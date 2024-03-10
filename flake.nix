@@ -46,6 +46,8 @@
         };
 
         devShells.default = pkgs.mkShell {
+          MAGENTIC_BACKEND = "litellm";
+          MAGENTIC_LITELLM_MODEL = "ollama/phi";
           packages = [
             pkgs.poetry
             (pkgs.python311.withPackages (ps: with ps; [ self.packages.${system}.magentic ]))
