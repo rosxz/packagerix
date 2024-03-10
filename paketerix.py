@@ -76,6 +76,6 @@ class Question(BaseModel):
 
 project = input("Enter the URL of the project you would like to package")
 num_questions = int(input("Enter a number: "))
-package = build_package(project)
+package = try_plan_to_make_progress("", project)
 
-print(f"\n{project}%\n")
+print(f"\n{package}%\n")
