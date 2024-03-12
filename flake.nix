@@ -51,7 +51,7 @@
           packages = [
             pkgs.poetry
             pyPkgs.packaging # TODO: add this to litellm dependencies instead
-            (pkgs.python311.withPackages (ps: with ps; [ self.packages.${system}.magentic ]))
+              (pkgs.python311.withPackages (ps: with ps; [ self.packages.${system}.magentic pyPkgs.beautifulsoup4 ]))
           ];
         };
       });
