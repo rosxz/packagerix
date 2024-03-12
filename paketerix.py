@@ -7,6 +7,37 @@ from magentic import prompt
 from pathlib import Path
 
 import litellm
+
+
+import requests
+from bs4 import BeautifulSoup
+import re
+import json
+
+def scrape_and_process(url):
+    # Fetch the webpage content
+    response = requests.get(url)
+    html = response.text
+
+    # Parse the HTML content
+    soup = BeautifulSoup(html, 'html.parser')
+
+    # Extract text from the webpage
+    # You might need to adjust the selection to your specific needs
+    text = ' '.join(soup.stripped_strings)
+
+    # Basic cleanup to remove unwanted characters or sections
+    cleaned_text = re.sub(r'\s+', ' ', text)  # Remove extra whitespaces
+
+    # Convert to a suitable format (e.g., JSON)
+    data = {
+        'url': url,
+        'text': cleaned_text
+    }
+    json_data = json.dumps(data, indent=4)
+
+    return json_data
+
 #litellm.set_verbose=True
 
 starting_template = Path("./template/package.nix").read_text()
