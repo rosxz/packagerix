@@ -4,6 +4,14 @@ from pydantic import BaseModel
 
 from magentic import prompt
 
+from pathlib import Path
+
+import litellm
+#litellm.set_verbose=True
+
+starting_template = Path("./template/package.nix").read_text()
+
+#test_project_page = Path("./compose.html").read_text()
 
 @prompt("""
 determine if the two truncated build logs contain the same error
@@ -33,32 +41,31 @@ def is_eval_error() -> bool : ...
 # an about equal amount goes to an llm to break the tie using same_build_error with the two tails of the two build logs
 def eval_progress() -> bool : ...
 
-template : str = """
-{
-fetchFromFithub
-}: {
-
-src = fetchFromGithub()
-
-}
-"""
-
 def build_package(source : str) -> bool : ...
 
 def invoke_build(sourse: str) -> bool : ...
 
-def eval_build(source: str, prev_log: str) -> str : ...
-
+def eval_build(source: str) -> str : ... #, prev_log: str
 
 @prompt("""
-Make a targeted and incremental addition to the existing Nix derivation so that the build progesses further.
+Make a targeted and incremental addition to the existing Nix derivation so that the build progesses further,
+by filling in the data marked with ... .
 This is the code you are starting from:
 
+```nix
 {prev_working_code}
+```
+
+Fill in the correct information from the project's github page listed here:
+
+```text
+{test_project_page}
+```
+
 """,
 #functions=[eval_build, ask_human_for_help],
 )
-def try_plan_to_make_progress (prev_working_code: str, prev_log: str) -> str : ... # returns the modified code
+def try_plan_to_make_progress (prev_working_code: str, test_project_page: str, prev_log: str) -> str : ... # returns the modified code
 
 #def eval_plan_to_make_progress_valid
 
@@ -74,8 +81,11 @@ class Question(BaseModel):
 
 # invoke bulid_package()
 
-project = input("Enter the URL of the project you would like to package")
-num_questions = int(input("Enter a number: "))
-package = try_plan_to_make_progress("", project)
+project_url = "https://github.com/docker/compose" # input("Enter the Github URL of the project you would like to package:\n")
+project_page = scrape_and_process(project_url)
+
+print (project_page)
+
+package = try_plan_to_make_progress(starting_template, project_page, None)
 
 print(f"\n{package}%\n")
