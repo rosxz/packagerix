@@ -47,7 +47,9 @@
 
         devShells.default = pkgs.mkShell {
           MAGENTIC_BACKEND = "litellm";
-          MAGENTIC_LITELLM_MODEL =  "claude-instant-1.2"; #  "claude-3-opus-20240229";
+          MAGENTIC_LITELLM_MAX_TOKENS = "1024";
+#          MAGENTIC_LITELLM_MODEL =  "claude-3-opus-20240229";
+          MAGENTIC_LITELLM_MODEL =  "claude-instant-1.2";
           packages = [
             pkgs.poetry
             pyPkgs.packaging # TODO: add this to litellm dependencies instead

@@ -61,6 +61,11 @@ def extract_updated_code(model_reply):
         print("reply contained more than one quoted section:")
         assert (False)
 
+def search_nixpkgs_for_package(query: str) -> str:
+    result = subprocess.run(["nix", "search", "nixpkgs", query], text=True, capture_output=True)
+    assert (result.status_cod
+    return result.stdout
+
 import shutil
 import tempfile
 import atexit
@@ -124,6 +129,16 @@ def invoke_build(source_flake: str) -> subprocess.CompletedProcess :
 
 def eval_build(source: str) -> str : ... #, prev_log: str
 
+def find_source(name: str) -> str:
+    return input (f"Dear human, please fill the automation gap and input the github page of {name}.")
+
+def package_missing_dependency (name: str):
+    # itentify source
+    # recurse into original process
+    #   - init new git template
+    #   - read github repo
+    #   - everything
+
 @prompt("""
 Make a targeted and incremental addition to the existing Nix derivation so that the build progesses further,
 by filling in the data marked with ... .
@@ -140,7 +155,8 @@ Fill in the correct information from the project's github page listed here:
 ```
 
 """,
-#functions=[eval_build, ask_human_for_help],
+functions=[test_updated_code, search_nixpkgs_for_package, package_missing_dependency]
+    # ask_human_for_help],
 )
 def try_plan_to_make_progress (prev_working_code: str, test_project_page: str, prev_log: str) -> str : ... # returns the modified code
 
@@ -163,7 +179,7 @@ For now the only supported functionality is
 * which are sensible to build using mkDerivation and
 * list their dependencies in the README.md (TODO: update this so it's accurate)
 """)
-project_url = mock_input("Enter the Github URL of the project you would like to package:\n", "https://github.com/docker/compose")
+project_url = mock_input("Enter the Github URL of the project you would like to package:\n", "https://github.com/bigbigmdm/IMSProg") #  "https://github.com/docker/compose")
 assert (project_url.startswith("https://github.com/"))
 
 project_page = scrape_and_process(project_url)
