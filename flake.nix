@@ -47,7 +47,7 @@
 
         devShells.default = pkgs.mkShell {
           MAGENTIC_BACKEND = "litellm";
-          MAGENTIC_LITELLM_MODEL = "ollama/phi";
+          MAGENTIC_LITELLM_MODEL =  "claude-instant-1.2"; #  "claude-3-opus-20240229";
           packages = [
             pkgs.poetry
             pyPkgs.packaging # TODO: add this to litellm dependencies instead
