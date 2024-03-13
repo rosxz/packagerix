@@ -118,7 +118,9 @@ def eval_progress() -> bool : ...
 
 def build_package(source : str) -> bool : ...
 
-def invoke_build(sourse: str) -> bool : ...
+import subprocess
+def invoke_build(source_flake: str) -> subprocess.CompletedProcess :
+    return subprocess.run(["nix", "build", source_flake], text=True, capture_output=True)
 
 def eval_build(source: str) -> str : ... #, prev_log: str
 
@@ -177,5 +179,9 @@ print ("updated code:\n" + updated_code)
 
 flake = init_flake()
 update_flake(flake, updated_code)
+
+result = invoke_build(flake.name)
+
+print (f"{result.returncode}:{result.stderr}")
 
 input("Wait for input")
