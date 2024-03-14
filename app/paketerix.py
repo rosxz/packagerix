@@ -8,7 +8,7 @@ from pathlib import Path
 
 import os
 
-os.environ["ANTHROPIC_API_KEY"] = ""
+os.environ["ANTHROPIC_API_KEY"] = "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"
 
 import litellm
 
@@ -63,7 +63,7 @@ def extract_updated_code(model_reply):
 
 def search_nixpkgs_for_package(query: str) -> str:
     result = subprocess.run(["nix", "search", "nixpkgs", query], text=True, capture_output=True)
-    assert (result.status_cod
+    assert (result.returncode == 0)
     return result.stdout
 
 import shutil
@@ -132,7 +132,7 @@ def eval_build(source: str) -> str : ... #, prev_log: str
 def find_source(name: str) -> str:
     return input (f"Dear human, please fill the automation gap and input the github page of {name}.")
 
-def package_missing_dependency (name: str):
+def package_missing_dependency (name: str): pass
     # itentify source
     # recurse into original process
     #   - init new git template
