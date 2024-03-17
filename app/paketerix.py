@@ -12,105 +12,20 @@ os.environ["ANTHROPIC_API_KEY"] = "sk-ant-api03-pZ9CBSoSFkLo3IgzfHNaQAL6O2STQKG9
 
 import litellm
 
-
-import requests
-from bs4 import BeautifulSoup
-import re
-import json
-
-def scrape_and_process(url):
-    # Fetch the webpage content
-    response = requests.get(url)
-    html = response.text
-
-    # Parse the HTML content
-    soup = BeautifulSoup(html, 'html.parser')
-
-    # Extract text from the webpage
-    # You might need to adjust the selection to your specific needs
-    text = ' '.join(soup.stripped_strings)
-
-    # Basic cleanup to remove unwanted characters or sections
-    cleaned_text = re.sub(r'\s+', ' ', text)  # Remove extra whitespaces
-
-    # Convert to a suitable format (e.g., JSON)
-    data = {
-        'url': url,
-        'text': cleaned_text
-    }
-    json_data = json.dumps(data, indent=4)
-
-    return json_data
+from tools.nix import *
+from tools.generic import *
+from util.nix import *
+from util.generic import *
 
 #litellm.set_verbose=True
+
+# Function calling is not supported by anthropic. To add it to the prompt, set
+#litellm.add_function_to_prompt = True #.
+#litellm.drop_params=True
 
 starting_template = Path("./template/package.nix").read_text()
 
 #test_project_page = Path("./compose.html").read_text()
-
-def extract_updated_code(model_reply):
-    pattern = r"^```nix\n(.*?)\n```$"
-
-    matches = list(re.finditer(pattern, model_reply, re.DOTALL | re.MULTILINE))
-    if len(matches) == 1:
-        return matches[0].group(1)
-    elif len(matches) == 0:
-        print("No section delimited by triple backticks was found. Should we pass this back to the model?")
-        assert (False)
-    else:
-        print("reply contained more than one quoted section:")
-        assert (False)
-
-def search_nixpkgs_for_package(query: str) -> str:
-    result = subprocess.run(["nix", "search", "nixpkgs", query], text=True, capture_output=True)
-    assert (result.returncode == 0)
-    return result.stdout
-
-import shutil
-import tempfile
-import atexit
-
-def init_flake():
-    # Path to the reference directory whose contents you want to copy
-    script_dir = os.path.dirname(os.path.abspath(__file__))
-    reference_directory_name = 'template'
-    reference_directory = os.path.join(script_dir, reference_directory_name)
-
-    # Create a temporary directory using TemporaryDirectory context manager
-    temp_dir = tempfile.TemporaryDirectory()
-    atexit.register(temp_dir.cleanup)
-
-    print(f"creating flake at {temp_dir.name} from reference directory {reference_directory}", )
-    shutil.copytree(reference_directory, temp_dir.name, dirs_exist_ok = True)
-    
-    return temp_dir
-
-def update_flake(temp_dir, new_content):
-    file_path = os.path.join(temp_dir.name, "package.nix")
-
-    # Open the file in write mode and overwrite it with new_content
-    with open(file_path, 'w') as file:
-        file.write(new_content)
-
-
-@prompt("""
-determine if the two truncated build logs contain the same error
-Log 1:
-```
-{log1_tail}
-```
-
-Log 2:
-```
-{log2_tail}
-```
-""")
-def same_build_error(log1_tail: str, log2_tail : str)  -> bool : ...
-# consider asking for human intervention to break tie   
-
-# distinguish nix build errors from nix eval errors
-# by looking for "nix log" sring and other markers
-def is_eval_error() -> bool : ...
 
 
 # read build log of previous step and this step
@@ -122,10 +37,6 @@ def is_eval_error() -> bool : ...
 def eval_progress() -> bool : ...
 
 def build_package(source : str) -> bool : ...
-
-import subprocess
-def invoke_build(source_flake: str) -> subprocess.CompletedProcess :
-    return subprocess.run(["nix", "build", source_flake], text=True, capture_output=True)
 
 def eval_build(source: str) -> str : ... #, prev_log: str
 
@@ -153,6 +64,8 @@ Fill in the correct information from the project's github page listed here:
 ```text
 {test_project_page}
 ```
+
+When you think you are done, invoke the test_updated_code function with the updated code.
 
 """,
 functions=[test_updated_code, search_nixpkgs_for_package, package_missing_dependency]
