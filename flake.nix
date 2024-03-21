@@ -46,15 +46,18 @@
         };
 
         devShells.default = pkgs.mkShell {
-          MAGENTIC_BACKEND = "litellm";
+#          MAGENTIC_BACKEND = "litellm";
+          MAGENTIC_BACKEND = "openai";
+#          MAGENTIC_OPENAI_MODEL = "gpt-3.5-turbo";
+          MAGENTIC_OPENAI_MODEL = "gpt-4";
           MAGENTIC_LITELLM_MAX_TOKENS = "1024";
 #          MAGENTIC_LITELLM_MODEL =  "claude-3-opus-20240229";
-          MAGENTIC_LITELLM_MODEL =  "ollama/mixtral";
+#          MAGENTIC_LITELLM_MODEL =  "ollama/mixtral";
 #          MAGENTIC_LITELLM_MODEL =  "claude-3-haiku-20240307";
           packages = [
             pkgs.poetry
             pyPkgs.packaging # TODO: add this to litellm dependencies instead
-              (pkgs.python311.withPackages (ps: with ps; [ self.packages.${system}.magentic pyPkgs.beautifulsoup4 pyPkgs.diskcache ]))
+              (pkgs.python311.withPackages (ps: with ps; [ self.packages.${system}.magentic pyPkgs.beautifulsoup4 pyPkgs.diskcache pyPkgs.gitpython ]))
           ];
         };
       });

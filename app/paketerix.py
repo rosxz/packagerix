@@ -2,31 +2,36 @@
 
 from pydantic import BaseModel
 
-from magentic import prompt
+from magentic import prompt_chain
 
 from pathlib import Path
 
 import os
 
+import logging
+
+import config
+
+config.init()
+
+loggers = [logging.getLogger(name) for name in logging.root.manager.loggerDict]
+openai_loggers = [logger for logger in loggers if logger.name.startswith("openai")]
+logging.getLogger("openai._base_client").setLevel(logging.DEBUG)
+
 os.environ["ANTHROPIC_API_KEY"] = "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"
+os.environ["OPENAI_API_KEY"] = "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"
 
 import litellm
 
-from tools.nix import *
-from tools.generic import *
-from util.nix import *
-from util.generic import *
+from app.nix import *
+from app.flake import *
+from app.parsing import *
 
 #litellm.set_verbose=True
 
 # Function calling is not supported by anthropic. To add it to the prompt, set
 #litellm.add_function_to_prompt = True #.
 #litellm.drop_params=True
-
-starting_template = Path("./template/package.nix").read_text()
-
-#test_project_page = Path("./compose.html").read_text()
-
 
 # read build log of previous step and this step
 # to evalute if the model made progress towards building the project
@@ -50,28 +55,67 @@ def package_missing_dependency (name: str): pass
     #   - read github repo
     #   - everything
 
-@prompt("""
-Make a targeted and incremental addition to the existing Nix derivation so that the build progesses further,
-by filling in the data marked with ... .
-This is the code you are starting from:
+
+@prompt_chain("""
+You are software packaging expert who can build any project.
+   
+Read the contents of the project's GitHub page and fill out all of the sections in the code that are marked with ... .
+
+Your goal is to make the build progress further, but without adding any unnecessary configuration or dependencies.
+
+This is the code template you have to fill out:
 
 ```nix
 {prev_working_code}
-```
+```   
 
-Fill in the correct information from the project's github page listed here:
+Here is the information form the projects github page:
 
 ```text
 {test_project_page}
 ```
 
-When you think you are done, invoke the test_updated_code function with the updated code.
-
+Note: do not modify lib.fakeHash.     
 """,
-functions=[test_updated_code, search_nixpkgs_for_package, package_missing_dependency]
-    # ask_human_for_help],
+functions=[test_updated_code] # search_nixpkgs_for_package]
+    # package_missing_dependency, ask_human_for_help],
 )
-def try_plan_to_make_progress (prev_working_code: str, test_project_page: str, prev_log: str) -> str : ... # returns the modified code
+def build_project (prev_working_code: str, test_project_page: str) -> str : ... # returns the modified code
+
+@prompt_chain("""
+You are software packaging expert who can build any project.
+   
+First you will read the contents of the project's GitHub page.
+
+You will use the information from the GitHub page to identify dependencis and fill out all of the sections in the code that are marked with ... .
+Then you will attempt to build the project for the fist time.
+
+Subsequently you will go through the following steps in a loop
+1. look at the error from the previous build
+2. identify the missing dependency indicated by the error (use tools to get more information if requrired) and
+3. add the dependency indicated by the error to the next build.
+
+Your goal is to make the build progress further with each ste without adding any unnecessary configuration or dependencies.
+
+This is the template where you have to initially fill in the ... .
+
+```nix
+{prev_working_code}
+```   
+
+Here is the information form the projects github page to get started:
+
+```text
+{test_project_page}
+```
+
+Note: sha-256 hashes are filled in by invoking the build with lib.fakeHash and obtaining the correct sha256 from the build output.
+Note: always invoke the test_updated_code with updated code until the build succeeds              
+""",
+functions=[test_updated_code] # search_nixpkgs_for_package]
+    # package_missing_dependency, ask_human_for_help],
+)
+def build_project (prev_working_code: str, test_project_page: str) -> str : ... # returns the modified code
 
 #def eval_plan_to_make_progress_valid
 
@@ -100,17 +144,13 @@ project_page = scrape_and_process(project_url)
 print ("I found the following information on the project page:\n")
 print (project_page)
 
-model_reply = try_plan_to_make_progress(starting_template, project_page, None)
-print ("model reply:\n" + model_reply)
-
-updated_code = extract_updated_code(model_reply)
-print ("updated code:\n" + updated_code)
-
 flake = init_flake()
-update_flake(flake, updated_code)
+print (f"Working on temporary flake at {flake_dir}")
 
-result = invoke_build(flake.name)
-
-print (f"{result.returncode}:{result.stderr}")
+starting_template = (config.template_dir / "package.nix").read_text()
+result = invoke_build()
+error_stack.append(result)
+model_reply = build_project(starting_template, project_page)
+print ("model reply:\n" + model_reply)
 
 input("Wait for input")

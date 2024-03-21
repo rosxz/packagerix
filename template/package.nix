@@ -13,13 +13,4 @@ stdenv.mkDerivation rec {
     rev = ...;
     hash = lib.fakeHash;
   };
-
-  meta = with lib; {
-    homepage = ...;
-    description = ...;
-    longDescription = ...;
-    license = ...;
-    maintainers = with maintainers; [];
-    platforms = platforms.unix;
-  };
 }
