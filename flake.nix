@@ -9,7 +9,7 @@
       inputs.nixpkgs.follows = "nixpkgs";
     };
     magentic = {
-     url = github:jackmpcollins/magentic;
+     url = github:jackmpcollins/magentic/652c4d66bb707b7adb982092916e6244da222a57;
      flake = false;
     };
   };
@@ -46,14 +46,14 @@
         };
 
         devShells.default = pkgs.mkShell {
-#          MAGENTIC_BACKEND = "litellm";
-          MAGENTIC_BACKEND = "openai";
+          MAGENTIC_BACKEND = "litellm";
+#          MAGENTIC_BACKEND = "openai";
 #          MAGENTIC_OPENAI_MODEL = "gpt-3.5-turbo";
-          MAGENTIC_OPENAI_MODEL = "gpt-4";
+#          MAGENTIC_OPENAI_MODEL = "gpt-4-turbo-preview";
           MAGENTIC_LITELLM_MAX_TOKENS = "1024";
 #          MAGENTIC_LITELLM_MODEL =  "claude-3-opus-20240229";
 #          MAGENTIC_LITELLM_MODEL =  "ollama/mixtral";
-#          MAGENTIC_LITELLM_MODEL =  "claude-3-haiku-20240307";
+          MAGENTIC_LITELLM_MODEL =  "anthropic/claude-3-haiku-20240307";
           packages = [
             pkgs.poetry
             pyPkgs.packaging # TODO: add this to litellm dependencies instead

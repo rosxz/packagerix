@@ -39,16 +39,17 @@
     "magentic": {
       "flake": false,
       "locked": {
-        "lastModified": 1709713244,
-        "narHash": "sha256-7HD+j1w2AIlzrtxb1Hu3/md9StuSDewkMTfRY81lpvA=",
+        "lastModified": 1711006227,
+        "narHash": "sha256-WcgpT3PHev/E0NlCccMTskMD75qdqxUyUw5sZ640qXM=",
         "owner": "jackmpcollins",
         "repo": "magentic",
-        "rev": "3dc29632f993a95f416adfcda522dcc238de4214",
+        "rev": "652c4d66bb707b7adb982092916e6244da222a57",
         "type": "github"
       },
       "original": {
         "owner": "jackmpcollins",
         "repo": "magentic",
+        "rev": "652c4d66bb707b7adb982092916e6244da222a57",
         "type": "github"
       }
     },
@@ -75,11 +76,11 @@
     },
     "nixpkgs": {
       "locked": {
-        "lastModified": 1710272261,
-        "narHash": "sha256-g0bDwXFmTE7uGDOs9HcJsfLFhH7fOsASbAuOzDC+fhQ=",
+        "lastModified": 1710806803,
+        "narHash": "sha256-qrxvLS888pNJFwJdK+hf1wpRCSQcqA6W5+Ox202NDa0=",
         "owner": "NixOS",
         "repo": "nixpkgs",
-        "rev": "0ad13a6833440b8e238947e47bea7f11071dc2b2",
+        "rev": "b06025f1533a1e07b6db3e75151caa155d1c7eb3",
         "type": "github"
       },
       "original": {
