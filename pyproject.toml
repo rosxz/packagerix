@@ -1,0 +1,15 @@
+[tool.poetry]
+name = "paketerix"
+version = "0.1.0"
+description = "LLM-assisted packaging with Nix"
+authors = ["Martin Schwaighofer <mschwaig+paketerix@eml.cc>"]
+license = "MIT"
+readme = "README.md"
+
+[tool.poetry.dependencies]
+python = "^3.11"
+
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"
