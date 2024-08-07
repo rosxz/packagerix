@@ -1,52 +1,27 @@
-# https://github.com/jackmpcollins/magentic
-
 from pydantic import BaseModel
-
-from magentic import prompt_chain
-
-from pathlib import Path
-
+from magentic import prompt, prompt_chain
 import os
-
-import logging
-
 import config
+import litellm
+from typing import Optional
 
 config.init()
-
-loggers = [logging.getLogger(name) for name in logging.root.manager.loggerDict]
-openai_loggers = [logger for logger in loggers if logger.name.startswith("openai")]
-logging.getLogger("openai._base_client").setLevel(logging.DEBUG)
-
-os.environ["ANTHROPIC_API_KEY"] = "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"
-os.environ["OPENAI_API_KEY"] = "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"
-
-import litellm
 
 from app.nix import *
 from app.flake import *
 from app.parsing import *
 
+# loggers = [logging.getLogger(name) for name in logging.root.manager.loggerDict]
+# openai_loggers = [logger for logger in loggers if logger.name.startswith("openai")]
+# logging.getLogger("openai._base_client").setLevel(logging.DEBUG)
+
+os.environ["ANTHROPIC_API_KEY"] = secret_keys.anthropic_api
+os.environ["OPENAI_API_KEY"] = secret_keys.openai_api
+
 #litellm.set_verbose=True
 
 # Function calling is not supported by anthropic. To add it to the prompt, set
-#litellm.add_function_to_prompt = True #.
-#litellm.drop_params=True
-
-# read build log of previous step and this step
-# to evalute if the model made progress towards building the project
-# this is done by counting magical phrases in the build output like
-# "comiling ..." 
-# a significantly higher number of magical phrases indicates progress
-# an about equal amount goes to an llm to break the tie using same_build_error with the two tails of the two build logs
-def eval_progress() -> bool : ...
-
-def build_package(source : str) -> bool : ...
-
-def eval_build(source: str) -> str : ... #, prev_log: str
-
-def find_source(name: str) -> str:
-    return input (f"Dear human, please fill the automation gap and input the github page of {name}.")
+litellm.add_function_to_prompt = True
 
 def package_missing_dependency (name: str): pass
     # itentify source
@@ -56,35 +31,59 @@ def package_missing_dependency (name: str): pass
     #   - everything
 
 
-@prompt_chain("""
-You are software packaging expert who can build any project.
-   
-Read the contents of the project's GitHub page and fill out all of the sections in the code that are marked with ... .
+def fix_dummy_hash (error_message: str): ...
+    # not sure if I should do this with an LLM first
+    # or do it manually right away
+
+
+class Project(BaseModel):
+    name: str
+    latest_commit_sha1: str
+    version_tag : Optional[str]
+    dependencies: list[str]
+
+@prompt("""
+You are software packaging expert who can build any project using the Nix programming language.
+           
+Read the contents of the project's GitHub page and return a Project object with the grathered information.
+
+Here is the project's GitHub page:
+
+```text
+{project_page}
+```
+""")
+def gather_project_info (project_page: str) -> Project : ...
+
+
+@prompt("""
+You are software packaging expert who can build any project using the Nix programming language.
+
+Read the contents of the project's GitHub page and fill out all of the sections in the code template that are marked with ... .
+Do not make any other modifications. Do not modify lib.fakeHash.
 
 Your goal is to make the build progress further, but without adding any unnecessary configuration or dependencies.
 
 This is the code template you have to fill out:
 
 ```nix
-{prev_working_code}
+{code_template}
 ```   
 
-Here is the information form the projects github page:
+Here is the information form the project's GitHub page:
 
 ```text
-{test_project_page}
+{project_page}
 ```
 
-Note: do not modify lib.fakeHash.     
-""",
-functions=[test_updated_code] # search_nixpkgs_for_package]
-    # package_missing_dependency, ask_human_for_help],
-)
-def build_project (prev_working_code: str, test_project_page: str) -> str : ... # returns the modified code
+Note: your reply should contain exaclty one code block with the updated Nix code.
+""")
+def set_up_project (code_template: str, project_page: str) -> str : ...
 
 @prompt_chain("""
 You are software packaging expert who can build any project.
-   
+Your goal is to make the build of your designated progress proceed one step further.
+
 First you will read the contents of the project's GitHub page.
 
 You will use the information from the GitHub page to identify dependencis and fill out all of the sections in the code that are marked with ... .
@@ -150,7 +149,10 @@ print (f"Working on temporary flake at {flake_dir}")
 starting_template = (config.template_dir / "package.nix").read_text()
 result = invoke_build()
 error_stack.append(result)
-model_reply = build_project(starting_template, project_page)
+#model_reply = gather_project_info(project_page)
+model_reply = set_up_project(starting_template, project_page)
 print ("model reply:\n" + model_reply)
+code = extract_updated_code(model_reply)
+test_updated_code(code)
 
 input("Wait for input")
