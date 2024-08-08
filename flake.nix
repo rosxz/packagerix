@@ -5,7 +5,7 @@
     flake-utils.url = "github:numtide/flake-utils";
     nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
     poetry2nix = {
-      url = "github:nix-community/poetry2nix";
+      url = "github:mschwaig/poetry2nix/build-magentic";
       inputs.nixpkgs.follows = "nixpkgs";
     };
     magentic = {

@@ -4,6 +4,7 @@ import os
 import config
 import litellm
 from typing import Optional
+import secret_keys
 
 config.init()
 
@@ -44,7 +45,6 @@ class Project(BaseModel):
 
 @prompt("""
 You are software packaging expert who can build any project using the Nix programming language.
-           
 Read the contents of the project's GitHub page and return a Project object with the grathered information.
 
 Here is the project's GitHub page:

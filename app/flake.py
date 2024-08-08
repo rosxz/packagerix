@@ -25,7 +25,6 @@ def update_flake(new_content):
     repo.git.add('-A')
     repo.index.commit("build step")
 
-
 # @prompt("""
 # determine if the two truncated build logs contain the same error
 # Log 1:

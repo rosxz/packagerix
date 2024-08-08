@@ -25,14 +25,7 @@ def scrape_and_process(url):
     # Basic cleanup to remove unwanted characters or sections
     cleaned_text = re.sub(r'\s+', ' ', text)  # Remove extra whitespaces
 
-    # Convert to a suitable format (e.g., JSON)
-    data = {
-        'url': url,
-        'text': cleaned_text
-    }
-    json_data = json.dumps(data, indent=4)
-
-    return json_data
+    return cleaned_text
 
 def extract_updated_code(model_reply):
     pattern = r"^```nix\n(.*?)\n```$"
