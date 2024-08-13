@@ -1,5 +1,5 @@
 from pydantic import BaseModel
-from magentic import prompt, prompt_chain
+from magentic import prompt, prompt_chain, StreamedStr
 import os
 import config
 import litellm
@@ -45,19 +45,6 @@ class Project(BaseModel):
 
 @prompt("""
 You are software packaging expert who can build any project using the Nix programming language.
-Read the contents of the project's GitHub page and return a Project object with the grathered information.
-
-Here is the project's GitHub page:
-
-```text
-{project_page}
-```
-""")
-def gather_project_info (project_page: str) -> Project : ...
-
-
-@prompt("""
-You are software packaging expert who can build any project using the Nix programming language.
 
 Read the contents of the project's GitHub page and fill out all of the sections in the code template that are marked with ... .
 Do not make any other modifications. Do not modify lib.fakeHash.
@@ -81,32 +68,25 @@ Note: your reply should contain exaclty one code block with the updated Nix code
 def set_up_project (code_template: str, project_page: str) -> str : ...
 
 @prompt_chain("""
-You are software packaging expert who can build any project.
+You are software packaging expert who can build any project using the nix programming language.
 Your goal is to make the build of your designated progress proceed one step further.
 
-First you will read the contents of the project's GitHub page.
-
-You will use the information from the GitHub page to identify dependencis and fill out all of the sections in the code that are marked with ... .
-Then you will attempt to build the project for the fist time.
-
-Subsequently you will go through the following steps in a loop
-1. look at the error from the previous build
-2. identify the missing dependency indicated by the error (use tools to get more information if requrired) and
-3. add the dependency indicated by the error to the next build.
+You will go through the following steps in a loop
+1. look at the current build error
+2. identify its cause, taking into account
+    a) your previous changs
+    b) potentially missing dependencies
+3. call the test_updated_code (again) to see if your change fixes the error
 
 Your goal is to make the build progress further with each ste without adding any unnecessary configuration or dependencies.
 
-This is the template where you have to initially fill in the ... .
+This is the code which currently still fails to build:
+¸¸¸
+{code}
+¸¸¸
 
-```nix
-{prev_working_code}
-```   
-
-Here is the information form the projects github page to get started:
-
-```text
-{test_project_page}
-```
+This is the corresponding error from the previous evaluation:
+{error}
 
 Note: sha-256 hashes are filled in by invoking the build with lib.fakeHash and obtaining the correct sha256 from the build output.
 Note: always invoke the test_updated_code with updated code until the build succeeds              
@@ -114,7 +94,7 @@ Note: always invoke the test_updated_code with updated code until the build succ
 functions=[test_updated_code] # search_nixpkgs_for_package]
     # package_missing_dependency, ask_human_for_help],
 )
-def build_project (prev_working_code: str, test_project_page: str) -> str : ... # returns the modified code
+def build_project (code: str, error) -> StreamedStr : ... # returns the modified code
 
 #def eval_plan_to_make_progress_valid
 
@@ -153,6 +133,7 @@ error_stack.append(result)
 model_reply = set_up_project(starting_template, project_page)
 print ("model reply:\n" + model_reply)
 code = extract_updated_code(model_reply)
-test_updated_code(code)
-
-input("Wait for input")
+error = test_updated_code(code)
+for chunk in build_project(code, error):
+    print(chunk, end="")
+input("\nend of output - waiting for keypress")

@@ -4,6 +4,8 @@ from config import flake_dir, error_stack
 
 import git
 
+from typing import Optional
+
 from flake import update_flake
 
 def search_nixpkgs_for_package(query: str) -> str:
@@ -22,34 +24,50 @@ def invoke_build() -> subprocess.CompletedProcess :
 def get_last_ten_lines(s : str) -> str:
     lines = s.split('\n')
     return '\n'.join(lines[-30:])
+
+from enum import Enum
+
+class Error:
+    class ErrorType(Enum):
+        REGRESS = (1, "error not resolved - build fails earlier")
+        EVAL_ERROR = (2, "code failed to evaluate")
+        PROGRESS = (3, "error resolved - build fails later")
+
+        def __init__(self, id, description):
+            self.id = id
+            self.description = description
+
+        @classmethod
+        def from_id(cls, id):
+            for case in cls:
+                if case.id == id:
+                    return case
+            raise ValueError(f"No case with id {id}")
+
+    def __init__(self, type: ErrorType, error_message: str):
+        self.type = type
+        self.error_message = error_message
+
 # read build log of previous step and this step
 # to evalute if the model made progress towards building the project
 # this is done by counting magical phrases in the build output like
 # "comiling ..." 
 # a significantly higher number of magical phrases indicates progress
 # an about equal amount goes to an llm to break the tie using same_build_error with the two tails of the two build logs
-def eval_progress() -> str :
+def eval_progress() -> Error:
+    error_message = error_stack[-1].stderr
+    error_message_trunc = f"\n```\n{get_last_ten_lines(error_stack[-1].stderr)}\n```\n"
+    prev_error_message_trunc = get_last_ten_lines(error_stack[-2].stderr)
+    print(f"previous error: {prev_error_message_trunc}")
 
-    error_message = f"\n```\n{get_last_ten_lines(error_stack[-1].stderr)}\n```\n"
-    prev_error_message = get_last_ten_lines(error_stack[-2].stderr)
-    print(f"previous error: {prev_error_message}")
-
-    print(f"new error: {error_message}")
+    print(f"new error: {error_message_trunc}")
 
     repo = git.Repo(flake_dir.as_posix())
     print(repo.commit().diff())
 
-    # lets do this the human way for now
-    errors = [
-        f"error not resolved - build fails earlier: {error_message}",
-        f"error resolved - build fails later. please fix the nwe error: {error_message}",
-        f"code failed to evaluate - please fix the error: {error_message}",
-    ]
-
     # Display the sentences with numbers
-    for index, error in enumerate(errors, start=1):
-        first_line = error.split('\n')[0]
-        print(f"{index}. {first_line}")
+    for errorType in Error.ErrorType:
+        print(f"{errorType.id}. {errorType.description}")
 
     while True:
         try:
@@ -57,7 +75,7 @@ def eval_progress() -> str :
             choice = int(input("Please pick a number corresponding to your choice: "))
 
             # Check if the choice is within the range
-            if 1 <= choice <= len(errors):
+            if 1 <= choice <= len(Error.ErrorType):
                 break
             else:
                 print("Invalid choice. Please choose a number from the list.")
@@ -67,23 +85,38 @@ def eval_progress() -> str :
             print("Invalid input. Please enter a number.")
 
     # Process the choice
-    result = errors[choice - 1]
-    print(f"You have chosen: {result}")
-    return result
+    errorType = Error.ErrorType.from_id(choice)
+    print(f"You have chosen: {errorType.description}")
+    return Error(errorType, error_message_trunc)
 
 
-def test_updated_code(updated_code: str) -> str:
+def test_updated_code(updated_code: str) -> Optional[Error]:
     """build updated Nix code"""
 
     update_flake(updated_code)
     result = invoke_build()
     error_stack.append(result)
+    # if this is an eval error we should stay in the current context and try to fix it
+    # if 
+
+
+
     # now check if we made progress
     # if we made progress we should
     # return and re-start with the next step
     # if we did not make progress we should return
     # the error to the LLM
     if result.returncode == 0:
-        return "The build succeeded. Your job is done."
+        return None
     else:
-        return eval_progress()
+        errorType = eval_progress().type
+        return errorType
+        # if errorType == Error.ErrorType.REGRESS:
+        #     # retry in current context
+            
+        # elif errorType == Error.ErrorType.EVAL_ERROR:
+        #     # try to fix error in current context
+        # elif errorType == Error.ErrorType.PROGRESS:
+        #     # move to next iteration
+        # else:
+        #     throw ValueError("unknown error type")
