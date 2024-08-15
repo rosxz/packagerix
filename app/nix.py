@@ -1,6 +1,7 @@
 import subprocess
 
 from config import flake_dir, error_stack
+from pydantic import BaseModel
 
 import git
 
@@ -27,7 +28,7 @@ def get_last_ten_lines(s : str) -> str:
 
 from enum import Enum
 
-class Error:
+class Error(BaseModel):
     class ErrorType(Enum):
         REGRESS = (1, "error not resolved - build fails earlier")
         EVAL_ERROR = (2, "code failed to evaluate")
@@ -43,10 +44,8 @@ class Error:
                 if case.id == id:
                     return case
             raise ValueError(f"No case with id {id}")
-
-    def __init__(self, type: ErrorType, error_message: str):
-        self.type = type
-        self.error_message = error_message
+    type: ErrorType
+    error_message: str
 
 # read build log of previous step and this step
 # to evalute if the model made progress towards building the project
@@ -87,7 +86,7 @@ def eval_progress() -> Error:
     # Process the choice
     errorType = Error.ErrorType.from_id(choice)
     print(f"You have chosen: {errorType.description}")
-    return Error(errorType, error_message_trunc)
+    return Error(type=errorType, error_message=error_message_trunc)
 
 
 def test_updated_code(updated_code: str) -> Optional[Error]:
@@ -109,8 +108,7 @@ def test_updated_code(updated_code: str) -> Optional[Error]:
     if result.returncode == 0:
         return None
     else:
-        errorType = eval_progress().type
-        return errorType
+        return eval_progress()
         # if errorType == Error.ErrorType.REGRESS:
         #     # retry in current context
             
