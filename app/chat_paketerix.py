@@ -78,7 +78,9 @@ class ChatInput(Input):
         """Handle input submission."""
         if event.value.strip():
             self.post_message(self.MessageSent(event.value.strip()))
-            self.value = ""
+            self.clear()
+            event.stop()
+            event.prevent_default()
 
 
 class PaketerixChatApp(App):
@@ -88,28 +90,29 @@ class PaketerixChatApp(App):
     Screen {
         layout: vertical;
     }
-    
+
     #chat-container {
         height: 1fr;
         border: solid $primary;
         margin: 1;
     }
-    
+
     #input-container {
-        height: 3;
-        margin: 0 1;
+        height: 4;
+        margin: 0 1 2 1;
     }
-    
+
     ChatInput {
-        height: 1;
+        height: 3;
         margin: 1 0;
+        border: none;
     }
-    
+
     ChatHistory {
         height: 1fr;
         padding: 1;
     }
-    
+
     ChatMessage {
         margin-bottom: 1;
     }
@@ -164,10 +167,10 @@ class PaketerixChatApp(App):
     def handle_user_message(self, event: ChatInput.MessageSent) -> None:
         """Handle a new user message."""
         chat_history = self.query_one("#chat-history", ChatHistory)
-        
+
         # Add user message
         chat_history.add_message(event.content, "user")
-        
+
         # Process the message asynchronously
         asyncio.create_task(self.process_user_input(event.content))
     
