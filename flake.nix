@@ -47,15 +47,15 @@
         };
 
         devShells.default = pkgs.mkShell {
-#          MAGENTIC_BACKEND = "litellm";
-          MAGENTIC_BACKEND = "openai";
+          MAGENTIC_BACKEND = "litellm";
+#          MAGENTIC_BACKEND = "openai";
 #          MAGENTIC_BACKEND = "anthropic";
-          MAGENTIC_ANTHROPIC_MODEL = "claude-3-5-sonnet-20240620";
+#          MAGENTIC_ANTHROPIC_MODEL = "claude-3-5-sonnet-20240620";
 #          MAGENTIC_OPENAI_MODEL = "gpt-3.5-turbo";
-          MAGENTIC_OPENAI_MODEL = "gpt-4o";
+#          MAGENTIC_OPENAI_MODEL = "gpt-4o";
           MAGENTIC_LITELLM_MAX_TOKENS = "1024";
-#          MAGENTIC_LITELLM_MODEL =  "anthropic/claude-3-5-sonnet-20240620";
-#          MAGENTIC_LITELLM_MODEL =  "ollama/phi3";
+          MAGENTIC_LITELLM_MODEL =  "anthropic/claude-3-5-haiku-20241022";
+#          MAGENTIC_LITELLM_MODEL =  "ollama/qwen3:8b";
 #          MAGENTIC_LITELLM_MODEL =  "ollama/llama3.1:70b";
 #          MAGENTIC_LITELLM_MODEL =  "anthropic/claude-3-haiku-20240307";
            ANTHROPIC_LOG="debug";
