@@ -2,7 +2,7 @@ import shutil
 import os
 import git
 
-from config import flake_dir, template_dir
+from app.config import flake_dir, template_dir
 
 
 def init_flake():

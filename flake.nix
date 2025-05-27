@@ -60,7 +60,7 @@
 #          MAGENTIC_LITELLM_MODEL =  "anthropic/claude-3-haiku-20240307";
            ANTHROPIC_LOG="debug";
           packages = [
-            (pkgs.python312.withPackages (ps: with ps; [ self.packages.${system}.magentic pyPkgs.beautifulsoup4 pyPkgs.diskcache pyPkgs.gitpython ]))
+            (pkgs.python312.withPackages (ps: with ps; [ self.packages.${system}.magentic pyPkgs.beautifulsoup4 pyPkgs.diskcache pyPkgs.gitpython pyPkgs.textual pyPkgs.rich ]))
           ];
         };
       });
