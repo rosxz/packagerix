@@ -1,1 +1,4 @@
 /app/secret_keys.py
+/result
+__pycache__
+/cachedir
