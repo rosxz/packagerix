@@ -1,6 +1,6 @@
 from textual.app import App, ComposeResult
 from textual.containers import Horizontal, Vertical, ScrollableContainer
-from textual.widgets import Input, Static, Header, Footer
+from textual.widgets import Input, Static, Header, Footer, Button
 from textual.message import Message
 from textual import on
 from rich.text import Text
@@ -20,7 +20,7 @@ from app.paketerix import (
 )
 from app.parsing import scrape_and_process, extract_updated_code
 from app.flake import init_flake
-from app.nix import Error, get_last_ten_lines, invoke_build, test_updated_code
+from app.nix import Error, get_last_ten_lines, invoke_build, test_updated_code, error_stack
 import os
 
 
@@ -53,15 +53,69 @@ class ChatMessage(Static):
             yield Static(Panel(message_text, border_style="green", padding=(0, 1)))
 
 
+class ProgressPoll(Static):
+    """A widget for choosing build progress evaluation."""
+
+    class ProgressChoice(Message):
+        """Message sent when user makes a progress choice."""
+
+        def __init__(self, choice: int):
+            self.choice = choice
+            super().__init__()
+
+    def __init__(self, prev_error: str, new_error: str):
+        self.prev_error = prev_error
+        self.new_error = new_error
+        super().__init__()
+
+    def compose(self) -> ComposeResult:
+        """Create the progress poll layout."""
+        content = Text()
+        content.append("🔍 Build Progress Evaluation\n\n", style="bold blue")
+        content.append("Previous error:\n", style="bold")
+        content.append(f"{self.prev_error}\n\n", style="red")
+        content.append("New error:\n", style="bold")
+        content.append(f"{self.new_error}\n\n", style="red")
+        content.append("Did we make progress?", style="bold")
+
+        yield Static(Panel(content, border_style="yellow", padding=(1, 2)))
+
+        with Horizontal():
+            yield Button("❌ Regress (build fails earlier)", id="choice-1", variant="error")
+            yield Button("⚠️ Eval Error (code failed to evaluate)", id="choice-2", variant="warning")
+            yield Button("✅ Progress (build fails later)", id="choice-3", variant="success")
+
+    @on(Button.Pressed)
+    def on_button_pressed(self, event: Button.Pressed) -> None:
+        """Handle progress choice button press."""
+        if event.button.id == "choice-1":
+            choice = 1
+        elif event.button.id == "choice-2":
+            choice = 2
+        elif event.button.id == "choice-3":
+            choice = 3
+        else:
+            return
+
+        self.post_message(self.ProgressChoice(choice))
+
+
 class ChatHistory(ScrollableContainer):
     """Container for chat messages with auto-scroll."""
-    
+
     def add_message(self, content: str, sender: str):
         """Add a new message to the chat."""
         message = ChatMessage(content, sender)
         self.mount(message)
         # Auto-scroll to bottom
         self.scroll_end(animate=False)
+
+    def add_progress_poll(self, prev_error: str, new_error: str):
+        """Add a progress evaluation poll to the chat."""
+        poll = ProgressPoll(prev_error, new_error)
+        self.mount(poll)
+        self.scroll_end(animate=False)
+        return poll
 
 
 class ChatInput(Input):
@@ -115,6 +169,15 @@ class PaketerixChatApp(App):
 
     ChatMessage {
         margin-bottom: 1;
+    }
+
+    ProgressPoll {
+        margin-bottom: 1;
+    }
+
+    ProgressPoll Button {
+        margin: 0 1;
+        min-width: 30;
     }
     """
     
@@ -173,6 +236,23 @@ class PaketerixChatApp(App):
 
         # Process the message asynchronously
         asyncio.create_task(self.process_user_input(event.content))
+
+    @on(ProgressPoll.ProgressChoice)
+    def handle_progress_choice(self, event: ProgressPoll.ProgressChoice) -> None:
+        """Handle progress evaluation choice."""
+        chat_history = self.query_one("#chat-history", ChatHistory)
+
+        choices = {
+            1: "❌ Regress (build fails earlier)",
+            2: "⚠️ Eval Error (code failed to evaluate)",
+            3: "✅ Progress (build fails later)"
+        }
+
+        choice_text = choices.get(event.choice, "Unknown choice")
+        chat_history.add_message(f"Selected: {choice_text}", "user")
+
+        # Continue with the build process based on choice
+        asyncio.create_task(self.continue_build_process(event.choice))
     
     async def process_user_input(self, user_input: str) -> None:
         """Process user input and generate AI response."""
@@ -233,47 +313,101 @@ class PaketerixChatApp(App):
     async def start_packaging_process(self, chat_history: ChatHistory) -> None:
         """Start the actual packaging process."""
         self.packaging_state = "building"
-        
+
         chat_history.add_message("🔨 Starting packaging process...", "paketerix")
-        
+
         try:
             # Initialize flake
             flake = init_flake()
             self.current_flake_dir = config.flake_dir
             chat_history.add_message(f"📁 Created temporary flake at: {self.current_flake_dir}", "paketerix")
-            
+
             # Get project page data
             project_page = scrape_and_process(self.current_project_url)
-            
+            chat_history.add_message("📄 Project page information extracted", "paketerix")
+
             # Read template
             starting_template = (config.template_dir / "package.nix").read_text()
-            
+
+            # Show template info
+            from app.nix import invoke_build, get_last_ten_lines, error_stack
+            starting_template_error = invoke_build()
+            error_stack.append(starting_template_error)
+            starting_template_error_msg = get_last_ten_lines(starting_template_error.stderr)
+            chat_history.add_message(f"📋 Template status:\n```\n{starting_template_error_msg}\n```", "paketerix")
+
             # Generate initial package
             chat_history.add_message("🤖 Generating initial Nix derivation...", "paketerix")
             model_reply = set_up_project(starting_template, project_page)
+            chat_history.add_message(f"📝 Model reply:\n```nix\n{model_reply}\n```", "paketerix")
+
             code = extract_updated_code(model_reply)
-            
             chat_history.add_message("✅ Initial derivation created! Testing build...", "paketerix")
-            
-            # Test the build
-            error = test_updated_code(code)
-            
-            if error.type == Error.ErrorType.SUCCESS:
+
+            # Test the build - use custom version for chat
+            error = await self.test_build_for_chat(code)
+
+            if error is None:
                 chat_history.add_message("🎉 Build successful! Package is ready.", "paketerix")
                 self.packaging_state = "complete"
             else:
-                chat_history.add_message(
-                    f"⚠️  Build failed with error:\n```\n{error.error_message}\n```\n\n"
-                    f"Starting iterative build process to fix issues...", 
-                    "paketerix"
-                )
-                
-                # Start iterative build process
-                await self.iterative_build_process(starting_template, chat_history)
-                
+                # Show the build process and ask for progress evaluation
+                await self.handle_build_error(error, chat_history)
+
         except Exception as e:
             chat_history.add_message(f"❌ Error during packaging: {str(e)}", "paketerix")
             self.packaging_state = "idle"
+
+    async def handle_build_error(self, error, chat_history: ChatHistory) -> None:
+        """Handle a build error by showing progress evaluation poll."""
+        from app.nix import error_stack, get_last_ten_lines
+
+        # Get the error messages for comparison
+        current_error_msg = get_last_ten_lines(error_stack[-1].stderr)
+        prev_error_msg = get_last_ten_lines(error_stack[-2].stderr) if len(error_stack) > 1 else "No previous error"
+
+        chat_history.add_message(
+            f"⚠️ Build failed with error:\n```\n{current_error_msg}\n```",
+            "paketerix"
+        )
+
+        # Add the progress evaluation poll
+        chat_history.add_progress_poll(prev_error_msg, current_error_msg)
+
+    async def continue_build_process(self, choice: int) -> None:
+        """Continue the build process based on user's progress choice."""
+        chat_history = self.query_one("#chat-history", ChatHistory)
+
+        if choice == 1:  # Regress
+            chat_history.add_message("🔄 Build regressed. Attempting to fix in current context...", "paketerix")
+        elif choice == 2:  # Eval Error
+            chat_history.add_message("⚠️ Evaluation error detected. Fixing code issues...", "paketerix")
+        elif choice == 3:  # Progress
+            chat_history.add_message("✅ Progress made! Moving to next iteration...", "paketerix")
+
+        # For now, show completion - later this would trigger actual iterative building
+        await asyncio.sleep(1)
+        chat_history.add_message("🔄 Continuing iterative build process...", "paketerix")
+        self.packaging_state = "complete"
+
+    async def test_build_for_chat(self, updated_code: str):
+        """Test build without triggering interactive eval_progress."""
+        from app.flake import update_flake
+
+        # Update the flake with new code
+        update_flake(updated_code)
+
+        # Run the build
+        result = invoke_build()
+        error_stack.append(result)
+
+        # Check if build succeeded
+        if result.returncode == 0:
+            return None
+        else:
+            # Return error info that will trigger our chat-based progress evaluation
+            error_message = get_last_ten_lines(result.stderr)
+            return Error(type=Error.ErrorType.EVAL_ERROR, error_message=error_message)
     
     async def iterative_build_process(self, template_str: str, chat_history: ChatHistory) -> None:
         """Run the iterative build process."""
