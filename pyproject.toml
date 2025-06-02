@@ -1,17 +1,24 @@
-[tool.poetry]
+[project]
 name = "paketerix"
 version = "0.1.0"
 description = "LLM-assisted packaging with Nix"
-authors = ["Martin Schwaighofer <mschwaig+paketerix@eml.cc>"]
-license = "MIT"
+authors = [{name = "Martin Schwaighofer", email = "mschwaig+paketerix@eml.cc"}]
+license = {text = "MIT"}
 readme = "README.md"
+requires-python = ">=3.11"
+dependencies = [
+    "setuptools",
+    "wheel",
+    "textual>=0.47.0",
+    "rich>=13.7.0",
+    "requests",
+    "beautifulsoup4",
+    "diskcache",
+    "pydantic",
+    "GitPython",
+    "magentic",
+    "litellm",
+]
 
-[tool.poetry.dependencies]
-python = "^3.11"
-textual = "^0.47.0"
-rich = "^13.7.0"
-
-
-[build-system]
-requires = ["poetry-core"]
-build-backend = "poetry.core.masonry.api"
+[tool.setuptools]
+packages = ["app"]
