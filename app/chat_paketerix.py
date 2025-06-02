@@ -80,10 +80,18 @@ class ProgressPoll(Static):
 
         yield Static(Panel(content, border_style="yellow", padding=(1, 2)))
 
-        with Horizontal():
-            yield Button("❌ Regress (build fails earlier)", id="choice-1", variant="error")
-            yield Button("⚠️ Eval Error (code failed to evaluate)", id="choice-2", variant="warning")
-            yield Button("✅ Progress (build fails later)", id="choice-3", variant="success")
+        with Horizontal(id="progress-buttons"):
+            regress_btn = Button("❌ Regress", id="choice-1", variant="error")
+            regress_btn.tooltip = "Build fails earlier"
+            yield regress_btn
+
+            eval_btn = Button("⚠️ Eval Error", id="choice-2", variant="warning")
+            eval_btn.tooltip = "Code failed to evaluate"
+            yield eval_btn
+
+            progress_btn = Button("✅ Progress", id="choice-3", variant="success")
+            progress_btn.tooltip = "Build fails later"
+            yield progress_btn
 
     @on(Button.Pressed)
     def on_button_pressed(self, event: Button.Pressed) -> None:
@@ -175,9 +183,21 @@ class PaketerixChatApp(App):
         margin-bottom: 1;
     }
 
+    #progress-buttons {
+        width: 100%;
+        height: 3;
+        align: center middle;
+    }
+
     ProgressPoll Button {
         margin: 0 1;
-        min-width: 30;
+        min-width: 20;
+        height: 3;
+        content-align: center middle;
+        text-align: center;
+        border: solid $accent;
+        padding: 0 1;
+        width: 1fr;
     }
     """
     
