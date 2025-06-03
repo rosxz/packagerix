@@ -3,11 +3,12 @@ import os
 import git
 
 from app.config import flake_dir, template_dir
+from app.logging_config import logger
 
 
 def init_flake():
 
-    print(f"creating flake at {flake_dir} from reference directory {template_dir}", )
+    logger.info(f"Creating flake at {flake_dir} from reference directory {template_dir}")
     shutil.copytree(template_dir, flake_dir, dirs_exist_ok = True)
 
     repo = git.Repo.init(flake_dir.as_posix())

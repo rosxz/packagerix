@@ -10,6 +10,7 @@ from magentic import (
 )
 
 import os
+from app.logging_config import logger  # Import logger first to ensure it's initialized
 from app import config
 import litellm
 from typing import Optional
@@ -29,9 +30,18 @@ os.environ["ANTHROPIC_API_KEY"] = secret_keys.anthropic_api
 os.environ["OPENAI_API_KEY"] = secret_keys.openai_api
 
 import logging
-logging.basicConfig(level=logging.DEBUG)
+if "OLLAMA_HOST" in os.environ:
+    logger.info(f"OLLAMA_HOST is set to: {os.environ['OLLAMA_HOST']}")
+else:
+    logger.warning("OLLAMA_HOST environment variable is not set")
 
 #litellm.set_verbose=True
+# litellm.set_verbose=True
+
+# Explicitly set ollama_api_base if OLLAMA_HOST is set
+if "OLLAMA_HOST" in os.environ:
+    litellm.api_base = os.environ["OLLAMA_HOST"]
+    logger.info(f"Set litellm.api_base to: {litellm.api_base}")
 
 # Function calling is not supported by anthropic. To add it to the prompt, set
 litellm.add_function_to_prompt = True
@@ -116,13 +126,17 @@ class Question(BaseModel):
     answer: str
 
 def mock_input (ask : str, reply: str):
-    print (ask)
-    print (reply + "\n")
+    logger.info(ask)
+    logger.info(reply + "\n")
     return reply
 
 def main():
     """Main function for the original CLI interface."""
-    print("""
+    # Enable console logging for CLI mode
+    from app.logging_config import enable_console_logging
+    enable_console_logging()
+    
+    logger.info("""
 Welcome to Paketerix, your friendly Nix packaging assistant.
 For now the only supported functionality is
 * packaging projects which are on GitHub,
@@ -134,25 +148,25 @@ For now the only supported functionality is
 
     project_page = scrape_and_process(project_url)
 
-    print ("I found the following information on the project page:\n")
-    print (project_page)
+    logger.info("I found the following information on the project page:\n")
+    logger.info(project_page)
 
     flake = init_flake()
-    print (f"Working on temporary flake at {flake_dir}")
+    logger.info(f"Working on temporary flake at {flake_dir}")
 
     starting_template = (config.template_dir / "package.nix").read_text()
     starting_template_error = invoke_build()
     starting_template_error_for_func = Error(type=Error.ErrorType.EVAL_ERROR, error_message=get_last_ten_lines(starting_template_error.stderr))
     error_stack.append(starting_template_error)
 
-    print("Template:")
-    print(starting_template_error_for_func.model_dump_json())
+    logger.info("Template:")
+    logger.info(starting_template_error_for_func.model_dump_json())
 
     starting_template_call = FunctionCall(test_updated_code, starting_template)
 
     #model_reply = gather_project_info(project_page)
     model_reply = set_up_project(starting_template, project_page)
-    print ("model reply:\n" + model_reply)
+    logger.info("model reply:\n" + model_reply)
     code = extract_updated_code(model_reply)
     error = test_updated_code(code)
     error_trunc = error.error_message
@@ -193,12 +207,12 @@ For now the only supported functionality is
     def build_project_inner (template_str) -> StreamedStr : ... # FunctionCall[Optional[Error]] : ... # returns the modified code
 
     #build_output = build_project_inner(starting_template)
-    #print(build_output)
+    #logger.info(build_output)
     #build_output()
     #for chunk in build_project_inner(starting_template):
-    #    print(chunk, end="")
+    #    logger.info(chunk)
     summary = summarize_github(project_page)
-    print(summary)
+    logger.info(summary)
     input("\nend of output - waiting for keypress")
 
 

@@ -6,6 +6,7 @@ import re
 import json
 
 from diskcache import Cache
+from app.logging_config import logger
 
 cache = Cache("cachedir")
 
@@ -34,8 +35,8 @@ def extract_updated_code(model_reply):
     if len(matches) == 1:
         return matches[0].group(1)
     elif len(matches) == 0:
-        print("No section delimited by triple backticks was found. Should we pass this back to the model?")
+        logger.error("No section delimited by triple backticks was found. Should we pass this back to the model?")
         assert (False)
     else:
-        print("reply contained more than one quoted section:")
+        logger.error("Reply contained more than one quoted section")
         assert (False)

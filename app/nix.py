@@ -8,6 +8,7 @@ import git
 from typing import Optional
 
 from app.flake import update_flake
+from app.logging_config import logger
 
 def search_nixpkgs_for_package(query: str) -> str:
     """search the nixpkgs repository of Nix code for the given package"""
@@ -57,16 +58,16 @@ def eval_progress() -> Error:
     error_message = error_stack[-1].stderr
     error_message_trunc = f"\n```\n{get_last_ten_lines(error_stack[-1].stderr)}\n```\n"
     prev_error_message_trunc = get_last_ten_lines(error_stack[-2].stderr)
-    print(f"previous error: {prev_error_message_trunc}")
+    logger.info(f"previous error: {prev_error_message_trunc}")
 
-    print(f"new error: {error_message_trunc}")
+    logger.info(f"new error: {error_message_trunc}")
 
     repo = git.Repo(flake_dir.as_posix())
-    print(repo.commit().diff())
+    logger.info(repo.commit().diff())
 
     # Display the sentences with numbers
     for errorType in Error.ErrorType:
-        print(f"{errorType.id}. {errorType.description}")
+        logger.info(f"{errorType.id}. {errorType.description}")
 
     while True:
         try:
@@ -77,15 +78,15 @@ def eval_progress() -> Error:
             if 1 <= choice <= len(Error.ErrorType):
                 break
             else:
-                print("Invalid choice. Please choose a number from the list.")
+                logger.warning("Invalid choice. Please choose a number from the list.")
 
         except ValueError:
             # Handle the case where the input is not an integer
-            print("Invalid input. Please enter a number.")
+            logger.warning("Invalid input. Please enter a number.")
 
     # Process the choice
     errorType = Error.ErrorType.from_id(choice)
-    print(f"You have chosen: {errorType.description}")
+    logger.info(f"You have chosen: {errorType.description}")
     return Error(type=errorType, error_message=error_message_trunc)
 
 
