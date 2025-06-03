@@ -14,7 +14,7 @@ from app.logging_config import logger  # Import logger first to ensure it's init
 from app import config
 import litellm
 from typing import Optional
-from app import secret_keys
+from app.secure_keys import ensure_api_key
 
 config.init()
 
@@ -22,12 +22,30 @@ from app.nix import *
 from app.flake import *
 from app.parsing import *
 
-# loggers = [logging.getLogger(name) for name in logging.root.manager.loggerDict]
-# openai_loggers = [logger for logger in loggers if logger.name.startswith("openai")]
-# logging.getLogger("openai._base_client").setLevel(logging.DEBUG)
+# Check which backend we're using
+magentic_backend = os.environ.get("MAGENTIC_BACKEND", "litellm")
+logger.info(f"Using magentic backend: {magentic_backend}")
 
-os.environ["ANTHROPIC_API_KEY"] = secret_keys.anthropic_api
-os.environ["OPENAI_API_KEY"] = secret_keys.openai_api
+# Only load API keys if we're using a backend that needs them
+if magentic_backend == "anthropic" or "anthropic" in os.environ.get("MAGENTIC_LITELLM_MODEL", ""):
+    try:
+        anthropic_key = ensure_api_key(
+            "ANTHROPIC_API_KEY",
+            "Anthropic API key is required for Claude models.\nGet your key from: https://console.anthropic.com/"
+        )
+        os.environ["ANTHROPIC_API_KEY"] = anthropic_key
+    except ValueError as e:
+        logger.warning(f"Could not load Anthropic API key: {e}")
+
+if magentic_backend == "openai" or "gpt" in os.environ.get("MAGENTIC_LITELLM_MODEL", ""):
+    try:
+        openai_key = ensure_api_key(
+            "OPENAI_API_KEY", 
+            "OpenAI API key is required for GPT models.\nGet your key from: https://platform.openai.com/api-keys"
+        )
+        os.environ["OPENAI_API_KEY"] = openai_key
+    except ValueError as e:
+        logger.warning(f"Could not load OpenAI API key: {e}")
 
 import logging
 if "OLLAMA_HOST" in os.environ:

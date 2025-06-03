@@ -1,7 +1,0 @@
-app/secret_keys.py filter=git-ignore-changes
- 
- # Define a filter for ignoring changes
-[filter "git-ignore-changes"]
-	clean = cat
-    smudge = cat
-    required

@@ -19,6 +19,7 @@ dependencies = [
     "magentic",
     "litellm",
     "loguru",
+    "keyring",
 ]
 
 [tool.setuptools]

@@ -4,6 +4,7 @@ from textual.widgets import Input, Static, Header, Footer, Button, RichLog
 from textual.message import Message
 from textual import on, work
 from textual.worker import Worker, WorkerState
+from textual.screen import ModalScreen
 from rich.text import Text
 from rich.panel import Panel
 from rich.console import Console
@@ -174,6 +175,71 @@ class ChatInput(Input):
             self.clear()
             event.stop()
             event.prevent_default()
+
+
+class APIKeyScreen(ModalScreen):
+    """Modal screen for entering API keys."""
+    
+    CSS = """
+    APIKeyScreen {
+        align: center middle;
+    }
+    
+    #api-dialog {
+        width: 60;
+        height: auto;
+        border: thick $background 80%;
+        background: $surface;
+        padding: 1 2;
+    }
+    
+    #api-title {
+        text-align: center;
+        margin-bottom: 1;
+    }
+    
+    #api-input {
+        margin: 1 0;
+    }
+    
+    #api-buttons {
+        align: center middle;
+        margin-top: 1;
+    }
+    """
+    
+    def __init__(self, key_name: str, description: str):
+        super().__init__()
+        self.key_name = key_name
+        self.description = description
+        
+    def compose(self) -> ComposeResult:
+        with Vertical(id="api-dialog"):
+            yield Static(f"[bold]API Key Required: {self.key_name}[/bold]", id="api-title")
+            yield Static(self.description)
+            yield Input(placeholder="Enter your API key", password=True, id="api-input")
+            with Horizontal(id="api-buttons"):
+                yield Button("Cancel", variant="error", id="cancel")
+                yield Button("Save", variant="primary", id="save")
+    
+    @on(Button.Pressed, "#cancel")
+    def cancel_pressed(self) -> None:
+        self.dismiss(None)
+    
+    @on(Button.Pressed, "#save")
+    def save_pressed(self) -> None:
+        input_widget = self.query_one("#api-input", Input)
+        key_value = input_widget.value.strip()
+        if key_value:
+            self.dismiss(key_value)
+        else:
+            # Could show an error message here
+            pass
+    
+    @on(Input.Submitted)
+    def input_submitted(self, event: Input.Submitted) -> None:
+        if event.value.strip():
+            self.dismiss(event.value.strip())
 
 
 class LogWindow(Vertical):
