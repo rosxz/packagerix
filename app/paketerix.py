@@ -88,7 +88,7 @@ Here is the information form the project's GitHub page:
 
 Note: your reply should contain exaclty one code block with the updated Nix code.
 """)
-def set_up_project (code_template: str, project_page: str) -> str : ...
+def set_up_project (code_template: str, project_page: str) -> StreamedStr : ...
 
 @prompt("""
 You are software packaging expert who can build any project using the Nix programming language.
@@ -116,7 +116,7 @@ Here is the information form the project's GitHub page:
 {project_page}
 ```
 """)
-def summarize_github (project_page: str) -> str : ...
+def summarize_github (project_page: str) -> StreamedStr : ...
 
 #def eval_plan_to_make_progress_valid
 

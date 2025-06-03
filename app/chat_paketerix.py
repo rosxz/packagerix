@@ -33,6 +33,7 @@ class ChatMessage(Static):
         self.content = content
         self.sender = sender
         self.timestamp = timestamp or datetime.now()
+        self.panel_static = None
         super().__init__()
         
     def compose(self) -> ComposeResult:
@@ -45,14 +46,34 @@ class ChatMessage(Static):
             message_text.append(f"🤖 paketerix ", style="bold blue")
             message_text.append(f"({time_str})", style="dim")
             message_text.append(f"\n{self.content}", style="blue")
-            yield Static(Panel(message_text, border_style="blue", padding=(0, 1)))
+            self.panel_static = Static(Panel(message_text, border_style="blue", padding=(0, 1)))
+            yield self.panel_static
         else:
             # User message with green styling
             message_text = Text()
             message_text.append(f"👤 user ", style="bold green")
             message_text.append(f"({time_str})", style="dim")
             message_text.append(f"\n{self.content}", style="green")
-            yield Static(Panel(message_text, border_style="green", padding=(0, 1)))
+            self.panel_static = Static(Panel(message_text, border_style="green", padding=(0, 1)))
+            yield self.panel_static
+    
+    def update_content(self, new_content: str):
+        """Update the message content (for streaming)."""
+        self.content = new_content
+        if self.panel_static:
+            time_str = self.timestamp.strftime("%H:%M")
+            message_text = Text()
+            
+            if self.sender == "paketerix":
+                message_text.append(f"🤖 paketerix ", style="bold blue")
+                message_text.append(f"({time_str})", style="dim")
+                message_text.append(f"\n{self.content}", style="blue")
+                self.panel_static.update(Panel(message_text, border_style="blue", padding=(0, 1)))
+            else:
+                message_text.append(f"👤 user ", style="bold green")
+                message_text.append(f"({time_str})", style="dim")
+                message_text.append(f"\n{self.content}", style="green")
+                self.panel_static.update(Panel(message_text, border_style="green", padding=(0, 1)))
 
 
 class ProgressPoll(Static):
@@ -119,6 +140,14 @@ class ChatHistory(ScrollableContainer):
         self.mount(message)
         # Auto-scroll to bottom
         self.scroll_end(animate=False)
+        return message
+
+    def add_streaming_message(self, initial_content: str, sender: str):
+        """Add a new message that will be updated via streaming."""
+        message = ChatMessage(initial_content, sender)
+        self.mount(message)
+        self.scroll_end(animate=False)
+        return message
 
     def add_progress_poll(self, prev_error: str, new_error: str):
         """Add a progress evaluation poll to the chat."""
@@ -377,17 +406,34 @@ class PaketerixChatApp(App):
             logger.info("Scraping project page...")
             project_page = scrape_and_process(url)
             logger.info("Summarizing GitHub project...")
-            from app.paketerix import summarize_github
-            summary = summarize_github(project_page)
             
-            response = (
+            # Add initial streaming message
+            initial_msg = "📋 **Project Analysis**\n\n"
+            streaming_msg = self.call_from_thread(chat_history.add_streaming_message, initial_msg, "paketerix")
+            
+            # Stream the summary
+            from app.paketerix import summarize_github
+            summary_stream = summarize_github(project_page)
+            
+            full_summary = ""
+            current_content = initial_msg
+            
+            # Process streaming chunks
+            for chunk in summary_stream:
+                full_summary += chunk
+                current_content = initial_msg + full_summary
+                self.call_from_thread(streaming_msg.update_content, current_content)
+                self.call_from_thread(chat_history.scroll_end, animate=False)
+            
+            # Add completion message
+            final_content = (
                 f"📋 **Project Analysis Complete!**\n\n"
-                f"{summary}\n\n"
+                f"{full_summary}\n\n"
                 f"I've analyzed the repository and gathered information about its build system "
                 f"and dependencies. Would you like me to proceed with creating a Nix package? "
                 f"(Type 'yes' to continue)"
             )
-            self.call_from_thread(chat_history.add_message, response, "paketerix")
+            self.call_from_thread(streaming_msg.update_content, final_content)
             
         except Exception as e:
             self.call_from_thread(chat_history.add_message, f"❌ Error analyzing repository: {str(e)}", "paketerix")
@@ -449,11 +495,30 @@ class PaketerixChatApp(App):
 
             # Generate initial package
             self.call_from_thread(chat_history.add_message, "🤖 Generating initial Nix derivation...", "paketerix")
+            
+            # Add initial streaming message for model reply
+            initial_reply_msg = "📝 **Model reply:**\n```nix\n"
+            reply_streaming_msg = self.call_from_thread(chat_history.add_streaming_message, initial_reply_msg, "paketerix")
+            
+            # Stream the model reply
             from app.paketerix import set_up_project
-            model_reply = set_up_project(starting_template, project_page)
-            self.call_from_thread(chat_history.add_message, f"📝 Model reply:\n```nix\n{model_reply}\n```", "paketerix")
-
-            code = extract_updated_code(model_reply)
+            model_reply_stream = set_up_project(starting_template, project_page)
+            
+            full_reply = ""
+            current_reply_content = initial_reply_msg
+            
+            # Process streaming chunks
+            for chunk in model_reply_stream:
+                full_reply += chunk
+                current_reply_content = initial_reply_msg + full_reply + "\n```"
+                self.call_from_thread(reply_streaming_msg.update_content, current_reply_content)
+                self.call_from_thread(chat_history.scroll_end, animate=False)
+            
+            # Final update with complete code block
+            final_reply_content = f"📝 **Model reply:**\n```nix\n{full_reply}\n```"
+            self.call_from_thread(reply_streaming_msg.update_content, final_reply_content)
+            
+            code = extract_updated_code(full_reply)
             self.call_from_thread(chat_history.add_message, "✅ Initial derivation created! Testing build...", "paketerix")
 
             # Test the build
