@@ -15,6 +15,9 @@ from app import config
 import litellm
 from typing import Optional
 from app.secure_keys import ensure_api_key
+from functools import wraps
+import hashlib
+import json
 
 config.init()
 
@@ -64,6 +67,53 @@ if "OLLAMA_HOST" in os.environ:
 # Function calling is not supported by anthropic. To add it to the prompt, set
 litellm.add_function_to_prompt = True
 
+def cache_streaming_response(func):
+    """Decorator that caches streaming responses.
+    
+    For cached results, yields the cached string as a single chunk.
+    For new results, streams the response and caches the complete result.
+    """
+    @wraps(func)
+    def wrapper(*args, **kwargs):
+        # Create a cache key from function name and arguments
+        # Convert args to a hashable format
+        key_data = {
+            'func_name': func.__name__,
+            'args': args,
+            'kwargs': kwargs
+        }
+        key_str = json.dumps(key_data, sort_keys=True, default=str)
+        cache_key = hashlib.md5(key_str.encode()).hexdigest()
+        
+        # Check if we have a cached result
+        cached_result = cache.get(cache_key)
+        if cached_result is not None:
+            logger.info(f"Using cached result for {func.__name__}")
+            # Return a generator that yields the cached result
+            def cached_generator():
+                yield cached_result
+            return cached_generator()
+        
+        # No cached result, call the original function
+        logger.info(f"No cached result, calling {func.__name__}")
+        stream = func(*args, **kwargs)
+        
+        # Collect the stream and yield chunks
+        chunks = []
+        def caching_generator():
+            for chunk in stream:
+                chunks.append(chunk)
+                yield chunk
+            
+            # After streaming is complete, cache the full result
+            full_result = ''.join(chunks)
+            cache.set(cache_key, full_result)
+            logger.info(f"Cached result for {func.__name__}")
+        
+        return caching_generator()
+    
+    return wrapper
+
 def package_missing_dependency (name: str): pass
     # itentify source
     # recurse into original process
@@ -83,7 +133,7 @@ class Project(BaseModel):
     version_tag : Optional[str]
     dependencies: list[str]
 
-@cache.memoize()
+@cache_streaming_response
 @prompt("""
 You are software packaging expert who can build any project using the Nix programming language.
 
@@ -118,6 +168,7 @@ Read the contents of the project's GitHub page and return the following informat
 """)
 def identify_dependencies (code_template: str, project_page: str) -> str : ...
 
+@cache_streaming_response
 @prompt("""
 You are software packaging expert who can build any project using the Nix programming language.
 
