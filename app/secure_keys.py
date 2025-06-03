@@ -4,6 +4,41 @@ from app.logging_config import logger
 
 SERVICE_NAME = "paketerix"
 
+# Track if we're using file backend
+_using_file_backend = False
+_paketerix_keyring_path = None
+
+try:
+    # Test if a proper keyring backend is available
+    backend = keyring.get_keyring()
+    backend_name = backend.__class__.__name__
+    logger.info(f"Keyring backend: {backend_name}")
+    
+    # Check if it's the fail backend (no keyring available)
+    if "fail" in backend_name.lower() or backend_name == "NullKeyring":
+        logger.warning("No secure keyring backend available")
+        _using_file_backend = True
+        
+        # Try to set up the PlaintextKeyring from keyrings.alt
+        try:
+            from keyrings.alt.file import PlaintextKeyring
+            
+            plain_keyring = PlaintextKeyring()
+            keyring.set_keyring(plain_keyring)
+            
+            # Get the actual path where keys will be stored
+            _paketerix_keyring_path = plain_keyring.file_path
+            
+            logger.info(f"Set up PlaintextKeyring at: {_paketerix_keyring_path}")
+            
+        except ImportError:
+            logger.error("keyrings.alt not available - please install it")
+            raise
+    else:
+        logger.info(f"Using secure keyring backend: {backend_name}")
+except Exception as e:
+    logger.error(f"Error checking keyring backend: {e}")
+
 def get_api_key(key_name: str) -> Optional[str]:
     """Get an API key from secure storage."""
     try:
@@ -31,6 +66,14 @@ class MissingAPIKeyError(Exception):
         self.description = description
         super().__init__(f"Missing API key: {key_name}")
 
+def is_using_file_backend():
+    """Check if we're using the file backend."""
+    return _using_file_backend
+
+def get_keyring_path():
+    """Get the path where keys are stored."""
+    return _paketerix_keyring_path
+
 def ensure_api_key(key_name: str, prompt_message: str = None, ui_mode: bool = False) -> str:
     """Ensure an API key is available, prompting if necessary."""
     # First try to get from keyring
@@ -54,6 +97,9 @@ def ensure_api_key(key_name: str, prompt_message: str = None, ui_mode: bool = Fa
         )
     
     # CLI mode - prompt directly
+    if _using_file_backend:
+        print(f"\nNo keystore backend detected. API keys will be stored in plain text at {_paketerix_keyring_path or '~/.paketerix/api_keys'}")
+    
     if prompt_message:
         print(f"\n{prompt_message}")
     else:
@@ -66,6 +112,6 @@ def ensure_api_key(key_name: str, prompt_message: str = None, ui_mode: bool = Fa
         raise ValueError(f"No value provided for {key_name}")
     
     set_api_key(key_name, key_value)
-    print(f"✓ {key_name} saved securely")
+    print(f"✓ {key_name} saved")
     
     return key_value

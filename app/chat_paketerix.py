@@ -177,6 +177,7 @@ class ChatInput(Input):
             event.prevent_default()
 
 
+
 class APIKeyScreen(ModalScreen):
     """Modal screen for entering API keys."""
     
@@ -186,8 +187,10 @@ class APIKeyScreen(ModalScreen):
     }
     
     #api-dialog {
-        width: 60;
+        width: 90;
         height: auto;
+        min-height: 10;
+        max-height: 20;
         border: thick $background 80%;
         background: $surface;
         padding: 1 2;
@@ -200,12 +203,19 @@ class APIKeyScreen(ModalScreen):
     
     #api-input {
         margin: 1 0;
+        width: 100%;
     }
     
     #api-buttons {
+        height: 3;
         align: center middle;
         margin-top: 1;
     }
+    
+    #api-buttons Button {
+        margin: 0 1;
+    }
+    
     """
     
     def __init__(self, key_name: str, description: str):
@@ -217,7 +227,10 @@ class APIKeyScreen(ModalScreen):
         with Vertical(id="api-dialog"):
             yield Static(f"[bold]API Key Required: {self.key_name}[/bold]", id="api-title")
             yield Static(self.description)
-            yield Input(placeholder="Enter your API key", password=True, id="api-input")
+            
+            
+            yield Input(placeholder="Enter your API key", id="api-input")
+            yield Static("", id="api-preview")  # For showing the entered key
             with Horizontal(id="api-buttons"):
                 yield Button("Cancel", variant="error", id="cancel")
                 yield Button("Save", variant="primary", id="save")
@@ -233,8 +246,17 @@ class APIKeyScreen(ModalScreen):
         if key_value:
             self.dismiss(key_value)
         else:
-            # Could show an error message here
-            pass
+            preview = self.query_one("#api-preview", Static)
+            preview.update("[red]Please enter an API key[/red]")
+    
+    @on(Input.Changed)
+    def on_input_changed(self, event: Input.Changed) -> None:
+        """Update preview when input changes."""
+        preview = self.query_one("#api-preview", Static)
+        if event.value.strip():
+            preview.update(f"[green]Entered: {event.value}[/green]")
+        else:
+            preview.update("")
     
     @on(Input.Submitted)
     def input_submitted(self, event: Input.Submitted) -> None:
@@ -380,6 +402,10 @@ class PaketerixChatApp(App):
         # Initialize paketerix config
         config.init()
         
+        # Set UI mode
+        from app.paketerix import set_ui_mode
+        set_ui_mode(True)
+        
         # Log startup
         logger.info("Paketerix Chat UI started")
         
@@ -461,6 +487,28 @@ class PaketerixChatApp(App):
         logger.info(f"Starting analysis of GitHub URL: {url}")
         logger.info(f"Worker thread - OLLAMA_HOST: {os.environ.get('OLLAMA_HOST', 'NOT SET')}")
         logger.info(f"Worker thread - MAGENTIC_LITELLM_MODEL: {os.environ.get('MAGENTIC_LITELLM_MODEL', 'NOT SET')}")
+        
+        # Ensure API keys are loaded before making LLM calls
+        from app.paketerix import ensure_api_keys_loaded
+        from app.secure_keys import MissingAPIKeyError, set_api_key
+        
+        try:
+            ensure_api_keys_loaded()
+        except MissingAPIKeyError as e:
+            # Show API key dialog
+            logger.info(f"Missing API key: {e.key_name}")
+            
+            # Store values for the callback
+            key_name = e.key_name
+            description = e.description
+            
+            # Request API key from UI thread
+            def get_key_from_ui():
+                screen = APIKeyScreen(key_name, description)
+                self.app.push_screen(screen, callback=lambda key: self._handle_api_key_result(key_name, key, url, chat_history))
+            
+            self.call_from_thread(get_key_from_ui)
+            return
         
         self.current_project_url = url
         self.packaging_state = "analyzing"
@@ -871,6 +919,23 @@ class PaketerixChatApp(App):
         """Periodically update the log window with new logs."""
         if self.log_window and self.log_window.has_class("-show-logs"):
             self.log_window.update_logs()
+    
+    def _handle_api_key_result(self, key_name: str, key_value: str, url: str, chat_history: ChatHistory) -> None:
+        """Handle the result from the API key dialog."""
+        if key_value:
+            # Save the key
+            from app.secure_keys import set_api_key
+            set_api_key(key_name, key_value)
+            os.environ[key_name] = key_value
+            logger.info(f"API key {key_name} saved and set in environment")
+            
+            # Retry the operation
+            self.process_user_input(url)
+        else:
+            chat_history.add_message(
+                f"❌ API key required but not provided. Please provide your {key_name} to continue.",
+                "paketerix"
+            )
 
 
 def main():

@@ -14,7 +14,7 @@ from app.logging_config import logger  # Import logger first to ensure it's init
 from app import config
 import litellm
 from typing import Optional
-from app.secure_keys import ensure_api_key
+from app.secure_keys import ensure_api_key, MissingAPIKeyError
 from functools import wraps
 import hashlib
 import json
@@ -29,26 +29,44 @@ from app.parsing import *
 magentic_backend = os.environ.get("MAGENTIC_BACKEND", "litellm")
 logger.info(f"Using magentic backend: {magentic_backend}")
 
-# Only load API keys if we're using a backend that needs them
-if magentic_backend == "anthropic" or "anthropic" in os.environ.get("MAGENTIC_LITELLM_MODEL", ""):
-    try:
-        anthropic_key = ensure_api_key(
-            "ANTHROPIC_API_KEY",
-            "Anthropic API key is required for Claude models.\nGet your key from: https://console.anthropic.com/"
-        )
-        os.environ["ANTHROPIC_API_KEY"] = anthropic_key
-    except ValueError as e:
-        logger.warning(f"Could not load Anthropic API key: {e}")
+# Global variable to track if we're in UI mode
+_ui_mode = False
 
-if magentic_backend == "openai" or "gpt" in os.environ.get("MAGENTIC_LITELLM_MODEL", ""):
-    try:
-        openai_key = ensure_api_key(
-            "OPENAI_API_KEY", 
-            "OpenAI API key is required for GPT models.\nGet your key from: https://platform.openai.com/api-keys"
-        )
-        os.environ["OPENAI_API_KEY"] = openai_key
-    except ValueError as e:
-        logger.warning(f"Could not load OpenAI API key: {e}")
+def set_ui_mode(ui_mode: bool):
+    """Set whether we're running in UI mode."""
+    global _ui_mode
+    _ui_mode = ui_mode
+
+def ensure_api_keys_loaded():
+    """Ensure API keys are loaded when needed."""
+    # Only load API keys if we're using a backend that needs them
+    if magentic_backend == "anthropic" or "anthropic" in os.environ.get("MAGENTIC_LITELLM_MODEL", ""):
+        if "ANTHROPIC_API_KEY" not in os.environ:
+            try:
+                anthropic_key = ensure_api_key(
+                    "ANTHROPIC_API_KEY",
+                    "Anthropic API key is required for Claude models.\nGet your key from: https://console.anthropic.com/",
+                    ui_mode=_ui_mode
+                )
+                os.environ["ANTHROPIC_API_KEY"] = anthropic_key
+            except (ValueError, MissingAPIKeyError) as e:
+                logger.warning(f"Could not load Anthropic API key: {e}")
+                if _ui_mode:
+                    raise
+
+    if magentic_backend == "openai" or "gpt" in os.environ.get("MAGENTIC_LITELLM_MODEL", ""):
+        if "OPENAI_API_KEY" not in os.environ:
+            try:
+                openai_key = ensure_api_key(
+                    "OPENAI_API_KEY", 
+                    "OpenAI API key is required for GPT models.\nGet your key from: https://platform.openai.com/api-keys",
+                    ui_mode=_ui_mode
+                )
+                os.environ["OPENAI_API_KEY"] = openai_key
+            except (ValueError, MissingAPIKeyError) as e:
+                logger.warning(f"Could not load OpenAI API key: {e}")
+                if _ui_mode:
+                    raise
 
 import logging
 if "OLLAMA_HOST" in os.environ:
@@ -204,6 +222,12 @@ def main():
     # Enable console logging for CLI mode
     from app.logging_config import enable_console_logging
     enable_console_logging()
+    
+    # Ensure we're in CLI mode
+    set_ui_mode(False)
+    
+    # Load API keys in CLI mode
+    ensure_api_keys_loaded()
     
     logger.info("""
 Welcome to Paketerix, your friendly Nix packaging assistant.
