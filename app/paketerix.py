@@ -1,3 +1,12 @@
+#!/usr/bin/env python3
+"""Paketerix - AI-powered Nix package builder.
+
+Main entry point that supports both terminal and textual UI modes.
+"""
+
+import argparse
+import os
+import sys
 from pydantic import BaseModel
 from magentic import prompt, prompt_chain, StreamedStr
 from magentic import (
@@ -9,21 +18,19 @@ from magentic import (
     SystemMessage
 )
 
-import os
 from app.logging_config import logger  # Import logger first to ensure it's initialized
 from app import config
 import litellm
 from typing import Optional
-from app.secure_keys import ensure_api_key, MissingAPIKeyError
 from functools import wraps
 import hashlib
 import json
 
 config.init()
 
-from app.nix import *
-from app.flake import *
-from app.parsing import *
+from app.nix import Error, get_last_ten_lines, test_updated_code
+from app.flake import init_flake
+from app.parsing import scrape_and_process, extract_updated_code, cache
 
 # Check which backend we're using
 magentic_backend = os.environ.get("MAGENTIC_BACKEND", "litellm")
@@ -36,38 +43,6 @@ def set_ui_mode(ui_mode: bool):
     """Set whether we're running in UI mode."""
     global _ui_mode
     _ui_mode = ui_mode
-
-def ensure_api_keys_loaded():
-    """Ensure API keys are loaded when needed."""
-    # Only load API keys if we're using a backend that needs them
-    model_name = os.environ.get("MAGENTIC_LITELLM_MODEL", "") or ""
-    if magentic_backend == "anthropic" or "anthropic" in model_name:
-        if "ANTHROPIC_API_KEY" not in os.environ:
-            try:
-                anthropic_key = ensure_api_key(
-                    "ANTHROPIC_API_KEY",
-                    "Anthropic API key is required for Claude models.\nGet your key from: https://console.anthropic.com/",
-                    ui_mode=_ui_mode
-                )
-                os.environ["ANTHROPIC_API_KEY"] = anthropic_key
-            except (ValueError, MissingAPIKeyError) as e:
-                logger.warning(f"Could not load Anthropic API key: {e}")
-                if _ui_mode:
-                    raise
-
-    if magentic_backend == "openai" or "gpt" in model_name:
-        if "OPENAI_API_KEY" not in os.environ:
-            try:
-                openai_key = ensure_api_key(
-                    "OPENAI_API_KEY", 
-                    "OpenAI API key is required for GPT models.\nGet your key from: https://platform.openai.com/api-keys",
-                    ui_mode=_ui_mode
-                )
-                os.environ["OPENAI_API_KEY"] = openai_key
-            except (ValueError, MissingAPIKeyError) as e:
-                logger.warning(f"Could not load OpenAI API key: {e}")
-                if _ui_mode:
-                    raise
 
 import logging
 if "OLLAMA_HOST" in os.environ:
@@ -135,28 +110,15 @@ def cache_streaming_response(func):
     
     return wrapper
 
-def package_missing_dependency (name: str): pass
-    # itentify source
-    # recurse into original process
-    #   - init new git template
-    #   - read github repo
-    #   - everything
-
-
-def fix_dummy_hash (error_message: str): ...
-    # not sure if I should do this with an LLM first
-    # or do it manually right away
-
-
 class Project(BaseModel):
     name: str
     latest_commit_sha1: str
     version_tag : Optional[str]
     dependencies: list[str]
 
-@cache_streaming_response
-@prompt("""
-You are software packaging expert who can build any project using the Nix programming language.
+from app.coordinator import ask_model
+
+@ask_model("""@model You are software packaging expert who can build any project using the Nix programming language.
 
 Read the contents of the project's GitHub page and fill out all of the sections in the code template that are marked with ... .
 Do not make any other modifications. Do not modify lib.fakeHash.
@@ -189,9 +151,7 @@ Read the contents of the project's GitHub page and return the following informat
 """)
 def identify_dependencies (code_template: str, project_page: str) -> str : ...
 
-@cache_streaming_response
-@prompt("""
-You are software packaging expert who can build any project using the Nix programming language.
+@ask_model("""@model You are software packaging expert who can build any project using the Nix programming language.
 
 Read the contents of the project's GitHub page and summarize it.
 Include information like
@@ -211,108 +171,99 @@ def summarize_github (project_page: str) -> StreamedStr : ...
 #def eval_plan_to_make_progress_valid
 
 
-class Question(BaseModel):
-    question: str
-    answer: str
-
 def mock_input (ask : str, reply: str):
     logger.info(ask)
     logger.info(reply + "\n")
     return reply
 
-def main():
-    """Main function for the original CLI interface."""
-    # Enable console logging for CLI mode
+def run_terminal_ui():
+    """Run the terminal-based interface."""
     from app.logging_config import enable_console_logging
     enable_console_logging()
     
-    # Ensure we're in CLI mode
     set_ui_mode(False)
     
-    # Load API keys in CLI mode
-    ensure_api_keys_loaded()
+    # Use the coordinator pattern for CLI
+    from app.coordinator import set_ui_adapter, TerminalUIAdapter
+    from app.packaging_coordinator import run_packaging_flow
+    from app.terminal_model_config import ensure_model_configured
     
-    logger.info("""
-Welcome to Paketerix, your friendly Nix packaging assistant.
-For now the only supported functionality is
-* packaging projects which are on GitHub,
-* which are sensible to build using mkDerivation and
-* list their dependencies in the README.md (TODO: update this so it's accurate)
-""")
-    project_url = mock_input("Enter the Github URL of the project you would like to package:\n", "https://github.com/bigbigmdm/IMSProg") #  "https://github.com/docker/compose")
-    assert (project_url.startswith("https://github.com/"))
+    # Set up terminal UI adapter
+    set_ui_adapter(TerminalUIAdapter())
+    
+    # Ensure model is configured before running
+    if not ensure_model_configured():
+        logger.error("Model configuration required to continue")
+        sys.exit(1)
+    
+    # Run the packaging flow in background thread (like textual UI)
+    import threading
+    
+    def run_coordinator():
+        try:
+            run_packaging_flow()
+        except Exception as e:
+            logger.error(f"Error in packaging flow: {e}")
+            import traceback
+            traceback.print_exc()
+    
+    coordinator_thread = threading.Thread(target=run_coordinator)
+    coordinator_thread.daemon = True
+    coordinator_thread.start()
+    
+    # Wait for completion
+    coordinator_thread.join()
 
-    project_page = scrape_and_process(project_url)
 
-    logger.info("I found the following information on the project page:\n")
-    logger.info(project_page)
+def run_textual_ui():
+    """Run the textual-based interface."""
+    from app.textual_ui import PaketerixChatApp
+    app = PaketerixChatApp()
+    app.run()
 
-    flake = init_flake()
-    logger.info(f"Working on temporary flake at {flake_dir}")
 
-    starting_template = (config.template_dir / "package.nix").read_text()
-    starting_template_error = invoke_build()
-    starting_template_error_for_func = Error(type=Error.ErrorType.EVAL_ERROR, error_message=get_last_ten_lines(starting_template_error.stderr))
-    error_stack.append(starting_template_error)
+# The ensure_model_configured function is now handled by UI-specific implementations
 
-    logger.info("Template:")
-    logger.info(starting_template_error_for_func.model_dump_json())
 
-    starting_template_call = FunctionCall(test_updated_code, starting_template)
-
-    #model_reply = gather_project_info(project_page)
-    model_reply = set_up_project(starting_template, project_page)
-    logger.info("model reply:\n" + model_reply)
-    code = extract_updated_code(model_reply)
-    error = test_updated_code(code)
-    error_trunc = error.error_message
-
-    first_update_call = FunctionCall(test_updated_code, code)
-
-    @chatprompt(
-    SystemMessage(
-    """
-    You are software packaging expert who can build any project using the nix programming language.
-    Your goal is to make the build of your designated progress proceed one step further.
-
-    You will go through the following steps in a loop
-    1. look at the current build error
-    2. identify its cause, taking into account
-        a) your previous changs
-        b) potentially missing dependencies
-    3. call the test_updated_code (again) to see if your change fixes the error
-
-    Your goal is to make the build progress further with each ste without adding any unnecessary configuration or dependencies.
-
-    Note: sha-256 hashes are filled in by invoking the build with lib.fakeHash and obtaining the correct sha256 from the build output.
-    Note: Call the test_updated_code function repeatedly with updated code until the build succeeds. Do not respond directly.
-    """),
-    UserMessage("""
-    Make this project build, step by step:
-    ¸¸¸
-    {template_str}
-    ¸¸¸
-    """),
-    AssistantMessage(starting_template_call),
-    FunctionResultMessage(starting_template_error_for_func, starting_template_call),
-    AssistantMessage(first_update_call),
-    FunctionResultMessage(error, first_update_call),
-    functions=[test_updated_code] # search_nixpkgs_for_package]
-        # package_missing_dependency, ask_human_for_help],
+def main():
+    """Main entry point for paketerix."""
+    parser = argparse.ArgumentParser(
+        description="Paketerix - AI-powered Nix package builder",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        epilog="""Examples:
+  paketerix                    # Run with interactive textual UI
+  paketerix --raw             # Run with terminal-only interface
+  paketerix --help            # Show this help
+"""
     )
-    def build_project_inner (template_str) -> StreamedStr : ... # FunctionCall[Optional[Error]] : ... # returns the modified code
-
-    #build_output = build_project_inner(starting_template)
-    #logger.info(build_output)
-    #build_output()
-    #for chunk in build_project_inner(starting_template):
-    #    logger.info(chunk)
-    summary = summarize_github(project_page)
-    logger.info(summary)
-    input("\nend of output - waiting for keypress")
-
-
-def build_project (template_str) -> StreamedStr : ... # Placeholder for external access
+    
+    parser.add_argument(
+        "--raw",
+        action="store_true",
+        help="Use terminal-only interface instead of textual UI"
+    )
+    
+    parser.add_argument(
+        "--version",
+        action="version",
+        version="paketerix 0.1.0"
+    )
+    
+    args = parser.parse_args()
+    
+    try:
+        if args.raw:
+            logger.info("Starting paketerix in terminal mode")
+            run_terminal_ui()
+        else:
+            logger.info("Starting paketerix in textual UI mode")
+            run_textual_ui()
+    except KeyboardInterrupt:
+        logger.info("\nExiting...")
+        sys.exit(0)
+    except Exception as e:
+        logger.error(f"Fatal error: {e}")
+        sys.exit(1)
 
 
 if __name__ == "__main__":

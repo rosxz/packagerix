@@ -35,8 +35,10 @@ def extract_updated_code(model_reply):
     if len(matches) == 1:
         return matches[0].group(1)
     elif len(matches) == 0:
-        logger.error("No section delimited by triple backticks was found. Should we pass this back to the model?")
-        assert (False)
+        error_msg = "No section delimited by triple backticks was found in the model's reply"
+        logger.error(error_msg)
+        raise ValueError(error_msg)
     else:
-        logger.error("Reply contained more than one quoted section")
-        assert (False)
+        error_msg = f"Reply contained {len(matches)} quoted sections, expected exactly 1"
+        logger.error(error_msg)
+        raise ValueError(error_msg)

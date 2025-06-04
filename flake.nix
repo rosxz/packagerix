@@ -57,8 +57,8 @@
 #            MAGENTIC_OPENAI_MODEL = "gpt-3.5-turbo";
 #            MAGENTIC_OPENAI_MODEL = "gpt-4o";
 #            MAGENTIC_LITELLM_MAX_TOKENS = "1024";
-#            MAGENTIC_LITELLM_MODEL =  "anthropic/claude-3-5-haiku-20241022";
-            MAGENTIC_LITELLM_MODEL =  "ollama/qwen3:32b";
+            MAGENTIC_LITELLM_MODEL =  "anthropic/claude-3-5-haiku-20241022";
+#            MAGENTIC_LITELLM_MODEL =  "ollama/gemma3:4b";
 #            MAGENTIC_LITELLM_MODEL =  "ollama/llama3.1:70b";
 #            MAGENTIC_LITELLM_MODEL =  "anthropic/claude-3-haiku-20240307";
              ANTHROPIC_LOG="debug";
