@@ -40,7 +40,8 @@ def set_ui_mode(ui_mode: bool):
 def ensure_api_keys_loaded():
     """Ensure API keys are loaded when needed."""
     # Only load API keys if we're using a backend that needs them
-    if magentic_backend == "anthropic" or "anthropic" in os.environ.get("MAGENTIC_LITELLM_MODEL", ""):
+    model_name = os.environ.get("MAGENTIC_LITELLM_MODEL", "") or ""
+    if magentic_backend == "anthropic" or "anthropic" in model_name:
         if "ANTHROPIC_API_KEY" not in os.environ:
             try:
                 anthropic_key = ensure_api_key(
@@ -54,7 +55,7 @@ def ensure_api_keys_loaded():
                 if _ui_mode:
                     raise
 
-    if magentic_backend == "openai" or "gpt" in os.environ.get("MAGENTIC_LITELLM_MODEL", ""):
+    if magentic_backend == "openai" or "gpt" in model_name:
         if "OPENAI_API_KEY" not in os.environ:
             try:
                 openai_key = ensure_api_key(

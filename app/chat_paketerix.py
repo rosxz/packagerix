@@ -275,6 +275,10 @@ class LogWindow(Vertical):
         """Create the log window layout."""
         yield Header()
         yield RichLog(highlight=True, markup=True, id="log-content")
+        yield Static(
+            "[dim]💡 Tip: Hold Shift and drag to select text, then use Ctrl+C to copy[/dim]",
+            id="log-tip"
+        )
         yield Footer()
         
     def update_logs(self):
@@ -364,6 +368,13 @@ class PaketerixChatApp(App):
     
     LogWindow.-show-logs {
         display: block;
+    }
+    
+    #log-tip {
+        height: 1;
+        text-align: center;
+        background: $panel;
+        padding: 0 1;
     }
     """
     
@@ -646,6 +657,7 @@ class PaketerixChatApp(App):
                 self.handle_build_error_sync(error, chat_history)
 
         except Exception as e:
+            logger.error(f"Error during packaging: {str(e)}", exc_info=True)
             self.call_from_thread(chat_history.add_message, f"❌ Error during packaging: {str(e)}", "paketerix")
             self.packaging_state = "idle"
     
