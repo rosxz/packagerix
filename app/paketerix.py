@@ -78,10 +78,12 @@ else:
 #litellm.set_verbose=True
 # litellm.set_verbose=True
 
-# Explicitly set ollama_api_base if OLLAMA_HOST is set
+# Note: Do NOT set litellm.api_base globally as it affects all models
+# Instead, Ollama models should specify api_base per request
+# or use LITELLM_LOG=DEBUG to see endpoint selection
 if "OLLAMA_HOST" in os.environ:
-    litellm.api_base = os.environ["OLLAMA_HOST"]
-    logger.info(f"Set litellm.api_base to: {litellm.api_base}")
+    logger.info(f"OLLAMA_HOST available at: {os.environ['OLLAMA_HOST']}")
+    logger.info("Note: api_base will be set per-model, not globally")
 
 # Function calling is not supported by anthropic. To add it to the prompt, set
 litellm.add_function_to_prompt = True
