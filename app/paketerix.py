@@ -9,7 +9,7 @@ import os
 import sys
 from pydantic import BaseModel
 
-from app.logging_config import logger  # Import logger first to ensure it's initialized
+from app.ui.logging_config import logger  # Import logger first to ensure it's initialized
 from app import config
 import litellm
 from typing import Optional
@@ -112,7 +112,7 @@ def mock_input (ask : str, reply: str):
 
 def run_terminal_ui():
     """Run the terminal-based interface."""
-    from app.logging_config import enable_console_logging
+    from app.ui.logging_config import enable_console_logging
     enable_console_logging()
     
     set_ui_mode(False)
@@ -120,7 +120,7 @@ def run_terminal_ui():
     # Use the coordinator pattern for CLI
     from app.coordinator import set_ui_adapter, TerminalUIAdapter
     from app.packaging_coordinator import run_packaging_flow
-    from app.terminal_model_config import ensure_model_configured
+    from app.ui.raw_terminal.terminal_model_config import ensure_model_configured
     
     # Set up terminal UI adapter
     set_ui_adapter(TerminalUIAdapter())
@@ -151,7 +151,7 @@ def run_terminal_ui():
 
 def run_textual_ui():
     """Run the textual-based interface."""
-    from app.textual_ui import PaketerixChatApp
+    from app.ui.textual.textual_ui import PaketerixChatApp
     app = PaketerixChatApp()
     app.run()
 

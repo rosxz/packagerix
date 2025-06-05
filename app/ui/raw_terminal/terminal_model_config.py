@@ -2,9 +2,9 @@
 
 import os
 from typing import Optional, Dict, Any
-from app.model_config import PROVIDERS, Provider, get_available_models, save_configuration, load_saved_configuration
-from app.model_config_dialog import check_api_key_valid
-from app.logging_config import logger
+from app.ui.model_config import PROVIDERS, Provider, get_available_models, save_configuration, load_saved_configuration
+from app.ui.textual.model_config_dialog import check_api_key_valid
+from app.ui.logging_config import logger
 
 
 def show_model_config_terminal() -> Optional[Dict[str, str]]:

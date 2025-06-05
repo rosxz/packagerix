@@ -8,7 +8,7 @@ import git
 from typing import Optional
 
 from app.flake import update_flake
-from app.logging_config import logger
+from app.ui.logging_config import logger
 
 def search_nixpkgs_for_package(query: str) -> str:
     """search the nixpkgs repository of Nix code for the given package"""

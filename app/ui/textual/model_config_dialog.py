@@ -8,8 +8,8 @@ from typing import Optional, List
 import os
 import asyncio
 import litellm
-from app.model_config import PROVIDERS, Provider, get_available_models, save_configuration
-from app.logging_config import logger
+from app.ui.model_config import PROVIDERS, Provider, get_available_models, save_configuration
+from app.ui.logging_config import logger
 
 
 def check_api_key_valid(provider: Provider) -> bool:
@@ -123,7 +123,7 @@ class ModelConfigDialog(ModalScreen):
         self.selected_model = None
         
         # Load saved configuration if available
-        from app.model_config import load_saved_configuration
+        from app.ui.model_config import load_saved_configuration
         saved_config = load_saved_configuration()
         if saved_config:
             provider_name, model = saved_config

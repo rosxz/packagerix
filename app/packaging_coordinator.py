@@ -1,14 +1,11 @@
 """Business logic for paketerix using the coordinator pattern."""
 
-from magentic import StreamedStr
-from app.coordinator import ask_user, ask_model, coordinator_message, coordinator_error, coordinator_progress
+from app.coordinator import ask_user,  coordinator_message, coordinator_error, coordinator_progress
 from app.parsing import scrape_and_process, extract_updated_code
 from app.flake import init_flake
-from app.nix import Error, get_last_ten_lines, invoke_build, test_updated_code
+from app.nix import test_updated_code
 from app.model_prompts import set_up_project, summarize_github, fix_build_error
 from app import config
-from pathlib import Path
-
 
 @ask_user("""@user Welcome to Paketerix! 🚀
 

@@ -81,7 +81,7 @@ class TerminalUIAdapter(UIAdapter):
     
     def handle_model_streaming(self, streamed_result) -> str:
         """Handle streaming from a model response."""
-        from app.logging_config import logger
+        from app.ui.logging_config import logger
         from magentic import StreamedStr
         
         if not isinstance(streamed_result, StreamedStr):
@@ -99,7 +99,7 @@ class TerminalUIAdapter(UIAdapter):
     
     def show_message(self, message: Message):
         """Display a message in terminal."""
-        from app.logging_config import logger
+        from app.ui.logging_config import logger
         
         actor_symbol = {
             Actor.COORDINATOR: "🎯",
@@ -112,12 +112,12 @@ class TerminalUIAdapter(UIAdapter):
     
     def show_error(self, error: str):
         """Display error in terminal."""
-        from app.logging_config import logger
+        from app.ui.logging_config import logger
         logger.error(f"❌ Error: {error}")
     
     def show_progress(self, message: str):
         """Show progress in terminal."""
-        from app.logging_config import logger
+        from app.ui.logging_config import logger
         logger.info(f"⏳ {message}")
 
 
@@ -192,7 +192,7 @@ def ask_model(prompt_text: str):
                 import traceback
                 tb = traceback.format_exc()
                 error_msg = f"Error in model function {func.__name__}: {str(e)}\n{tb}"
-                from app.logging_config import logger
+                from app.ui.logging_config import logger
                 logger.error(error_msg)
                 raise
         

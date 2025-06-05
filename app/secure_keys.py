@@ -1,6 +1,6 @@
 import keyring
 from typing import Optional
-from app.logging_config import logger
+from app.ui.logging_config import logger
 
 SERVICE_NAME = "paketerix"
 

@@ -21,7 +21,7 @@ from app.model_prompts import (
 from app.parsing import scrape_and_process, extract_updated_code
 from app.flake import init_flake
 from app.nix import Error, get_last_ten_lines, invoke_build, test_updated_code, error_stack
-from app.logging_config import logger, log_capture
+from app.ui.logging_config import logger, log_capture
 import os
 
 
@@ -458,7 +458,7 @@ class PaketerixChatApp(App):
     def check_model_configuration(self):
         """Show model configuration dialog on every launch."""
         # Always show dialog on launch
-        from app.model_config_dialog import ModelConfigDialog
+        from app.ui.textual.model_config_dialog import ModelConfigDialog
         self.push_screen(ModelConfigDialog(), self.handle_model_config_result)
     
     def handle_model_config_result(self, result):
@@ -507,7 +507,7 @@ class PaketerixChatApp(App):
         """Start the packaging flow with the coordinator."""
         # Set up the textual UI adapter
         from app.coordinator import set_ui_adapter
-        from app.textual_ui_adapter import TextualUIAdapter
+        from app.ui.textual.textual_ui_adapter import TextualUIAdapter
         from app.packaging_coordinator import run_packaging_flow
         
         chat_history = self.query_one("#chat-history", ChatHistory)

@@ -4,7 +4,7 @@ import os
 import litellm
 from typing import List, Dict, Optional, Tuple
 from dataclasses import dataclass
-from app.logging_config import logger
+from app.ui.logging_config import logger
 
 
 @dataclass

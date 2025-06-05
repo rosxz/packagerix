@@ -6,7 +6,7 @@ import re
 import json
 
 from diskcache import Cache
-from app.logging_config import logger
+from app.ui.logging_config import logger
 
 cache = Cache("cachedir")
 
