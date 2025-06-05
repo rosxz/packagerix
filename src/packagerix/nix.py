@@ -34,6 +34,7 @@ class Error(BaseModel):
         REGRESS = (1, "error not resolved - build fails earlier")
         EVAL_ERROR = (2, "code failed to evaluate")
         PROGRESS = (3, "error resolved - build fails later")
+        HASH_MISMATCH = (4, "hash mismatch - needs correct hash to be filled in")
 
         def __init__(self, id, description):
             self.id = id
@@ -52,6 +53,20 @@ class Error(BaseModel):
 # to evalute if the model made progress towards building the project
 # this is done by counting magical phrases in the build output like
 # "comiling ..." 
+def eval_initial_build() -> Error:
+    """Evaluate the initial build - look for hash mismatch which indicates progress."""
+    completed_process = error_stack[-1]
+    error_message = completed_process.stderr
+    
+    # Check if this is a hash mismatch error (indicates template was filled correctly)
+    if "hash mismatch" in error_message.lower() or "expected sha256" in error_message.lower():
+        logger.info("✅ Initial build shows hash mismatch - template was filled correctly!")
+        # Return Error object for LLM to fix the hash
+        return Error(type=Error.ErrorType.HASH_MISMATCH, error_message=error_message)
+    else:
+        logger.info("❌ Initial build failed with non-hash error")
+        return Error(type=Error.ErrorType.EVAL_ERROR, error_message=error_message)
+
 # a significantly higher number of magical phrases indicates progress
 # an about equal amount goes to an llm to break the tie using same_build_error with the two tails of the two build logs
 def eval_progress() -> Error:
@@ -69,20 +84,10 @@ def eval_progress() -> Error:
     for errorType in Error.ErrorType:
         logger.info(f"{errorType.id}. {errorType.description}")
 
-    while True:
-        try:
-            # Ask the user for their choice
-            choice = int(input("Please pick a number corresponding to your choice: "))
-
-            # Check if the choice is within the range
-            if 1 <= choice <= len(Error.ErrorType):
-                break
-            else:
-                logger.warning("Invalid choice. Please choose a number from the list.")
-
-        except ValueError:
-            # Handle the case where the input is not an integer
-            logger.warning("Invalid input. Please enter a number.")
+    # Use coordinator pattern to get user choice
+    from packagerix.packaging_flow.user_prompts import evaluate_build_progress
+    choice_str = evaluate_build_progress(prev_error_message_trunc, error_message_trunc)
+    choice = int(choice_str)
 
     # Process the choice
     errorType = Error.ErrorType.from_id(choice)
@@ -90,7 +95,7 @@ def eval_progress() -> Error:
     return Error(type=errorType, error_message=error_message_trunc)
 
 
-def test_updated_code(updated_code: str) -> Optional[Error]:
+def test_updated_code(updated_code: str, is_initial_build: bool = False) -> Optional[Error]:
     """build updated Nix code"""
 
     update_flake(updated_code)
@@ -109,7 +114,10 @@ def test_updated_code(updated_code: str) -> Optional[Error]:
     if result.returncode == 0:
         return None
     else:
-        return eval_progress()
+        if is_initial_build:
+            return eval_initial_build()
+        else:
+            return eval_progress()
         # if errorType == Error.ErrorType.REGRESS:
         #     # retry in current context
             

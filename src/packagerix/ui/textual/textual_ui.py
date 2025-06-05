@@ -142,6 +142,10 @@ class ProgressPoll(Static):
             progress_btn.tooltip = "Build fails later"
             yield progress_btn
 
+            hash_btn = Button("🔧 Hash Mismatch", id="choice-4", variant="primary")
+            hash_btn.tooltip = "Needs correct hash to be filled in"
+            yield hash_btn
+
     @on(Button.Pressed)
     def on_button_pressed(self, event: Button.Pressed) -> None:
         """Handle progress choice button press."""
@@ -151,6 +155,8 @@ class ProgressPoll(Static):
             choice = 2
         elif event.button.id == "choice-3":
             choice = 3
+        elif event.button.id == "choice-4":
+            choice = 4
         else:
             return
 
@@ -488,19 +494,28 @@ class PackagerixChatApp(App):
     @on(ProgressPoll.ProgressChoice)
     def handle_progress_choice(self, event: ProgressPoll.ProgressChoice) -> None:
         """Handle progress evaluation choice."""
-        chat_history = self.query_one("#chat-history", ChatHistory)
-
-        choices = {
-            1: "❌ Regress (build fails earlier)",
-            2: "⚠️ Eval Error (code failed to evaluate)",
-            3: "✅ Progress (build fails later)"
-        }
-
-        choice_text = choices.get(event.choice, "Unknown choice")
-        chat_history.add_message(f"Selected: {choice_text}", "user")
-
-        # Continue with the build process based on choice
-        asyncio.create_task(self.continue_build_process(event.choice))
+        # Check if we have a UI adapter waiting for progress response
+        from packagerix.ui.conversation import get_ui_adapter
+        adapter = get_ui_adapter()
+        
+        if hasattr(adapter, 'progress_response_event') and adapter.progress_response_event:
+            # Set the choice in the response container and signal completion
+            adapter.progress_response_container[0] = str(event.choice)
+            adapter.progress_response_event.set()
+            # Clear the event so it doesn't interfere with future calls
+            adapter.progress_response_event = None
+            adapter.progress_response_container = None
+        else:
+            # Fallback: show message in chat (legacy behavior)
+            chat_history = self.query_one("#chat-history", ChatHistory)
+            choices = {
+                1: "❌ Regress (build fails earlier)",
+                2: "⚠️ Eval Error (code failed to evaluate)",
+                3: "✅ Progress (build fails later)",
+                4: "🔧 Hash Mismatch (needs correct hash)"
+            }
+            choice_text = choices.get(event.choice, "Unknown choice")
+            chat_history.add_message(f"Selected: {choice_text}", "user")
     
     @work(exclusive=False, thread=True)
     def start_packaging_flow(self) -> None:

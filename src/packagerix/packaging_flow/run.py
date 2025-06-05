@@ -58,7 +58,7 @@ def package_project():
     
     # Step 7: Test build
     coordinator_progress("Testing the initial build...")
-    error = test_updated_code(code)
+    error = test_updated_code(code, is_initial_build=True)
     
     if error is None:
         coordinator_message("✅ Build succeeded on first try!")

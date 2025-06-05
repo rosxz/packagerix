@@ -24,6 +24,11 @@ class TextualUIAdapter(UIAdapter):
     
     def ask_user(self, prompt: str) -> str:
         """Ask the user for input via the textual interface."""
+        # Check if this is a progress evaluation request
+        if "Please evaluate the build progress" in prompt and "Previous error:" in prompt:
+            return self._handle_progress_evaluation(prompt)
+        
+        # Regular text input handling
         # Show coordinator message
         self.show_message(Message(Actor.COORDINATOR, prompt))
         
@@ -55,6 +60,47 @@ class TextualUIAdapter(UIAdapter):
         self.show_message(Message(Actor.USER, response))
         
         return response
+    
+    def _handle_progress_evaluation(self, prompt: str) -> str:
+        """Handle progress evaluation with ProgressPoll widget."""
+        import threading
+        import re
+        
+        # Extract errors from the prompt
+        prev_error_match = re.search(r'Previous error:\s*\n(.*?)\n\nNew error:', prompt, re.DOTALL)
+        new_error_match = re.search(r'New error:\s*\n(.*?)\n\nPlease choose:', prompt, re.DOTALL)
+        
+        prev_error = prev_error_match.group(1).strip() if prev_error_match else "Previous error not found"
+        new_error = new_error_match.group(1).strip() if new_error_match else "New error not found"
+        
+        response_event = threading.Event()
+        response_container = [None]
+        
+        # Store the response event so the main app can set it
+        self.progress_response_event = response_event
+        self.progress_response_container = response_container
+        
+        def show_progress_poll():
+            # Add the progress poll widget
+            self.chat_history.add_progress_poll(prev_error, new_error)
+        
+        self.app.call_from_thread(show_progress_poll)
+        
+        # Wait for response (will be set by handle_progress_choice in main app)
+        response_event.wait()
+        choice = response_container[0]
+        
+        # Show user's choice
+        choice_text = {
+            "1": "❌ Regress (build fails earlier)",
+            "2": "⚠️ Eval Error (code failed to evaluate)", 
+            "3": "✅ Progress (build fails later)",
+            "4": "🔧 Hash Mismatch (needs correct hash)"
+        }.get(choice, f"Choice {choice}")
+        
+        self.show_message(Message(Actor.USER, choice_text))
+        
+        return choice
     
     def _enable_input(self):
         """Re-enable the input field."""
