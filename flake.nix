@@ -52,10 +52,6 @@
             MAGENTIC_BACKEND = "litellm";
             OLLAMA_HOST= "https://hydralisk.van-duck.ts.net:11435";
 #            MAGENTIC_LITELLM_MAX_TOKENS = "1024";
-            MAGENTIC_LITELLM_MODEL =  "anthropic/claude-3-5-haiku-20241022";
-#            MAGENTIC_LITELLM_MODEL =  "ollama/gemma3:4b";
-#            MAGENTIC_LITELLM_MODEL =  "ollama/llama3.1:70b";
-#            MAGENTIC_LITELLM_MODEL =  "anthropic/claude-3-haiku-20240307";
 #             ANTHROPIC_LOG="debug";
             
             # Use only dependencies environment, not the built package
