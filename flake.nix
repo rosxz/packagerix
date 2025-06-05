@@ -41,10 +41,10 @@
       {
         packages = {
           # Create a virtual environment with all dependencies
-          default = pythonSet.mkVirtualEnv "paketerix-env" workspace.deps.default;
+          default = pythonSet.mkVirtualEnv "packagerix-env" workspace.deps.default;
           
-          # The paketerix application itself
-          paketerix = pythonSet.paketerix;
+          # The packagerix application itself
+          packagerix = pythonSet.packagerix;
         };
 
         devShells = {
@@ -62,9 +62,15 @@
 #            MAGENTIC_LITELLM_MODEL =  "ollama/llama3.1:70b";
 #            MAGENTIC_LITELLM_MODEL =  "anthropic/claude-3-haiku-20240307";
              ANTHROPIC_LOG="debug";
+            
+            # Use only dependencies environment, not the built package
             packages = [
-              self.packages.${system}.default
+              python
+              (pythonSet.mkVirtualEnv "packagerix-dev-deps" workspace.deps.default)
             ];
+            
+            # Point to source files for development
+            PYTHONPATH = "src";
           };
           
           # Impure shell for generating uv.lock

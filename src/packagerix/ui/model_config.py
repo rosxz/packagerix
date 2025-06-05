@@ -1,10 +1,10 @@
-"""Model configuration flow for paketerix using LiteLLM."""
+"""Model configuration flow for packagerix using LiteLLM."""
 
 import os
 import litellm
 from typing import List, Dict, Optional, Tuple
 from dataclasses import dataclass
-from app.ui.logging_config import logger
+from packagerix.ui.logging_config import logger
 
 
 @dataclass
@@ -126,7 +126,7 @@ def save_configuration(provider: Provider, model: str):
     
     try:
         import json
-        config_path = os.path.expanduser("~/.paketerix/config.json")
+        config_path = os.path.expanduser("~/.packagerix/config.json")
         os.makedirs(os.path.dirname(config_path), exist_ok=True)
         
         with open(config_path, "w") as f:
@@ -141,7 +141,7 @@ def load_saved_configuration() -> Optional[Tuple[str, str]]:
     """Load previously saved configuration."""
     try:
         import json
-        config_path = os.path.expanduser("~/.paketerix/config.json")
+        config_path = os.path.expanduser("~/.packagerix/config.json")
         
         if os.path.exists(config_path):
             with open(config_path) as f:
@@ -159,7 +159,7 @@ def load_saved_configuration() -> Optional[Tuple[str, str]]:
                 # Load API keys from secure storage if needed
                 provider = next((p for p in PROVIDERS if p.name == provider_name), None)
                 if provider and provider.requires_api_key:
-                    from app.secure_keys import get_api_key
+                    from packagerix.secure_keys import get_api_key
                     api_key = get_api_key(provider.env_var)
                     if api_key:
                         os.environ[provider.env_var] = api_key

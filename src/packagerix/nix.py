@@ -1,14 +1,14 @@
 import subprocess
 
-from app.config import flake_dir, error_stack
+from packagerix.config import flake_dir, error_stack
 from pydantic import BaseModel
 
 import git
 
 from typing import Optional
 
-from app.flake import update_flake
-from app.ui.logging_config import logger
+from packagerix.flake import update_flake
+from packagerix.ui.logging_config import logger
 
 def search_nixpkgs_for_package(query: str) -> str:
     """search the nixpkgs repository of Nix code for the given package"""

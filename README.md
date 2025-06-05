@@ -1,4 +1,4 @@
-# Paketerix - AI assistant for nix packaging
+# Packagerix - AI assistant for nix packaging
 
 The elevator pitch for this project is that you give it the URL of a GitHub project,
 and it starts from a template and iteratively improves on it until it finally succeeds (or fails)
@@ -22,7 +22,7 @@ I could also imagine providing this functionality as a hosted service to custome
 
 To run the terminal UI use:
 ```
-nix develop -c python -m app.chat_paketerix
+nix develop -c python -m app.packagerix
 ```
 
 You have to set an appropriate model in the `flake.nix` file.

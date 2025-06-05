@@ -1,12 +1,12 @@
-"""Business logic for paketerix using the coordinator pattern."""
+"""Business logic for packagerix using the coordinator pattern."""
 
-from app.ui.conversation import ask_user,  coordinator_message, coordinator_error, coordinator_progress
-from app.parsing import scrape_and_process, extract_updated_code
-from app.flake import init_flake
-from app.nix import test_updated_code
-from app.packaging_flow.model_prompts import set_up_project, summarize_github, fix_build_error
-from app.packaging_flow.user_prompts import get_project_url
-from app import config
+from packagerix.ui.conversation import ask_user,  coordinator_message, coordinator_error, coordinator_progress
+from packagerix.parsing import scrape_and_process, extract_updated_code
+from packagerix.flake import init_flake
+from packagerix.nix import test_updated_code
+from packagerix.packaging_flow.model_prompts import set_up_project, summarize_github, fix_build_error
+from packagerix.packaging_flow.user_prompts import get_project_url
+from packagerix import config
 
 
 

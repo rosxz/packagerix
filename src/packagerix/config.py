@@ -11,7 +11,7 @@ def init():
     global template_dir
 
     script_dir = os.path.dirname(os.path.abspath(__file__))
-    reference_directory_name = '../template'
+    reference_directory_name = 'template'
     template_dir = Path(script_dir, reference_directory_name)
 
     global flake_dir

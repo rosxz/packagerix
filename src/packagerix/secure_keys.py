@@ -1,12 +1,12 @@
 import keyring
 from typing import Optional
-from app.ui.logging_config import logger
+from packagerix.ui.logging_config import logger
 
-SERVICE_NAME = "paketerix"
+SERVICE_NAME = "packagerix"
 
 # Track if we're using file backend
 _using_file_backend = False
-_paketerix_keyring_path = None
+_packagerix_keyring_path = None
 
 try:
     # Test if a proper keyring backend is available
@@ -27,9 +27,9 @@ try:
             keyring.set_keyring(plain_keyring)
             
             # Get the actual path where keys will be stored
-            _paketerix_keyring_path = plain_keyring.file_path
+            _packagerix_keyring_path = plain_keyring.file_path
             
-            logger.info(f"Set up PlaintextKeyring at: {_paketerix_keyring_path}")
+            logger.info(f"Set up PlaintextKeyring at: {_packagerix_keyring_path}")
             
         except ImportError:
             logger.error("keyrings.alt not available - please install it")
@@ -72,7 +72,7 @@ def is_using_file_backend():
 
 def get_keyring_path():
     """Get the path where keys are stored."""
-    return _paketerix_keyring_path
+    return _packagerix_keyring_path
 
 def ensure_api_key(key_name: str, prompt_message: str = None, ui_mode: bool = False) -> str:
     """Ensure an API key is available, prompting if necessary."""
@@ -98,7 +98,7 @@ def ensure_api_key(key_name: str, prompt_message: str = None, ui_mode: bool = Fa
     
     # CLI mode - prompt directly
     if _using_file_backend:
-        print(f"\nNo keystore backend detected. API keys will be stored in plain text at {_paketerix_keyring_path or '~/.paketerix/api_keys'}")
+        print(f"\nNo keystore backend detected. API keys will be stored in plain text at {_packagerix_keyring_path or '~/.packagerix/api_keys'}")
     
     if prompt_message:
         print(f"\n{prompt_message}")

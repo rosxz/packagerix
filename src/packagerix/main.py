@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Paketerix - AI-powered Nix package builder.
+"""Packagerix - AI-powered Nix package builder.
 
 Main entry point that supports both terminal and textual UI modes.
 """
@@ -9,8 +9,8 @@ import os
 import sys
 from pydantic import BaseModel
 
-from app.ui.logging_config import logger  # Import logger first to ensure it's initialized
-from app import config
+from packagerix.ui.logging_config import logger  # Import logger first to ensure it's initialized
+from packagerix import config
 import litellm
 from typing import Optional
 from functools import wraps
@@ -19,7 +19,7 @@ import json
 
 config.init()
 
-from app.parsing import cache
+from packagerix.parsing import cache
 
 # Check which backend we're using
 magentic_backend = os.environ.get("MAGENTIC_BACKEND", "litellm")
@@ -112,15 +112,15 @@ def mock_input (ask : str, reply: str):
 
 def run_terminal_ui():
     """Run the terminal-based interface."""
-    from app.ui.logging_config import enable_console_logging
+    from packagerix.ui.logging_config import enable_console_logging
     enable_console_logging()
     
     set_ui_mode(False)
     
     # Use the coordinator pattern for CLI
-    from app.ui.conversation import set_ui_adapter, TerminalUIAdapter
-    from app.packaging_flow.run import run_packaging_flow
-    from app.ui.raw_terminal.terminal_model_config import ensure_model_configured
+    from packagerix.ui.conversation import set_ui_adapter, TerminalUIAdapter
+    from packagerix.packaging_flow.run import run_packaging_flow
+    from packagerix.ui.raw_terminal.terminal_model_config import ensure_model_configured
     
     # Set up terminal UI adapter
     set_ui_adapter(TerminalUIAdapter())
@@ -151,19 +151,19 @@ def run_terminal_ui():
 
 def run_textual_ui():
     """Run the textual-based interface."""
-    from app.ui.textual.textual_ui import PaketerixChatApp
-    app = PaketerixChatApp()
+    from packagerix.ui.textual.textual_ui import PackagerixChatApp
+    app = PackagerixChatApp()
     app.run()
 
 def main():
-    """Main entry point for paketerix."""
+    """Main entry point for packagerix."""
     parser = argparse.ArgumentParser(
-        description="Paketerix - AI-powered Nix package builder",
+        description="Packagerix - AI-powered Nix package builder",
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""Examples:
-  paketerix                    # Run with interactive textual UI
-  paketerix --raw             # Run with terminal-only interface
-  paketerix --help            # Show this help
+  packagerix                    # Run with interactive textual UI
+  packagerix --raw             # Run with terminal-only interface
+  packagerix --help            # Show this help
 """
     )
     
@@ -176,17 +176,17 @@ def main():
     parser.add_argument(
         "--version",
         action="version",
-        version="paketerix 0.1.0"
+        version="packagerix 0.1.0"
     )
     
     args = parser.parse_args()
     
     try:
         if args.raw:
-            logger.info("Starting paketerix in terminal mode")
+            logger.info("Starting packagerix in terminal mode")
             run_terminal_ui()
         else:
-            logger.info("Starting paketerix in textual UI mode")
+            logger.info("Starting packagerix in textual UI mode")
             run_textual_ui()
     except KeyboardInterrupt:
         logger.info("\nExiting...")

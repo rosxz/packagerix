@@ -1,12 +1,12 @@
-"""All user prompts for paketerix.
+"""All user prompts for packagerix.
 
 This module contains all functions decorated with @ask_user that interact with the user.
 """
 
-from app.ui.conversation import ask_user, coordinator_error
+from packagerix.ui.conversation import ask_user, coordinator_error
 
 
-@ask_user("""@user Welcome to Paketerix! 🚀
+@ask_user("""@user Welcome to Packagerix! 🚀
 
 I'm your friendly Nix packaging assistant. I can help you:
 • Package projects from GitHub

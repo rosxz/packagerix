@@ -1,8 +1,8 @@
 [project]
-name = "paketerix"
+name = "packagerix"
 version = "0.1.0"
 description = "LLM-assisted packaging with Nix"
-authors = [{name = "Martin Schwaighofer", email = "mschwaig+paketerix@eml.cc"}]
+authors = [{name = "Martin Schwaighofer", email = "mschwaig+packagerix@eml.cc"}]
 license = {text = "MIT"}
 readme = "README.md"
 requires-python = ">=3.11"
@@ -23,5 +23,11 @@ dependencies = [
     "keyrings.alt",
 ]
 
-[tool.setuptools]
-packages = ["app"]
+[project.scripts]
+packagerix = "packagerix.main:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools.package-data]
+packagerix = ["template/*"]

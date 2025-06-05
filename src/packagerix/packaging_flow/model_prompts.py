@@ -1,11 +1,11 @@
-"""All model prompts for paketerix.
+"""All model prompts for packagerix.
 
 This module contains all functions decorated with @ask_model that interact with the AI model.
 """
 
 from magentic import StreamedStr
-from app.ui.conversation import ask_model
-from app.nix import Error
+from packagerix.ui.conversation import ask_model
+from packagerix.nix import Error
 
 
 @ask_model("""@model You are software packaging expert who can build any project using the Nix programming language.
