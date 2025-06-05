@@ -173,28 +173,51 @@ def ask_model(prompt_text: str):
         @wraps(func)
         def wrapper(*args, **kwargs) -> str:
             adapter = get_ui_adapter()
+            max_retries = 3
+            base_delay = 5  # seconds
             
-            try:
-                # Show the coordinator message
-                adapter.show_message(Message(Actor.COORDINATOR, prompt_text))
-                
-                # Call the prompt-decorated function to get StreamedStr
-                streamed_result = prompt_decorated_func(*args, **kwargs)
-                
-                if streamed_result is None:
-                    raise ValueError(f"Model function {func.__name__} returned None - this indicates a problem with the prompt or model configuration")
-                
-                # Handle the streaming in the adapter and return final string
-                return adapter.handle_model_streaming(streamed_result)
-                
-            except Exception as e:
-                # Log the full error details
-                import traceback
-                tb = traceback.format_exc()
-                error_msg = f"Error in model function {func.__name__}: {str(e)}\n{tb}"
-                from packagerix.ui.logging_config import logger
-                logger.error(error_msg)
-                raise
+            for attempt in range(max_retries):
+                try:
+                    # Show the coordinator message (only on first attempt)
+                    if attempt == 0:
+                        adapter.show_message(Message(Actor.COORDINATOR, prompt_text))
+                    else:
+                        from packagerix.ui.logging_config import logger
+                        logger.info(f"Retrying model call (attempt {attempt + 1}/{max_retries})")
+                    
+                    # Call the prompt-decorated function to get StreamedStr
+                    streamed_result = prompt_decorated_func(*args, **kwargs)
+                    
+                    if streamed_result is None:
+                        raise ValueError(f"Model function {func.__name__} returned None - this indicates a problem with the prompt or model configuration")
+                    
+                    # Handle the streaming in the adapter and return final string
+                    return adapter.handle_model_streaming(streamed_result)
+                    
+                except Exception as e:
+                    # Import litellm to check for InternalServerError
+                    try:
+                        import litellm
+                        is_overload_error = isinstance(e, litellm.InternalServerError)
+                    except ImportError:
+                        is_overload_error = False
+                    
+                    if is_overload_error and attempt < max_retries - 1:
+                        # Wait with exponential backoff
+                        delay = base_delay * (2 ** attempt)
+                        from packagerix.ui.logging_config import logger
+                        logger.warning(f"API overloaded, waiting {delay} seconds before retry...")
+                        import time
+                        time.sleep(delay)
+                        continue
+                    else:
+                        # Either not an overload error, or we've exhausted retries
+                        import traceback
+                        tb = traceback.format_exc()
+                        error_msg = f"Error in model function {func.__name__}: {str(e)}\n{tb}"
+                        from packagerix.ui.logging_config import logger
+                        logger.error(error_msg)
+                        raise
         
         return wrapper
     return decorator
