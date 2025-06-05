@@ -119,7 +119,7 @@ def run_terminal_ui():
     
     # Use the coordinator pattern for CLI
     from app.coordinator import set_ui_adapter, TerminalUIAdapter
-    from app.packaging_coordinator import run_packaging_flow
+    from app.packaging_flow.run import run_packaging_flow
     from app.ui.raw_terminal.terminal_model_config import ensure_model_configured
     
     # Set up terminal UI adapter

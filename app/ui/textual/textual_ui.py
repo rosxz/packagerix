@@ -14,7 +14,7 @@ from datetime import datetime
 
 # Import existing paketerix functionality
 from app import config
-from app.model_prompts import (
+from app.packaging_flow.model_prompts import (
     set_up_project,
     summarize_github
 )
@@ -508,7 +508,7 @@ class PaketerixChatApp(App):
         # Set up the textual UI adapter
         from app.coordinator import set_ui_adapter
         from app.ui.textual.textual_ui_adapter import TextualUIAdapter
-        from app.packaging_coordinator import run_packaging_flow
+        from app.packaging_flow.run import run_packaging_flow
         
         chat_history = self.query_one("#chat-history", ChatHistory)
         adapter = TextualUIAdapter(self.app, chat_history)
