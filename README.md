@@ -8,7 +8,7 @@ to build the package, at which point we might be able to still get it over the f
 
 ---
 
-🚧 This is a very ealy prototype that does not successfully loop yet, it only does the first iteration. 🚧
+🚧 This is a very ealy prototype that has not successfully built anything yet. 🚧
 
 ---
 
@@ -22,7 +22,7 @@ I could also imagine providing this functionality as a hosted service to custome
 
 To run the terminal UI use:
 ```
-nix develop -c python -m app.packagerix
+nix develop -c python -m packagerix
 ```
 
 You have to set an appropriate model in the `flake.nix` file.
