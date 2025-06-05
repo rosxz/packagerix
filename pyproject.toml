@@ -2,7 +2,7 @@
 name = "packagerix"
 version = "0.1.0"
 description = "LLM-assisted packaging with Nix"
-authors = [{name = "Martin Schwaighofer", email = "mschwaig+packagerix@eml.cc"}]
+authors = [{name = "Martin Schwaighofer", email = "martin.schwaighofer@ins.jku.at"}]
 license = {text = "MIT"}
 readme = "README.md"
 requires-python = ">=3.11"
