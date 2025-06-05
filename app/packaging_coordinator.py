@@ -5,7 +5,7 @@ from app.coordinator import ask_user, ask_model, coordinator_message, coordinato
 from app.parsing import scrape_and_process, extract_updated_code
 from app.flake import init_flake
 from app.nix import Error, get_last_ten_lines, invoke_build, test_updated_code
-from app.paketerix import set_up_project, summarize_github
+from app.model_prompts import set_up_project, summarize_github, fix_build_error
 from app import config
 from pathlib import Path
 
@@ -42,23 +42,6 @@ def create_initial_package(template: str, project_page: str) -> str:
     return extract_updated_code(result)
 
 
-@ask_model("""@model I'll fix this build error and try again.
-
-Current code:
-```nix
-{code}
-```
-
-Error:
-```
-{error}
-```
-
-Please fix the code to resolve the error. Return only the updated Nix code.
-""")
-def fix_build_error(code: str, error: Error) -> StreamedStr:
-    """Fix a build error using the model."""
-    ...
 
 
 def package_project():

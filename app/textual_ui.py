@@ -14,7 +14,7 @@ from datetime import datetime
 
 # Import existing paketerix functionality
 from app import config
-from app.paketerix import (
+from app.model_prompts import (
     set_up_project,
     summarize_github
 )

@@ -8,15 +8,6 @@ import argparse
 import os
 import sys
 from pydantic import BaseModel
-from magentic import prompt, prompt_chain, StreamedStr
-from magentic import (
-    chatprompt,
-    AssistantMessage,
-    FunctionCall,
-    FunctionResultMessage,
-    UserMessage,
-    SystemMessage
-)
 
 from app.logging_config import logger  # Import logger first to ensure it's initialized
 from app import config
@@ -28,9 +19,7 @@ import json
 
 config.init()
 
-from app.nix import Error, get_last_ten_lines, test_updated_code
-from app.flake import init_flake
-from app.parsing import scrape_and_process, extract_updated_code, cache
+from app.parsing import cache
 
 # Check which backend we're using
 magentic_backend = os.environ.get("MAGENTIC_BACKEND", "litellm")
@@ -116,61 +105,6 @@ class Project(BaseModel):
     version_tag : Optional[str]
     dependencies: list[str]
 
-from app.coordinator import ask_model
-
-@ask_model("""@model You are software packaging expert who can build any project using the Nix programming language.
-
-Read the contents of the project's GitHub page and fill out all of the sections in the code template that are marked with ... .
-Do not make any other modifications. Do not modify lib.fakeHash.
-
-Your goal is to make the build progress further, but without adding any unnecessary configuration or dependencies.
-
-This is the code template you have to fill out:
-
-```nix
-{code_template}
-```   
-
-Here is the information form the project's GitHub page:
-
-```text
-{project_page}
-```
-
-Note: your reply should contain exaclty one code block with the updated Nix code.
-""")
-def set_up_project (code_template: str, project_page: str) -> StreamedStr : ...
-
-@prompt("""
-You are software packaging expert who can build any project using the Nix programming language.
-
-Read the contents of the project's GitHub page and return the following information.
-    1. The build tool which should be invoked to build the project.
-    2. A list of build tools and project dependencies.
-    3. A list of other information which might be necessary for buiding the project.
-""")
-def identify_dependencies (code_template: str, project_page: str) -> str : ...
-
-@ask_model("""@model You are software packaging expert who can build any project using the Nix programming language.
-
-Read the contents of the project's GitHub page and summarize it.
-Include information like
-    1. The build tool which should be invoked to build the project.
-    2. A list of build tools and project dependencies.
-    3. Other information which might be necessary for buiding the project.
-    
-    Do not include information which is irrelevant for building the project.
-Here is the information form the project's GitHub page:
-
-```text
-{project_page}
-```
-""")
-def summarize_github (project_page: str) -> StreamedStr : ...
-
-#def eval_plan_to_make_progress_valid
-
-
 def mock_input (ask : str, reply: str):
     logger.info(ask)
     logger.info(reply + "\n")
@@ -220,10 +154,6 @@ def run_textual_ui():
     from app.textual_ui import PaketerixChatApp
     app = PaketerixChatApp()
     app.run()
-
-
-# The ensure_model_configured function is now handled by UI-specific implementations
-
 
 def main():
     """Main entry point for paketerix."""

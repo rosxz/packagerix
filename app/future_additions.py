@@ -2,6 +2,15 @@
 
 from pydantic import BaseModel
 
+@prompt("""
+You are software packaging expert who can build any project using the Nix programming language.
+
+Read the contents of the project's GitHub page and return the following information.
+    1. The build tool which should be invoked to build the project.
+    2. A list of build tools and project dependencies.
+    3. A list of other information which might be necessary for buiding the project.
+""")
+def identify_dependencies (code_template: str, project_page: str) -> str : ...
 
 def package_missing_dependency(name: str):
     pass
