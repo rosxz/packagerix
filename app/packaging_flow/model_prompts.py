@@ -4,7 +4,7 @@ This module contains all functions decorated with @ask_model that interact with 
 """
 
 from magentic import StreamedStr
-from app.coordinator import ask_model
+from app.ui.conversation import ask_model
 from app.nix import Error
 
 

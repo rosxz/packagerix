@@ -3,7 +3,7 @@
 This module contains all functions decorated with @ask_user that interact with the user.
 """
 
-from app.coordinator import ask_user, coordinator_error
+from app.ui.conversation import ask_user, coordinator_error
 
 
 @ask_user("""@user Welcome to Paketerix! 🚀

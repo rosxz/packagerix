@@ -1,6 +1,6 @@
 """Business logic for paketerix using the coordinator pattern."""
 
-from app.coordinator import ask_user,  coordinator_message, coordinator_error, coordinator_progress
+from app.ui.conversation import ask_user,  coordinator_message, coordinator_error, coordinator_progress
 from app.parsing import scrape_and_process, extract_updated_code
 from app.flake import init_flake
 from app.nix import test_updated_code

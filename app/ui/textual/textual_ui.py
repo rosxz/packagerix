@@ -476,7 +476,7 @@ class PaketerixChatApp(App):
     def handle_user_message(self, event: ChatInput.MessageSent) -> None:
         """Handle a new user message."""
         # Check if the coordinator is waiting for user input
-        from app.coordinator import get_ui_adapter
+        from app.ui.conversation import get_ui_adapter
         adapter = get_ui_adapter()
         
         # Resolve the future with the user's input
@@ -506,7 +506,7 @@ class PaketerixChatApp(App):
     def start_packaging_flow(self) -> None:
         """Start the packaging flow with the coordinator."""
         # Set up the textual UI adapter
-        from app.coordinator import set_ui_adapter
+        from app.ui.conversation import set_ui_adapter
         from app.ui.textual.textual_ui_adapter import TextualUIAdapter
         from app.packaging_flow.run import run_packaging_flow
         
