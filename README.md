@@ -26,6 +26,7 @@ nix develop -c python -m packagerix
 ```
 
 You have to set an appropriate model in the `flake.nix` file.
-In terms of local models right now I recommend `qwen2.5-coder`, which works well as long as the input stays short enough.
+In terms of local models right now I recommend `qwen2.5-coder:32b`, which works well as long as the input stays short enough, but needs a hair more than 24GB of VRAM to fit fully into VRAM. The 8b models I tried so far seem to struggle too much with hashes and function calling.
 All the local models I have tried struggle with inputs that are longer than `12000` characters, which some github pages exceed.
-In terms of hosted models, Claude Haiku for example, can cope with longer prompts as well. I have not tried other hosted models recently.
+In terms of hosted models, `claude-3-5-haiku-20241022` for example, can cope with longer prompts as well.
+It's what I am targeting as of now. So far, I don't think you need a better model than that for packaging.
