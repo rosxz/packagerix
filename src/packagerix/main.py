@@ -110,7 +110,7 @@ def mock_input (ask : str, reply: str):
     logger.info(reply + "\n")
     return reply
 
-def run_terminal_ui():
+def run_terminal_ui(output_dir=None, project_url=None):
     """Run the terminal-based interface."""
     from packagerix.ui.logging_config import enable_console_logging
     enable_console_logging()
@@ -135,7 +135,7 @@ def run_terminal_ui():
     
     def run_coordinator():
         try:
-            run_packaging_flow()
+            run_packaging_flow(output_dir=output_dir, project_url=project_url)
         except Exception as e:
             logger.error(f"Error in packaging flow: {e}")
             import traceback
@@ -161,9 +161,11 @@ def main():
         description="Packagerix - AI-powered Nix package builder",
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""Examples:
-  packagerix                    # Run with interactive textual UI
-  packagerix --raw             # Run with terminal-only interface
-  packagerix --help            # Show this help
+  packagerix                                          # Run with interactive textual UI
+  packagerix --raw                                   # Run with terminal-only interface
+  packagerix --raw https://github.com/user/repo      # Package a specific repo
+  packagerix --raw --output-dir out https://github.com/user/repo  # Save output
+  packagerix --help                                  # Show this help
 """
     )
     
@@ -171,6 +173,18 @@ def main():
         "--raw",
         action="store_true",
         help="Use terminal-only interface instead of textual UI"
+    )
+    
+    parser.add_argument(
+        "--output-dir",
+        type=str,
+        help="Directory to save successful package.nix files (only works with --raw)"
+    )
+    
+    parser.add_argument(
+        "project_url",
+        nargs="?",
+        help="GitHub project URL to package (only works with --raw)"
     )
     
     parser.add_argument(
@@ -184,8 +198,14 @@ def main():
     try:
         if args.raw:
             logger.info("Starting packagerix in terminal mode")
-            run_terminal_ui()
+            if args.output_dir and not args.project_url:
+                parser.error("--output-dir requires a project URL to be provided")
+            run_terminal_ui(output_dir=args.output_dir, project_url=args.project_url)
         else:
+            if args.output_dir:
+                parser.error("--output-dir only works with --raw mode")
+            if args.project_url:
+                parser.error("project URL argument only works with --raw mode")
             logger.info("Starting packagerix in textual UI mode")
             run_textual_ui()
     except KeyboardInterrupt:

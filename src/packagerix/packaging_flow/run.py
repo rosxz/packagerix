@@ -25,10 +25,14 @@ def create_initial_package(template: str, project_page: str) -> str:
 
 
 
-def package_project():
+def package_project(output_dir=None, project_url=None):
     """Main coordinator function for packaging a project."""
     # Step 1: Get project URL (includes welcome message)
-    project_url = get_project_url()
+    if project_url is None:
+        project_url = get_project_url()
+    else:
+        # When URL is provided via CLI, still show welcome but skip prompt
+        coordinator_message("Welcome to packagerix!")
     
     coordinator_progress(f"Fetching project information from {project_url}")
     
@@ -62,6 +66,8 @@ def package_project():
     
     if error is None:
         coordinator_message("✅ Build succeeded on first try!")
+        if output_dir:
+            save_package_output(code, project_url, output_dir)
         return code
     
     # Step 8: Iterative fixing
@@ -80,16 +86,43 @@ def package_project():
         
         if error is None:
             coordinator_message(f"✅ Build succeeded after {attempt + 1} fixes!")
+            if output_dir:
+                save_package_output(code, project_url, output_dir)
             return code
     
     coordinator_error(f"Failed to build after {max_attempts} attempts. Manual intervention may be needed.")
     return None
 
 
-def run_packaging_flow():
+def save_package_output(code: str, project_url: str, output_dir: str):
+    """Save the package.nix file to the output directory."""
+    import os
+    import re
+    from pathlib import Path
+    
+    # Extract package name from the code
+    pname_match = re.search(r'pname\s*=\s*"([^"]+)"', code)
+    if not pname_match:
+        coordinator_error("Could not extract package name from code")
+        return
+    
+    package_name = pname_match.group(1)
+    
+    # Create output directory structure
+    output_path = Path(output_dir) / package_name
+    output_path.mkdir(parents=True, exist_ok=True)
+    
+    # Save package.nix
+    package_file = output_path / "package.nix"
+    package_file.write_text(code)
+    
+    coordinator_message(f"Saved package to: {package_file}")
+
+
+def run_packaging_flow(output_dir=None, project_url=None):
     """Run the complete packaging flow."""
     try:
-        result = package_project()
+        result = package_project(output_dir=output_dir, project_url=project_url)
         if result:
             coordinator_message("Packaging completed successfully!")
             coordinator_message(f"Final package code:\n```nix\n{result}\n```")

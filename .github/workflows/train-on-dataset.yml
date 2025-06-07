@@ -1,0 +1,207 @@
+name: Train on Dataset
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+    paths:
+      - 'research/nixpkgs_packaging_requests_training.csv'
+      - 'src/**'
+      - '.github/workflows/train-on-dataset.yml'
+
+jobs:
+  setup:
+    runs-on: ubuntu-latest
+    outputs:
+      matrix: ${{ steps.create-matrix.outputs.matrix }}
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      
+      - name: Install Nix
+        uses: cachix/install-nix-action@v24
+        
+      - name: Create matrix from CSV
+        id: create-matrix
+        run: |
+          python3 -c "
+          import csv
+          import json
+          
+          matrix_data = []
+          with open('research/nixpkgs_packaging_requests_training.csv', 'r') as f:
+              reader = csv.DictReader(f)
+              for row in reader:
+                  if row['repo_url']:  # Skip entries without repo URLs
+                      matrix_data.append({
+                          'issue_number': row['issue_number'],
+                          'repo_url': row['repo_url']
+                      })
+          
+          # GitHub Actions has a matrix size limit, so we might need to batch
+          # For now, let's process all entries
+          matrix = {'include': matrix_data}
+          
+          with open('matrix.json', 'w') as f:
+              json.dump(matrix, f)
+          
+          # Set output for GitHub Actions
+          print(f'matrix={json.dumps(matrix)}')
+          "
+          echo "matrix=$(cat matrix.json)" >> $GITHUB_OUTPUT
+
+  process-training-data:
+    needs: setup
+    runs-on: ubuntu-latest
+    strategy:
+      matrix: ${{ fromJson(needs.setup.outputs.matrix) }}
+      max-parallel: 5  # Limit concurrent jobs to avoid rate limiting
+      fail-fast: false
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          
+      - name: Install Nix
+        uses: cachix/install-nix-action@v24
+        
+      # Dependencies are handled by nix develop, so we don't need to install them separately
+          
+      - name: Setup paketerix configuration
+        run: |
+          # Create config directory
+          mkdir -p ~/.packagerix
+          
+          # Set Anthropic API key as environment variable
+          # (paketerix will pick it up from env vars as fallback)
+          echo "ANTHROPIC_API_KEY=${{ secrets.ANTHROPIC_API_KEY }}" >> $GITHUB_ENV
+          
+          # Create model configuration file
+          cat > ~/.packagerix/config.json << EOF
+          {
+            "provider": "anthropic",
+            "model": "claude-3-5-sonnet-20241022",
+            "backend": "litellm"
+          }
+          EOF
+      
+      - name: Process package request
+        id: process
+        run: |
+          echo "Processing issue #${{ matrix.issue_number }} - ${{ matrix.repo_url }}"
+          
+          # Create output directory for this run
+          mkdir -p output
+          
+          # Run paketerix with raw output and save results
+          nix develop .# -c python -m packagerix \
+            --raw \
+            --output-dir output \
+            "${{ matrix.repo_url }}" \
+            > "output_${{ matrix.issue_number }}.log" 2> "error_${{ matrix.issue_number }}.log"
+          
+          # Check if the command succeeded
+          if [ $? -eq 0 ]; then
+            echo "status=success" >> $GITHUB_OUTPUT
+            # Find the package name from the output directory
+            if [ -d output ]; then
+              package_name=$(ls output | head -n1)
+              if [ -n "$package_name" ]; then
+                echo "package_name=$package_name" >> $GITHUB_OUTPUT
+              fi
+            fi
+          else
+            echo "status=failed" >> $GITHUB_OUTPUT
+            cat "error_${{ matrix.issue_number }}.log"
+          fi
+          
+      - name: Upload results
+        uses: actions/upload-artifact@v4
+        with:
+          name: paketerix-output-${{ matrix.issue_number }}
+          path: |
+            output_${{ matrix.issue_number }}.log
+            error_${{ matrix.issue_number }}.log
+            output/
+          retention-days: 30
+          
+      - name: Create summary
+        run: |
+          echo "## Issue #${{ matrix.issue_number }}" >> $GITHUB_STEP_SUMMARY
+          echo "- Repository: ${{ matrix.repo_url }}" >> $GITHUB_STEP_SUMMARY
+          echo "- Status: ${{ steps.process.outputs.status }}" >> $GITHUB_STEP_SUMMARY
+          if [ -n "${{ steps.process.outputs.package_name }}" ]; then
+            echo "- Package name: ${{ steps.process.outputs.package_name }}" >> $GITHUB_STEP_SUMMARY
+          fi
+          if [ -f "output_${{ matrix.issue_number }}.log" ]; then
+            echo "- Output log size: $(wc -c < output_${{ matrix.issue_number }}.log) bytes" >> $GITHUB_STEP_SUMMARY
+          fi
+          if [ -d "output/${{ steps.process.outputs.package_name }}/package.nix" ]; then
+            echo "- Generated package.nix: ✓" >> $GITHUB_STEP_SUMMARY
+          fi
+          if [ -f "error_${{ matrix.issue_number }}.log" ] && [ -s "error_${{ matrix.issue_number }}.log" ]; then
+            echo "### Error log:" >> $GITHUB_STEP_SUMMARY
+            echo '```' >> $GITHUB_STEP_SUMMARY
+            head -n 50 "error_${{ matrix.issue_number }}.log" >> $GITHUB_STEP_SUMMARY
+            echo '```' >> $GITHUB_STEP_SUMMARY
+          fi
+
+  aggregate-results:
+    needs: process-training-data
+    runs-on: ubuntu-latest
+    if: always()
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+          pattern: paketerix-output-*
+          
+      - name: Aggregate results
+        run: |
+          echo "# Training Dataset Processing Results" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          
+          total=0
+          success=0
+          failed=0
+          
+          for dir in artifacts/paketerix-output-*; do
+            if [ -d "$dir" ]; then
+              issue_num=$(basename "$dir" | sed 's/paketerix-output-//')
+              total=$((total + 1))
+              
+              # Check if there's a package.nix file in the output directory
+              if [ -n "$(find "$dir/output" -name "package.nix" 2>/dev/null)" ]; then
+                success=$((success + 1))
+              else
+                failed=$((failed + 1))
+              fi
+            fi
+          done
+          
+          echo "- Total processed: $total" >> $GITHUB_STEP_SUMMARY
+          echo "- Successful: $success" >> $GITHUB_STEP_SUMMARY
+          echo "- Failed: $failed" >> $GITHUB_STEP_SUMMARY
+          
+      - name: Create combined artifact
+        run: |
+          mkdir -p combined-results
+          cp -r artifacts/* combined-results/
+          
+      - name: Upload combined results
+        uses: actions/upload-artifact@v4
+        with:
+          name: all-training-results
+          path: combined-results/
+          retention-days: 90
