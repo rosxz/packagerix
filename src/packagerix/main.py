@@ -125,10 +125,19 @@ def run_terminal_ui(output_dir=None, project_url=None):
     # Set up terminal UI adapter
     set_ui_adapter(TerminalUIAdapter())
     
-    # Ensure model is configured before running
-    if not ensure_model_configured():
-        logger.error("Model configuration required to continue")
-        sys.exit(1)
+    # If project URL is provided, skip interactive configuration
+    if project_url:
+        from packagerix.ui.model_config import load_saved_configuration
+        saved_config = load_saved_configuration()
+        if not saved_config:
+            logger.error("No saved model configuration found. Please run interactively first to configure.")
+            sys.exit(1)
+        logger.info("Using saved model configuration")
+    else:
+        # Interactive mode - prompt for configuration if needed
+        if not ensure_model_configured():
+            logger.error("Model configuration required to continue")
+            sys.exit(1)
     
     # Run the packaging flow in background thread (like textual UI)
     import threading
