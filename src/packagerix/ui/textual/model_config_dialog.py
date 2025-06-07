@@ -126,12 +126,18 @@ class ModelConfigDialog(ModalScreen):
         from packagerix.ui.model_config import load_saved_configuration
         saved_config = load_saved_configuration()
         if saved_config:
-            provider_name, model = saved_config
+            if len(saved_config) == 3:  # New format with ollama_host
+                provider_name, model, ollama_host = saved_config
+                self.saved_ollama_host = ollama_host
+            else:  # Old format compatibility
+                provider_name, model = saved_config
+                self.saved_ollama_host = None
             self.saved_provider = provider_name
             self.saved_model = model
         else:
             self.saved_provider = None
             self.saved_model = None
+            self.saved_ollama_host = None
         
     def compose(self) -> ComposeResult:
         """Create the configuration dialog layout."""
@@ -167,9 +173,13 @@ class ModelConfigDialog(ModalScreen):
             with Vertical(id="model-section", classes="config-section hidden"):
                 yield Label("Select Model:", classes="config-label")
                 yield ListView(id="model-list")
+                
+            # Ollama host configuration (only shown for Ollama)
+            with Vertical(id="ollama-section", classes="config-section hidden"):
+                yield Label("Ollama Host (optional):", classes="config-label")
                 yield Input(
-                    placeholder="Or enter custom model name",
-                    id="custom-model-input"
+                    placeholder="e.g., http://localhost:11434",
+                    id="ollama-host-input"
                 )
             
             # Status message
@@ -212,6 +222,15 @@ class ModelConfigDialog(ModalScreen):
                 # Update the placeholder to show key is configured
                 api_key_input = self.query_one("#api-key-input", Input)
                 api_key_input.placeholder = "API key already configured (leave blank to keep)"
+        
+        # Show Ollama host section if needed
+        if self.selected_provider.name == "ollama":
+            ollama_section = self.query_one("#ollama-section")
+            ollama_section.remove_class("hidden")
+            # Pre-populate saved Ollama host
+            if self.saved_ollama_host:
+                ollama_input = self.query_one("#ollama-host-input", Input)
+                ollama_input.value = self.saved_ollama_host
         
         # Show model section
         model_section = self.query_one("#model-section")
@@ -259,6 +278,17 @@ class ModelConfigDialog(ModalScreen):
             else:
                 api_key_section.add_class("hidden")
             
+            # Show/hide Ollama host section
+            ollama_section = self.query_one("#ollama-section")
+            if self.selected_provider.name == "ollama":
+                ollama_section.remove_class("hidden")
+                # If we have a saved Ollama host, pre-populate it
+                if hasattr(self, 'saved_ollama_host') and self.saved_ollama_host:
+                    ollama_input = self.query_one("#ollama-host-input", Input)
+                    ollama_input.value = self.saved_ollama_host
+            else:
+                ollama_section.add_class("hidden")
+            
             # Show model section and populate models
             model_section = self.query_one("#model-section")
             model_section.remove_class("hidden")
@@ -290,6 +320,12 @@ class ModelConfigDialog(ModalScreen):
             old_key = os.environ.get(self.selected_provider.env_var)
             os.environ[self.selected_provider.env_var] = api_key
         
+        # For Ollama, ensure OLLAMA_API_BASE is set if we have a host
+        if self.selected_provider.name == "ollama":
+            ollama_input = self.query_one("#ollama-host-input", Input)
+            if ollama_input.value.strip():
+                os.environ["OLLAMA_API_BASE"] = ollama_input.value.strip()
+        
         try:
             # Show loading message
             status.update("Loading available models...")
@@ -312,7 +348,13 @@ class ModelConfigDialog(ModalScreen):
                     
                 status.update("")
             else:
-                raise RuntimeError(f"Failed to access model discovery endpoint for {self.selected_provider.display_name}")
+                status.update(f"No models found for {self.selected_provider.display_name}")
+                model_list.clear()
+        
+        except Exception as e:
+            logger.error(f"Error loading models for {self.selected_provider.name}: {e}")
+            status.update(f"❌ Error: {str(e)}")
+            model_list.clear()
         
         finally:
             # Restore original API key if we changed it
@@ -329,10 +371,6 @@ class ModelConfigDialog(ModalScreen):
             label = event.item.query_one(Label)
             self.selected_model = label.renderable
             
-            # Clear custom input
-            custom_input = self.query_one("#custom-model-input", Input)
-            custom_input.value = ""
-            
             self.update_button_states()
     
     def on_input_changed(self, event: Input.Changed) -> None:
@@ -344,6 +382,15 @@ class ModelConfigDialog(ModalScreen):
             model_list.index = None
         elif event.input.id == "api-key-input" and event.value and self.selected_provider:
             # Reload models when API key is entered
+            asyncio.create_task(self.load_models())
+        elif event.input.id == "ollama-host-input" and self.selected_provider and self.selected_provider.name == "ollama":
+            # Set the environment variable and reload models when Ollama host changes
+            if event.value.strip():
+                os.environ["OLLAMA_API_BASE"] = event.value.strip()
+            else:
+                # Remove the environment variable if empty
+                os.environ.pop("OLLAMA_API_BASE", None)
+            # Reload models with new host
             asyncio.create_task(self.load_models())
         
         self.update_button_states()
@@ -391,11 +438,18 @@ class ModelConfigDialog(ModalScreen):
                 # Set in environment for current session
                 os.environ[self.selected_provider.env_var] = api_key_input.value
         
+        # Get Ollama host if provider is Ollama
+        ollama_host = None
+        if self.selected_provider.name == "ollama":
+            ollama_input = self.query_one("#ollama-host-input", Input)
+            ollama_host = ollama_input.value.strip() if ollama_input.value else None
+        
         # Save to config file
-        save_configuration(self.selected_provider, self.selected_model)
+        save_configuration(self.selected_provider, self.selected_model, ollama_host)
         
         # Dismiss with success
         self.dismiss({
             "provider": self.selected_provider.name,
-            "model": self.selected_model
+            "model": self.selected_model,
+            "ollama_host": ollama_host
         })

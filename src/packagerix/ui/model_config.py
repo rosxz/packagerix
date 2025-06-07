@@ -60,10 +60,22 @@ PROVIDERS = [
 def get_available_models(provider: Provider) -> List[str]:
     """Get available models for a provider."""
     try:
+        # Build litellm_params based on provider
+        litellm_params = None
+        if provider.name == "ollama" and os.environ.get("OLLAMA_API_BASE"):
+            from litellm import LiteLLM_Params
+            # Use a dummy model name for discovery
+            litellm_params = LiteLLM_Params(
+                model="ollama/dummy",
+                api_base=os.environ.get("OLLAMA_API_BASE")
+            )
+            logger.info(f"Using Ollama API base: {os.environ.get('OLLAMA_API_BASE')}")
+        
         # Use LiteLLM's get_valid_models with provider-specific endpoint checking
         models = litellm.utils.get_valid_models(
             check_provider_endpoint=True, 
-            custom_llm_provider=provider.name
+            custom_llm_provider=provider.name,
+            litellm_params=litellm_params
         )
         
         # Add provider prefix to all models for LiteLLM
@@ -111,7 +123,7 @@ def validate_configuration(provider: Provider, model: str) -> bool:
         return False
 
 
-def save_configuration(provider: Provider, model: str):
+def save_configuration(provider: Provider, model: str, ollama_host: Optional[str] = None):
     """Save the configuration for future use."""
     # Set environment variables for magentic
     os.environ["MAGENTIC_BACKEND"] = "litellm"
@@ -123,6 +135,15 @@ def save_configuration(provider: Provider, model: str):
         "model": model,
         "backend": "litellm"
     }
+    
+    # Always save ollama_host if provided, regardless of current provider
+    if ollama_host:
+        config_data["ollama_host"] = ollama_host
+    
+    # Only set OLLAMA_API_BASE if we're actually using Ollama
+    if provider.name == "ollama" and ollama_host:
+        os.environ["OLLAMA_API_BASE"] = ollama_host
+        logger.info(f"Set OLLAMA_API_BASE to {ollama_host}")
     
     try:
         import json
@@ -137,8 +158,8 @@ def save_configuration(provider: Provider, model: str):
         logger.warning(f"Could not save configuration: {e}")
 
 
-def load_saved_configuration() -> Optional[Tuple[str, str]]:
-    """Load previously saved configuration."""
+def load_saved_configuration() -> Optional[Tuple[str, str, Optional[str]]]:
+    """Load previously saved configuration, returns (provider_name, model, ollama_host)."""
     try:
         import json
         config_path = os.path.expanduser("~/.packagerix/config.json")
@@ -150,6 +171,7 @@ def load_saved_configuration() -> Optional[Tuple[str, str]]:
             # Find the provider
             provider_name = config_data.get("provider")
             model = config_data.get("model")
+            ollama_host = config_data.get("ollama_host")
             
             if provider_name and model:
                 # Set environment variables
@@ -165,8 +187,13 @@ def load_saved_configuration() -> Optional[Tuple[str, str]]:
                         os.environ[provider.env_var] = api_key
                         logger.info(f"Loaded API key for {provider.display_name} from secure storage")
                 
+                # Set OLLAMA_API_BASE only if using Ollama
+                if provider_name == "ollama" and ollama_host:
+                    os.environ["OLLAMA_API_BASE"] = ollama_host
+                    logger.info(f"Set OLLAMA_API_BASE to {ollama_host}")
+                
                 logger.info(f"Loaded saved configuration: {model} from {provider_name}")
-                return provider_name, model
+                return provider_name, model, ollama_host
     
     except Exception as e:
         logger.warning(f"Could not load saved configuration: {e}")

@@ -11,7 +11,7 @@ def show_model_config_terminal() -> Optional[Dict[str, str]]:
     """Show terminal-based model configuration dialog.
     
     Returns:
-        Dict with 'provider' and 'model' keys, or None if cancelled
+        Dict with 'provider', 'model', and optionally 'ollama_host' keys, or None if cancelled
     """
     print("\n🤖 Configure AI Model")
     print("=" * 50)
@@ -26,12 +26,17 @@ def show_model_config_terminal() -> Optional[Dict[str, str]]:
         if not handle_api_key_terminal(provider):
             return None
     
-    # Step 3: Choose model
-    model = choose_model_terminal(provider)
+    # Step 3: Handle Ollama host if Ollama provider
+    ollama_host = None
+    if provider.name == "ollama":
+        ollama_host = handle_ollama_host_terminal()
+    
+    # Step 4: Choose model
+    model = choose_model_terminal(provider, ollama_host)
     if not model:
         return None
     
-    # Step 4: Save configuration
+    # Step 5: Save configuration
     print(f"\n✅ Saving configuration: {model} from {provider.display_name}")
     
     # Set environment variables
@@ -39,12 +44,16 @@ def show_model_config_terminal() -> Optional[Dict[str, str]]:
     os.environ["MAGENTIC_LITELLM_MODEL"] = model
     
     # Save to config file and secure storage
-    save_configuration(provider, model)
+    save_configuration(provider, model, ollama_host)
     
-    return {
+    result = {
         "provider": provider.name,
         "model": model
     }
+    if ollama_host:
+        result["ollama_host"] = ollama_host
+    
+    return result
 
 
 def choose_provider_terminal() -> Optional[Provider]:
@@ -112,9 +121,36 @@ def handle_api_key_terminal(provider: Provider) -> bool:
         return False
 
 
-def choose_model_terminal(provider: Provider) -> Optional[str]:
+def handle_ollama_host_terminal() -> Optional[str]:
+    """Handle Ollama host configuration in terminal."""
+    print("\nOllama Host Configuration (optional)")
+    print("Leave blank to use default localhost:11434")
+    
+    try:
+        ollama_host = input("Enter Ollama host URL (e.g., http://192.168.1.100:11434): ").strip()
+        
+        if ollama_host:
+            # Set environment variable for model discovery
+            os.environ["OLLAMA_API_BASE"] = ollama_host
+            print(f"✅ Ollama host set to: {ollama_host}")
+            return ollama_host
+        else:
+            # Clear any existing OLLAMA_API_BASE
+            os.environ.pop("OLLAMA_API_BASE", None)
+            return None
+            
+    except KeyboardInterrupt:
+        print("\nCancelled")
+        return None
+
+
+def choose_model_terminal(provider: Provider, ollama_host: Optional[str] = None) -> Optional[str]:
     """Choose a model from provider in terminal."""
     print(f"\nLoading available models for {provider.display_name}...")
+    
+    # Ensure OLLAMA_API_BASE is set if we have an ollama_host
+    if provider.name == "ollama" and ollama_host:
+        os.environ["OLLAMA_API_BASE"] = ollama_host
     
     try:
         available_models = get_available_models(provider)
@@ -162,8 +198,18 @@ def ensure_model_configured() -> bool:
     saved_config = load_saved_configuration()
     
     if saved_config:
-        provider_name, model = saved_config
-        print(f"\n✅ Found saved model configuration: {model}")
+        if len(saved_config) == 3:  # New format with ollama_host
+            provider_name, model, ollama_host = saved_config
+            # Set OLLAMA_API_BASE if using Ollama
+            if provider_name == "ollama" and ollama_host:
+                os.environ["OLLAMA_API_BASE"] = ollama_host
+                print(f"\n✅ Found saved model configuration: {model} (Ollama host: {ollama_host})")
+            else:
+                print(f"\n✅ Found saved model configuration: {model}")
+        else:  # Old format compatibility
+            provider_name, model = saved_config
+            print(f"\n✅ Found saved model configuration: {model}")
+            
         use_saved = input("Use this configuration? (Y/n): ").strip().lower()
         
         if use_saved in ['', 'y', 'yes']:
