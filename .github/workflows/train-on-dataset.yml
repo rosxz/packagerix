@@ -1,4 +1,4 @@
-name: Train on Dataset
+name: Build Test Packages
 
 on:
   workflow_dispatch:
@@ -44,8 +44,8 @@ jobs:
                       })
           
           # GitHub Actions has a matrix size limit, so we might need to batch
-          # For now, let's process all entries
-          matrix = {'include': matrix_data}
+          # Limit to first 5 entries for testing
+          matrix = {'include': matrix_data[:5]}
           
           with open('matrix.json', 'w') as f:
               json.dump(matrix, f)
@@ -55,9 +55,10 @@ jobs:
           "
           echo "matrix=$(cat matrix.json)" >> $GITHUB_OUTPUT
 
-  process-training-data:
+  build-test-packages:
     needs: setup
     runs-on: ubuntu-latest
+    name: Package ${{ matrix.repo_url }}
     strategy:
       matrix: ${{ fromJson(needs.setup.outputs.matrix) }}
       max-parallel: 5  # Limit concurrent jobs to avoid rate limiting
@@ -88,7 +89,7 @@ jobs:
           cat > ~/.packagerix/config.json << EOF
           {
             "provider": "anthropic",
-            "model": "claude-3-5-sonnet-20241022",
+            "model": "claude-3-5-haiku-20241022",
             "backend": "litellm"
           }
           EOF
@@ -106,10 +107,11 @@ jobs:
             --raw \
             --output-dir output \
             "${{ matrix.repo_url }}" \
-            > "output_${{ matrix.issue_number }}.log" 2> "error_${{ matrix.issue_number }}.log"
+            > "output_${{ matrix.issue_number }}.log" 2> "error_${{ matrix.issue_number }}.log" \
+            && exit_code=0 || exit_code=$?
           
           # Check if the command succeeded
-          if [ $? -eq 0 ]; then
+          if [ $exit_code -eq 0 ]; then
             echo "status=success" >> $GITHUB_OUTPUT
             # Find the package name from the output directory
             if [ -d output ]; then
@@ -120,7 +122,11 @@ jobs:
             fi
           else
             echo "status=failed" >> $GITHUB_OUTPUT
-            cat "error_${{ matrix.issue_number }}.log"
+            echo "Exit code: $exit_code"
+            echo "=== Error log ==="
+            cat "error_${{ matrix.issue_number }}.log" || echo "No error log found"
+            echo "=== Output log ==="
+            head -n 50 "output_${{ matrix.issue_number }}.log" || echo "No output log found"
           fi
           
       - name: Upload results
@@ -155,7 +161,7 @@ jobs:
           fi
 
   aggregate-results:
-    needs: process-training-data
+    needs: build-test-packages
     runs-on: ubuntu-latest
     if: always()
     steps:
@@ -169,7 +175,7 @@ jobs:
           
       - name: Aggregate results
         run: |
-          echo "# Training Dataset Processing Results" >> $GITHUB_STEP_SUMMARY
+          echo "# Test Package Build Results" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           
           total=0
@@ -197,11 +203,16 @@ jobs:
       - name: Create combined artifact
         run: |
           mkdir -p combined-results
-          cp -r artifacts/* combined-results/
+          if [ -d artifacts ] && [ "$(ls -A artifacts)" ]; then
+            cp -r artifacts/* combined-results/
+          else
+            echo "No artifacts found to combine"
+            echo "No successful packages were built" > combined-results/README.txt
+          fi
           
       - name: Upload combined results
         uses: actions/upload-artifact@v4
         with:
-          name: all-training-results
+          name: all-test-results
           path: combined-results/
           retention-days: 90
