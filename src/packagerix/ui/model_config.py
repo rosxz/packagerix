@@ -34,11 +34,11 @@ PROVIDERS = [
         setup_url="https://platform.openai.com/"
     ),
     Provider(
-        name="google",
+        name="gemini",
         display_name="Gemini",
         env_var="GEMINI_API_KEY",
         requires_api_key=True,
-        setup_url="https://makersuite.google.com/"
+        setup_url="https://aistudio.google.com/"
     ),
     Provider(
         name="ollama",
@@ -81,8 +81,6 @@ def get_available_models(provider: Provider) -> List[str]:
         # Add provider prefix to all models for LiteLLM
         if provider.name == "ollama":
             return [f"ollama/{model}" for model in models]
-        elif provider.name == "google":
-            return [f"gemini/{model}" for model in models]
         else:
             # Anthropic and OpenAI models typically don't need prefixes
             return models
