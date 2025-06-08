@@ -76,13 +76,13 @@ jobs:
         
       # Dependencies are handled by nix develop, so we don't need to install them separately
           
-      - name: Setup paketerix configuration
+      - name: Setup packagerix configuration
         run: |
           # Create config directory
           mkdir -p ~/.packagerix
           
           # Set Anthropic API key as environment variable
-          # (paketerix will pick it up from env vars as fallback)
+          # (packagerix will pick it up from env vars as fallback)
           echo "ANTHROPIC_API_KEY=${{ secrets.ANTHROPIC_API_KEY }}" >> $GITHUB_ENV
           
           # Create model configuration file
@@ -102,7 +102,7 @@ jobs:
           # Create output directory for this run
           mkdir -p output
           
-          # Run paketerix with raw output and save results
+          # Run packagerix with raw output and save results
           nix develop .# -c python -m packagerix \
             --raw \
             --output-dir output \
@@ -132,7 +132,7 @@ jobs:
       - name: Upload results
         uses: actions/upload-artifact@v4
         with:
-          name: paketerix-output-${{ matrix.issue_number }}
+          name: packagerix-output-${{ matrix.issue_number }}
           path: |
             output_${{ matrix.issue_number }}.log
             error_${{ matrix.issue_number }}.log
@@ -171,7 +171,7 @@ jobs:
         uses: actions/download-artifact@v4
         with:
           path: artifacts
-          pattern: paketerix-output-*
+          pattern: packagerix-output-*
           
       - name: Aggregate results
         run: |
@@ -182,9 +182,9 @@ jobs:
           success=0
           failed=0
           
-          for dir in artifacts/paketerix-output-*; do
+          for dir in artifacts/packagerix-output-*; do
             if [ -d "$dir" ]; then
-              issue_num=$(basename "$dir" | sed 's/paketerix-output-//')
+              issue_num=$(basename "$dir" | sed 's/packagerix-output-//')
               total=$((total + 1))
               
               # Check if there's a package.nix file in the output directory
