@@ -5,7 +5,7 @@ This module contains all functions decorated with @ask_model that interact with 
 
 from magentic import StreamedStr
 from packagerix.ui.conversation import ask_model
-from packagerix.nix import Error
+from packagerix.errors import NixError, NixErrorKind, NixBuildErrorDiff
 
 
 @ask_model("""@model You are software packaging expert who can build any project using the Nix programming language.
@@ -65,9 +65,10 @@ def summarize_github(project_page: str, release_data: dict = None) -> StreamedSt
     ...
 
 
-@ask_model("""@model I'll fix this build error and try again.
+@ask_model("""@model You are software packaging expert who can build any project using the Nix programming language.
 
-Current code:
+Please fix the folloing error in the following Nix code.      
+
 ```nix
 {code}
 ```
@@ -76,12 +77,50 @@ Error:
 ```
 {error}
 ```
-
-Please fix the code to resolve the error.
            
 Note: your reply should contain exaclty one code block with the updated Nix code.
 Note: If you need to introduce a new hash, use lib.fakeHash as a placeholder, and automated process will replace this with the actual hash.
 """)
-def fix_build_error(code: str, error: Error) -> StreamedStr:
+def fix_build_error(code: str, error: NixError) -> StreamedStr:
     """Fix a build error in Nix code."""
+    ...
+
+
+@ask_model("""@model You are software packaging expert who can build any project using the Nix programming language.
+
+ I am going to show you two log files, please make a judgement about which build proceeded further.
+
+Initial build:
+```nix
+{initial_error}
+```
+
+Attempted improvement:
+```
+{attempted_improvement}
+```
+
+If the attempt to improve the build proceeded further, please return IMPROVEMENT, if the previous build proceeded further or both fail at the same step with no clear winner, return REGRESSION.
+
+If the build error shows a hash mismatch, please return HASH_MISMATCH.
+""")
+def evaluate_progress(initial_error: str, attempted_improvement: str) -> NixBuildErrorDiff:
+    ...
+
+@ask_model("""@model You are software packaging expert who can build any project using the Nix programming language.
+
+Please fix the folloing hash mismatch error in the following Nix code by replacing the relevant intance of lib.fakeHash wiith the actual value from the error message.      
+
+```nix
+{code}
+```
+
+Error:
+```
+{error}
+```
+           
+Note: your reply should contain exaclty one code block with the updated Nix code.
+""")
+def fix_hash_mismatch(code: str, error: NixError) -> StreamedStr:
     ...

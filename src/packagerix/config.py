@@ -3,6 +3,12 @@ import atexit
 from pathlib import Path
 import tempfile
 from collections import deque
+from typing import List, TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from packagerix.errors import NixBuildResult
+
+error_stack: List['NixBuildResult']
 
 def init():
     global error_stack

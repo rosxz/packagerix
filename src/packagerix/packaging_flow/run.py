@@ -4,9 +4,10 @@ from packagerix.ui.conversation import ask_user,  coordinator_message, coordinat
 from packagerix.parsing import scrape_and_process, extract_updated_code, fetch_combined_project_data
 from packagerix.flake import init_flake
 from packagerix.nix import test_updated_code
-from packagerix.packaging_flow.model_prompts import set_up_project, summarize_github, fix_build_error
+from packagerix.packaging_flow.model_prompts import set_up_project, summarize_github, fix_build_error, fix_hash_mismatch
 from packagerix.packaging_flow.user_prompts import get_project_url
 from packagerix import config
+from packagerix.errors import NixErrorKind
 
 
 
@@ -70,35 +71,43 @@ def package_project(output_dir=None, project_url=None):
     coordinator_message("Creating initial package configuration...")
     code = create_initial_package(starting_template, project_page, release_data)
     
-    # Step 7: Test build
-    coordinator_progress("Testing the initial build...")
-    error = test_updated_code(code, is_initial_build=True)
-    
-    if error is None:
-        coordinator_message("✅ Build succeeded on first try!")
-        if output_dir:
-            save_package_output(code, project_url, output_dir)
-        return code
-    
-    # Step 8: Iterative fixing
+    # Step 7: Iterative build and fix loop
     max_attempts = 5
+    is_initial_build = True
+    
     for attempt in range(max_attempts):
-        coordinator_message(f"Build attempt {attempt + 1}/{max_attempts} failed with error:")
-        coordinator_message(f"```\n{error.error_message}\n```")
+        # Test build
+        if attempt == 0:
+            coordinator_progress("Testing the initial build...")
+        else:
+            coordinator_progress(f"Testing build attempt {attempt + 1}...")
+            
+        error = test_updated_code(code, is_initial_build=is_initial_build)
+        is_initial_build = False
         
-        # Fix the error
-        fixed_response = fix_build_error(code, error)
-        code = extract_updated_code(fixed_response)
-        
-        # Test again
-        coordinator_progress(f"Testing build attempt {attempt + 2}...")
-        error = test_updated_code(code)
-        
+        # Check if build succeeded
         if error is None:
-            coordinator_message(f"✅ Build succeeded after {attempt + 1} fixes!")
+            if attempt == 0:
+                coordinator_message("✅ Build succeeded on first try!")
+            else:
+                coordinator_message(f"✅ Build succeeded after {attempt} fixes!")
             if output_dir:
                 save_package_output(code, project_url, output_dir)
             return code
+        
+        # Build failed, show error
+        coordinator_message(f"Build attempt {attempt + 1}/{max_attempts} failed with error:")
+        coordinator_message(f"```\n{error.error_message}\n```")
+        
+        # Fix the error based on type
+        if error.type == NixErrorKind.HASH_MISMATCH:
+            coordinator_message("Hash mismatch detected, fixing...")
+            fixed_response = fix_hash_mismatch(code, error)
+        else:
+            # Regular error fixing
+            fixed_response = fix_build_error(code, error)
+        
+        code = extract_updated_code(fixed_response)
     
     coordinator_error(f"Failed to build after {max_attempts} attempts. Manual intervention may be needed.")
     return None
