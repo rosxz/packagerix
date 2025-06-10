@@ -6,7 +6,7 @@ on:
     branches:
       - main
     paths:
-      - 'research/nixpkgs_packaging_requests_training.csv'
+      - 'research/packaging_requests/used_during_implementation.csv'
       - 'src/**'
       - '.github/workflows/train-on-dataset.yml'
 
@@ -26,6 +26,33 @@ jobs:
       - name: Install Nix
         uses: cachix/install-nix-action@v24
         
+      - name: Cache Nix store
+        uses: nix-community/cache-nix-action@v6
+        with:
+          primary-key: nix-${{ runner.os }}-${{ hashFiles('flake.lock') }}
+          restore-prefixes-first-match: nix-${{ runner.os }}-
+        
+      - name: Create packagerix config
+        run: |
+          mkdir -p ~/.packagerix
+          cat > ~/.packagerix/config.json << EOF
+          {
+            "provider": "anthropic",
+            "model": "claude-3-5-haiku-20241022",
+            "backend": "litellm"
+          }
+          EOF
+          
+      - name: Cache packagerix config
+        uses: actions/cache@v4
+        with:
+          path: ~/.packagerix
+          key: packagerix-config-v1
+        
+      - name: Build packagerix environment
+        run: |
+          nix develop .# --command echo "Development environment ready"
+        
       - name: Create matrix from CSV
         id: create-matrix
         run: |
@@ -34,18 +61,20 @@ jobs:
           import json
           
           matrix_data = []
-          with open('research/nixpkgs_packaging_requests_training.csv', 'r') as f:
+          with open('research/packaging_requests/used_during_implementation.csv', 'r') as f:
               reader = csv.DictReader(f)
               for row in reader:
                   if row['repo_url']:  # Skip entries without repo URLs
+                      clean_name = row['repo_url'].replace('https://github.com/', '')
                       matrix_data.append({
                           'issue_number': row['issue_number'],
-                          'repo_url': row['repo_url']
+                          'repo_url': row['repo_url'],
+                          'repo_name': clean_name
                       })
           
           # GitHub Actions has a matrix size limit, so we might need to batch
-          # Limit to first 5 entries for testing
-          matrix = {'include': matrix_data[:5]}
+          # Limit to first 2 entries for testing
+          matrix = {'include': matrix_data[:2]}
           
           with open('matrix.json', 'w') as f:
               json.dump(matrix, f)
@@ -58,57 +87,53 @@ jobs:
   build-test-packages:
     needs: setup
     runs-on: ubuntu-latest
-    name: Package ${{ matrix.repo_url }}
+    name: Package ${{ matrix.repo_name }}
     strategy:
       matrix: ${{ fromJson(needs.setup.outputs.matrix) }}
-      max-parallel: 5  # Limit concurrent jobs to avoid rate limiting
+      max-parallel: 1  # Run sequentially to avoid API rate limits
       fail-fast: false
     steps:
       - uses: actions/checkout@v4
       
-      - name: Set up Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: '3.11'
-          
       - name: Install Nix
         uses: cachix/install-nix-action@v24
         
-      # Dependencies are handled by nix develop, so we don't need to install them separately
+      - name: Restore Nix cache
+        uses: nix-community/cache-nix-action@v6
+        with:
+          primary-key: nix-${{ runner.os }}-${{ hashFiles('flake.lock') }}
+          restore-prefixes-first-match: nix-${{ runner.os }}-
+        
+      - name: Restore packagerix config
+        uses: actions/cache@v4
+        with:
+          path: ~/.packagerix
+          key: packagerix-config-v1
           
-      - name: Setup packagerix configuration
+      - name: Setup environment
         run: |
-          # Create config directory
-          mkdir -p ~/.packagerix
-          
           # Set Anthropic API key as environment variable
-          # (packagerix will pick it up from env vars as fallback)
           echo "ANTHROPIC_API_KEY=${{ secrets.ANTHROPIC_API_KEY }}" >> $GITHUB_ENV
-          
-          # Create model configuration file
-          cat > ~/.packagerix/config.json << EOF
-          {
-            "provider": "anthropic",
-            "model": "claude-3-5-haiku-20241022",
-            "backend": "litellm"
-          }
-          EOF
       
       - name: Process package request
         id: process
         run: |
           echo "Processing issue #${{ matrix.issue_number }} - ${{ matrix.repo_url }}"
           
+          # Set default status
+          echo "status=failed" >> $GITHUB_OUTPUT
+          
           # Create output directory for this run
           mkdir -p output
           
           # Run packagerix with raw output and save results
+          set -o pipefail
           nix develop .# -c python -m packagerix \
             --raw \
             --output-dir output \
             "${{ matrix.repo_url }}" \
-            > "output_${{ matrix.issue_number }}.log" 2> "error_${{ matrix.issue_number }}.log" \
-            && exit_code=0 || exit_code=$?
+            2>&1 | tee "${{ matrix.issue_number }}.log"
+          exit_code=$?
           
           # Check if the command succeeded
           if [ $exit_code -eq 0 ]; then
@@ -123,23 +148,22 @@ jobs:
           else
             echo "status=failed" >> $GITHUB_OUTPUT
             echo "Exit code: $exit_code"
-            echo "=== Error log ==="
-            cat "error_${{ matrix.issue_number }}.log" || echo "No error log found"
-            echo "=== Output log ==="
-            head -n 50 "output_${{ matrix.issue_number }}.log" || echo "No output log found"
+            echo "=== Combined log ==="
+            head -n 50 "${{ matrix.issue_number }}.log" || echo "No log found"
           fi
           
       - name: Upload results
+        if: always()
         uses: actions/upload-artifact@v4
         with:
           name: packagerix-output-${{ matrix.issue_number }}
           path: |
-            output_${{ matrix.issue_number }}.log
-            error_${{ matrix.issue_number }}.log
+            ${{ matrix.issue_number }}.log
             output/
-          retention-days: 30
+          retention-days: 1
           
       - name: Create summary
+        if: always()
         run: |
           echo "## Issue #${{ matrix.issue_number }}" >> $GITHUB_STEP_SUMMARY
           echo "- Repository: ${{ matrix.repo_url }}" >> $GITHUB_STEP_SUMMARY
@@ -147,26 +171,31 @@ jobs:
           if [ -n "${{ steps.process.outputs.package_name }}" ]; then
             echo "- Package name: ${{ steps.process.outputs.package_name }}" >> $GITHUB_STEP_SUMMARY
           fi
-          if [ -f "output_${{ matrix.issue_number }}.log" ]; then
-            echo "- Output log size: $(wc -c < output_${{ matrix.issue_number }}.log) bytes" >> $GITHUB_STEP_SUMMARY
+          if [ -f "${{ matrix.issue_number }}.log" ]; then
+            echo "- Log size: $(wc -c < ${{ matrix.issue_number }}.log) bytes" >> $GITHUB_STEP_SUMMARY
           fi
           if [ -d "output/${{ steps.process.outputs.package_name }}/package.nix" ]; then
             echo "- Generated package.nix: ✓" >> $GITHUB_STEP_SUMMARY
           fi
-          if [ -f "error_${{ matrix.issue_number }}.log" ] && [ -s "error_${{ matrix.issue_number }}.log" ]; then
-            echo "### Error log:" >> $GITHUB_STEP_SUMMARY
-            echo '```' >> $GITHUB_STEP_SUMMARY
-            head -n 50 "error_${{ matrix.issue_number }}.log" >> $GITHUB_STEP_SUMMARY
-            echo '```' >> $GITHUB_STEP_SUMMARY
+          if [ -f "${{ matrix.issue_number }}.log" ] && [ -s "${{ matrix.issue_number }}.log" ]; then
+            echo "### Log excerpt:" >> $GITHUB_STEP_SUMMARY
+            echo '<pre>' >> $GITHUB_STEP_SUMMARY
+            tail -n 50 "${{ matrix.issue_number }}.log" >> $GITHUB_STEP_SUMMARY
+            echo '</pre>' >> $GITHUB_STEP_SUMMARY
           fi
+          
+      - name: Fail job if packaging failed
+        if: always() && steps.process.outputs.status == 'failed'
+        run: |
+          echo "Packaging failed, failing the job"
+          echo "Status was: ${{ steps.process.outputs.status }}"
+          exit 1
 
   aggregate-results:
     needs: build-test-packages
     runs-on: ubuntu-latest
     if: always()
     steps:
-      - uses: actions/checkout@v4
-      
       - name: Download all artifacts
         uses: actions/download-artifact@v4
         with:
