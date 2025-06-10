@@ -2,6 +2,12 @@ name: Build Test Packages
 
 on:
   workflow_dispatch:
+    inputs:
+      max_packages:
+        description: 'Maximum number of packages to build (0 for all)'
+        required: false
+        default: '5'
+        type: number
   push:
     branches:
       - main
@@ -73,8 +79,11 @@ jobs:
                       })
           
           # GitHub Actions has a matrix size limit, so we might need to batch
-          # Limit to first 2 entries for testing
-          matrix = {'include': matrix_data[:2]}
+          max_packages = int('${{ github.event.inputs.max_packages || 5 }}')
+          if max_packages == 0:
+              matrix = {'include': matrix_data}
+          else:
+              matrix = {'include': matrix_data[:max_packages]}
           
           with open('matrix.json', 'w') as f:
               json.dump(matrix, f)
