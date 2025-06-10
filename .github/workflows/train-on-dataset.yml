@@ -65,9 +65,11 @@ jobs:
               reader = csv.DictReader(f)
               for row in reader:
                   if row['repo_url']:  # Skip entries without repo URLs
+                      clean_name = row['repo_url'].replace('https://github.com/', '')
                       matrix_data.append({
                           'issue_number': row['issue_number'],
-                          'repo_url': row['repo_url']
+                          'repo_url': row['repo_url'],
+                          'repo_name': clean_name
                       })
           
           # GitHub Actions has a matrix size limit, so we might need to batch
@@ -85,10 +87,10 @@ jobs:
   build-test-packages:
     needs: setup
     runs-on: ubuntu-latest
-    name: Package ${{ matrix.repo_url }}
+    name: Package ${{ matrix.repo_name }}
     strategy:
       matrix: ${{ fromJson(needs.setup.outputs.matrix) }}
-      max-parallel: 5  # Limit concurrent jobs to avoid rate limiting
+      max-parallel: 1  # Run sequentially to avoid API rate limits
       fail-fast: false
     steps:
       - uses: actions/checkout@v4
@@ -118,6 +120,9 @@ jobs:
         run: |
           echo "Processing issue #${{ matrix.issue_number }} - ${{ matrix.repo_url }}"
           
+          # Set default status
+          echo "status=failed" >> $GITHUB_OUTPUT
+          
           # Create output directory for this run
           mkdir -p output
           
@@ -145,9 +150,17 @@ jobs:
             echo "Exit code: $exit_code"
             echo "=== Combined log ==="
             head -n 50 "${{ matrix.issue_number }}.log" || echo "No log found"
-            exit $exit_code
           fi
           
+      - name: Upload results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: packagerix-output-${{ matrix.issue_number }}
+          path: |
+            ${{ matrix.issue_number }}.log
+            output/
+          retention-days: 1
           
       - name: Create summary
         if: always()
@@ -166,20 +179,41 @@ jobs:
           fi
           if [ -f "${{ matrix.issue_number }}.log" ] && [ -s "${{ matrix.issue_number }}.log" ]; then
             echo "### Log excerpt:" >> $GITHUB_STEP_SUMMARY
-            echo '```' >> $GITHUB_STEP_SUMMARY
+            echo '<pre>' >> $GITHUB_STEP_SUMMARY
             tail -n 50 "${{ matrix.issue_number }}.log" >> $GITHUB_STEP_SUMMARY
-            echo '```' >> $GITHUB_STEP_SUMMARY
+            echo '</pre>' >> $GITHUB_STEP_SUMMARY
           fi
+          
+      - name: Fail job if packaging failed
+        if: steps.process.outputs.status == 'failed'
+        run: |
+          echo "Packaging failed, failing the job"
+          exit 1
 
   aggregate-results:
     needs: build-test-packages
     runs-on: ubuntu-latest
     if: always()
     steps:
-      - name: Aggregate results
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+          pattern: packagerix-output-*
+          
+      - name: Create combined artifact
         run: |
-          echo "# Test Package Build Results" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "Build jobs completed. Individual job summaries contain detailed results." >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "Check individual job logs and summaries for packaging details." >> $GITHUB_STEP_SUMMARY
+          mkdir -p combined-results
+          if [ -d artifacts ] && [ "$(ls -A artifacts)" ]; then
+            cp -r artifacts/* combined-results/
+          else
+            echo "No artifacts found to combine"
+            echo "No successful packages were built" > combined-results/README.txt
+          fi
+          
+      - name: Upload combined results
+        uses: actions/upload-artifact@v4
+        with:
+          name: all-test-results
+          path: combined-results/
+          retention-days: 90
