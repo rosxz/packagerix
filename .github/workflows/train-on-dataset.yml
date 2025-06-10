@@ -49,7 +49,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: packagerix-config
-          path: ~/.packagerix/
+          path: /home/runner/.packagerix/
           retention-days: 1
         
       - name: Create matrix from CSV
@@ -104,7 +104,7 @@ jobs:
         uses: actions/download-artifact@v4
         with:
           name: packagerix-config
-          path: ~/
+          path: /home/runner/
           
       - name: Setup environment
         run: |
@@ -143,18 +143,12 @@ jobs:
             echo "Exit code: $exit_code"
             echo "=== Combined log ==="
             head -n 50 "${{ matrix.issue_number }}.log" || echo "No log found"
+            exit $exit_code
           fi
           
-      - name: Upload results
-        uses: actions/upload-artifact@v4
-        with:
-          name: packagerix-output-${{ matrix.issue_number }}
-          path: |
-            ${{ matrix.issue_number }}.log
-            output/
-          retention-days: 30
           
       - name: Create summary
+        if: always()
         run: |
           echo "## Issue #${{ matrix.issue_number }}" >> $GITHUB_STEP_SUMMARY
           echo "- Repository: ${{ matrix.repo_url }}" >> $GITHUB_STEP_SUMMARY
@@ -180,54 +174,10 @@ jobs:
     runs-on: ubuntu-latest
     if: always()
     steps:
-      - uses: actions/checkout@v4
-      
-      - name: Download all artifacts
-        uses: actions/download-artifact@v4
-        with:
-          path: artifacts
-          pattern: packagerix-output-*
-          
       - name: Aggregate results
         run: |
           echo "# Test Package Build Results" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
-          
-          total=0
-          success=0
-          failed=0
-          
-          for dir in artifacts/packagerix-output-*; do
-            if [ -d "$dir" ]; then
-              issue_num=$(basename "$dir" | sed 's/packagerix-output-//')
-              total=$((total + 1))
-              
-              # Check if there's a package.nix file in the output directory
-              if [ -n "$(find "$dir/output" -name "package.nix" 2>/dev/null)" ]; then
-                success=$((success + 1))
-              else
-                failed=$((failed + 1))
-              fi
-            fi
-          done
-          
-          echo "- Total processed: $total" >> $GITHUB_STEP_SUMMARY
-          echo "- Successful: $success" >> $GITHUB_STEP_SUMMARY
-          echo "- Failed: $failed" >> $GITHUB_STEP_SUMMARY
-          
-      - name: Create combined artifact
-        run: |
-          mkdir -p combined-results
-          if [ -d artifacts ] && [ "$(ls -A artifacts)" ]; then
-            cp -r artifacts/* combined-results/
-          else
-            echo "No artifacts found to combine"
-            echo "No successful packages were built" > combined-results/README.txt
-          fi
-          
-      - name: Upload combined results
-        uses: actions/upload-artifact@v4
-        with:
-          name: all-test-results
-          path: combined-results/
-          retention-days: 90
+          echo "Build jobs completed. Individual job summaries contain detailed results." >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "Check individual job logs and summaries for packaging details." >> $GITHUB_STEP_SUMMARY
