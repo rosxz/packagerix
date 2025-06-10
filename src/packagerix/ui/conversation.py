@@ -173,7 +173,7 @@ def ask_model(prompt_text: str):
         @wraps(func)
         def wrapper(*args, **kwargs) -> str:
             adapter = get_ui_adapter()
-            max_retries = 3
+            max_retries = 30
             base_delay = 5  # seconds
             
             for attempt in range(max_retries):
@@ -203,8 +203,8 @@ def ask_model(prompt_text: str):
                         is_overload_error = False
                     
                     if is_overload_error and attempt < max_retries - 1:
-                        # Wait with exponential backoff
-                        delay = base_delay * (2 ** attempt)
+                        # Wait with exponential backoff, capped at 10 minutes
+                        delay = min(base_delay * (1.16 ** attempt), 600)
                         from packagerix.ui.logging_config import logger
                         logger.warning(f"API overloaded, waiting {delay} seconds before retry...")
                         import time
@@ -251,7 +251,7 @@ def ask_model_enum(prompt_text: str):
         @wraps(func)
         def wrapper(*args, **kwargs):
             adapter = get_ui_adapter()
-            max_retries = 3
+            max_retries = 30
             base_delay = 5  # seconds
             
             for attempt in range(max_retries):
@@ -293,8 +293,8 @@ def ask_model_enum(prompt_text: str):
                         is_overload_error = False
                     
                     if is_overload_error and attempt < max_retries - 1:
-                        # Wait with exponential backoff
-                        delay = base_delay * (2 ** attempt)
+                        # Wait with exponential backoff, capped at 10 minutes
+                        delay = min(base_delay * (1.16 ** attempt), 600)
                         from packagerix.ui.logging_config import logger
                         logger.warning(f"API overloaded, waiting {delay} seconds before retry...")
                         import time
