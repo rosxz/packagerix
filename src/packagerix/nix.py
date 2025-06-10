@@ -36,9 +36,11 @@ def invoke_build() -> NixBuildResult:
         )
     
     derivation_path = eval_result.stdout.strip()
+    logger.info(f"Building derivation outputs: {derivation_path}^*")
 
+    # Build the derivation outputs (not just the derivation file)
     build_result = subprocess.run(
-        ["nix", "build", derivation_path, "--no-link"],
+        ["nix", "build", f"{derivation_path}^*", "--no-link"],
         text=True,
         capture_output=True
     )

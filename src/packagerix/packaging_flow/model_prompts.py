@@ -81,7 +81,7 @@ Error:
 Note: your reply should contain exaclty one code block with the updated Nix code.
 Note: If you need to introduce a new hash, use lib.fakeHash as a placeholder, and automated process will replace this with the actual hash.
 """)
-def fix_build_error(code: str, error: NixError) -> StreamedStr:
+def fix_build_error(code: str, error: str) -> StreamedStr:
     """Fix a build error in Nix code."""
     ...
 
@@ -122,5 +122,5 @@ Error:
            
 Note: your reply should contain exaclty one code block with the updated Nix code.
 """)
-def fix_hash_mismatch(code: str, error: NixError) -> StreamedStr:
+def fix_hash_mismatch(code: str, error: str) -> StreamedStr:
     ...

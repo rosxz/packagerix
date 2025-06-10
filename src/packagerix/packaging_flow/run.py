@@ -102,10 +102,10 @@ def package_project(output_dir=None, project_url=None):
         # Fix the error based on type
         if error.type == NixErrorKind.HASH_MISMATCH:
             coordinator_message("Hash mismatch detected, fixing...")
-            fixed_response = fix_hash_mismatch(code, error)
+            fixed_response = fix_hash_mismatch(code, error.error_message)
         else:
             # Regular error fixing
-            fixed_response = fix_build_error(code, error)
+            fixed_response = fix_build_error(code, error.error_message)
         
         code = extract_updated_code(fixed_response)
     
