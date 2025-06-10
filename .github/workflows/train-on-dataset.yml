@@ -122,12 +122,13 @@ jobs:
           mkdir -p output
           
           # Run packagerix with raw output and save results
-          { nix develop .# -c python -m packagerix \
-              --raw \
-              --output-dir output \
-              "${{ matrix.repo_url }}" \
-              2>&1 | tee "${{ matrix.issue_number }}.log"; } \
-            && exit_code=0 || exit_code=$?
+          set -o pipefail
+          nix develop .# -c python -m packagerix \
+            --raw \
+            --output-dir output \
+            "${{ matrix.repo_url }}" \
+            2>&1 | tee "${{ matrix.issue_number }}.log"
+          exit_code=$?
           
           # Check if the command succeeded
           if [ $exit_code -eq 0 ]; then
