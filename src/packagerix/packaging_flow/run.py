@@ -101,7 +101,7 @@ def package_project(output_dir=None, project_url=None):
     
     # Main build improvement loop
     build_iteration = 1
-    max_inner_attempts = 6
+    max_inner_attempts = 10
     
     while True:
         coordinator_message(f"Build iteration {build_iteration} - attempting to fix error:")
