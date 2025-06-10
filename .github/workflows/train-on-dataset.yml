@@ -73,8 +73,8 @@ jobs:
                       })
           
           # GitHub Actions has a matrix size limit, so we might need to batch
-          # Limit to first 5 entries for testing
-          matrix = {'include': matrix_data[:5]}
+          # Limit to first 2 entries for testing
+          matrix = {'include': matrix_data[:2]}
           
           with open('matrix.json', 'w') as f:
               json.dump(matrix, f)
@@ -185,9 +185,10 @@ jobs:
           fi
           
       - name: Fail job if packaging failed
-        if: steps.process.outputs.status == 'failed'
+        if: always() && steps.process.outputs.status == 'failed'
         run: |
           echo "Packaging failed, failing the job"
+          echo "Status was: ${{ steps.process.outputs.status }}"
           exit 1
 
   aggregate-results:
