@@ -103,11 +103,11 @@ jobs:
           mkdir -p output
           
           # Run packagerix with raw output and save results
-          nix develop .# -c python -m packagerix \
-            --raw \
-            --output-dir output \
-            "${{ matrix.repo_url }}" \
-            > "output_${{ matrix.issue_number }}.log" 2> "error_${{ matrix.issue_number }}.log" \
+          { nix develop .# -c python -m packagerix \
+              --raw \
+              --output-dir output \
+              "${{ matrix.repo_url }}" \
+              2>&1 | tee "${{ matrix.issue_number }}.log"; } \
             && exit_code=0 || exit_code=$?
           
           # Check if the command succeeded
@@ -123,10 +123,8 @@ jobs:
           else
             echo "status=failed" >> $GITHUB_OUTPUT
             echo "Exit code: $exit_code"
-            echo "=== Error log ==="
-            cat "error_${{ matrix.issue_number }}.log" || echo "No error log found"
-            echo "=== Output log ==="
-            head -n 50 "output_${{ matrix.issue_number }}.log" || echo "No output log found"
+            echo "=== Combined log ==="
+            head -n 50 "${{ matrix.issue_number }}.log" || echo "No log found"
           fi
           
       - name: Upload results
@@ -134,8 +132,7 @@ jobs:
         with:
           name: packagerix-output-${{ matrix.issue_number }}
           path: |
-            output_${{ matrix.issue_number }}.log
-            error_${{ matrix.issue_number }}.log
+            ${{ matrix.issue_number }}.log
             output/
           retention-days: 30
           
@@ -147,16 +144,16 @@ jobs:
           if [ -n "${{ steps.process.outputs.package_name }}" ]; then
             echo "- Package name: ${{ steps.process.outputs.package_name }}" >> $GITHUB_STEP_SUMMARY
           fi
-          if [ -f "output_${{ matrix.issue_number }}.log" ]; then
-            echo "- Output log size: $(wc -c < output_${{ matrix.issue_number }}.log) bytes" >> $GITHUB_STEP_SUMMARY
+          if [ -f "${{ matrix.issue_number }}.log" ]; then
+            echo "- Log size: $(wc -c < ${{ matrix.issue_number }}.log) bytes" >> $GITHUB_STEP_SUMMARY
           fi
           if [ -d "output/${{ steps.process.outputs.package_name }}/package.nix" ]; then
             echo "- Generated package.nix: ✓" >> $GITHUB_STEP_SUMMARY
           fi
-          if [ -f "error_${{ matrix.issue_number }}.log" ] && [ -s "error_${{ matrix.issue_number }}.log" ]; then
-            echo "### Error log:" >> $GITHUB_STEP_SUMMARY
+          if [ -f "${{ matrix.issue_number }}.log" ] && [ -s "${{ matrix.issue_number }}.log" ]; then
+            echo "### Log excerpt:" >> $GITHUB_STEP_SUMMARY
             echo '```' >> $GITHUB_STEP_SUMMARY
-            head -n 50 "error_${{ matrix.issue_number }}.log" >> $GITHUB_STEP_SUMMARY
+            tail -n 50 "${{ matrix.issue_number }}.log" >> $GITHUB_STEP_SUMMARY
             echo '```' >> $GITHUB_STEP_SUMMARY
           fi
 
