@@ -223,6 +223,96 @@ def ask_model(prompt_text: str):
     return decorator
 
 
+def ask_model_enum(prompt_text: str):
+    """Decorator for functions that need model input and return an Enum. Should only be used on stub functions.
+    
+    This decorator:
+    1. Applies the @prompt decorator with the given prompt
+    2. Shows the coordinator message in the UI  
+    3. Handles non-streaming responses
+    4. Converts string result to Enum based on function's return type annotation
+    """
+    def decorator(func: Callable) -> Callable:
+        # Apply the prompt decorator using the same prompt text
+        from magentic import prompt
+        import inspect
+        from enum import Enum
+        
+        # Get the return type annotation
+        sig = inspect.signature(func)
+        return_type = sig.return_annotation
+        
+        # Check if return type is an Enum
+        if not (inspect.isclass(return_type) and issubclass(return_type, Enum)):
+            raise TypeError(f"ask_model_enum can only be used with functions that return Enum types, got {return_type}")
+        
+        prompt_decorated_func = prompt(prompt_text.replace("@model ", ""))(func)
+        
+        @wraps(func)
+        def wrapper(*args, **kwargs):
+            adapter = get_ui_adapter()
+            max_retries = 3
+            base_delay = 5  # seconds
+            
+            for attempt in range(max_retries):
+                try:
+                    # Show the coordinator message (only on first attempt)
+                    if attempt == 0:
+                        adapter.show_message(Message(Actor.COORDINATOR, prompt_text))
+                    else:
+                        from packagerix.ui.logging_config import logger
+                        logger.info(f"Retrying model call (attempt {attempt + 1}/{max_retries})")
+                    
+                    # Call the prompt-decorated function to get result
+                    result = prompt_decorated_func(*args, **kwargs)
+                    
+                    if result is None:
+                        raise ValueError(f"Model function {func.__name__} returned None - this indicates a problem with the prompt or model configuration")
+                    
+                    # Convert result to Enum if needed
+                    if isinstance(result, return_type):
+                        # Already the correct enum type
+                        return result
+                    elif isinstance(result, str):
+                        # String result, convert to enum
+                        try:
+                            return return_type(result.strip())
+                        except ValueError:
+                            # If direct conversion fails, try by name
+                            return return_type[result.strip()]
+                    else:
+                        # Try to convert whatever we got
+                        return return_type(str(result).strip())
+                        
+                except Exception as e:
+                    # Import litellm to check for InternalServerError
+                    try:
+                        import litellm
+                        is_overload_error = isinstance(e, litellm.InternalServerError)
+                    except ImportError:
+                        is_overload_error = False
+                    
+                    if is_overload_error and attempt < max_retries - 1:
+                        # Wait with exponential backoff
+                        delay = base_delay * (2 ** attempt)
+                        from packagerix.ui.logging_config import logger
+                        logger.warning(f"API overloaded, waiting {delay} seconds before retry...")
+                        import time
+                        time.sleep(delay)
+                        continue
+                    else:
+                        # Either not an overload error, or we've exhausted retries
+                        import traceback
+                        tb = traceback.format_exc()
+                        error_msg = f"Error in model function {func.__name__}: {str(e)}\n{tb}"
+                        from packagerix.ui.logging_config import logger
+                        logger.error(error_msg)
+                        raise
+        
+        return wrapper
+    return decorator
+
+
 def coordinator_message(content: str):
     """Send a message from the coordinator."""
     adapter = get_ui_adapter()

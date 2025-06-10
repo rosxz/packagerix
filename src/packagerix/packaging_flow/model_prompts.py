@@ -4,7 +4,7 @@ This module contains all functions decorated with @ask_model that interact with 
 """
 
 from magentic import StreamedStr
-from packagerix.ui.conversation import ask_model
+from packagerix.ui.conversation import ask_model, ask_model_enum
 from packagerix.errors import NixError, NixErrorKind, NixBuildErrorDiff
 
 
@@ -86,7 +86,7 @@ def fix_build_error(code: str, error: str) -> StreamedStr:
     ...
 
 
-@ask_model("""@model You are software packaging expert who can build any project using the Nix programming language.
+@ask_model_enum("""@model You are software packaging expert who can build any project using the Nix programming language.
 
  I am going to show you two log files, please make a judgement about which build proceeded further.
 
@@ -100,9 +100,7 @@ Attempted improvement:
 {attempted_improvement}
 ```
 
-If the attempt to improve the build proceeded further, please return IMPROVEMENT, if the previous build proceeded further or both fail at the same step with no clear winner, return REGRESSION.
-
-If the build error shows a hash mismatch, please return HASH_MISMATCH.
+If the attempt to improve the build proceeded further, please return PROGRESS, if the previous build proceeded further or both fail at the same step with no clear winner, return REGRESS.
 """)
 def evaluate_progress(initial_error: str, attempted_improvement: str) -> NixBuildErrorDiff:
     ...

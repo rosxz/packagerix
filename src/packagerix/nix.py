@@ -115,35 +115,9 @@ def eval_progress() -> NixBuildErrorDiff:
 
     return evaluate_progress(prev_error_message_trunc, error_message_trunc)
 
-def test_updated_code(updated_code: str, is_initial_build: bool = False) -> Optional[NixError]:
-    """build updated Nix code"""
-
+def execute_build_and_add_to_stack(updated_code: str) -> NixBuildResult:
+    """Update flake with new code, build it, and add result to error stack."""
     update_flake(updated_code)
     result = invoke_build()
     error_stack.append(result)
-    # if this is an eval error we should stay in the current context and try to fix it
-    # if 
-
-
-
-    # now check if we made progress
-    # if we made progress we should
-    # return and re-start with the next step
-    # if we did not make progress we should return
-    # the error to the LLM
-    if result.success:
-        return None
-    else:
-        if is_initial_build:
-            return eval_initial_build()
-        else:
-            return eval_progress()
-        # if errorType == ErrorType.REGRESS:
-        #     # retry in current context
-            
-        # elif errorType == ErrorType.EVAL_ERROR:
-        #     # try to fix error in current context
-        # elif errorType == ErrorType.PROGRESS:
-        #     # move to next iteration
-        # else:
-        #     throw ValueError("unknown error type")
+    return result

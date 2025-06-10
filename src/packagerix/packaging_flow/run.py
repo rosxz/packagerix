@@ -3,7 +3,7 @@
 from packagerix.ui.conversation import ask_user,  coordinator_message, coordinator_error, coordinator_progress
 from packagerix.parsing import scrape_and_process, extract_updated_code, fetch_combined_project_data
 from packagerix.flake import init_flake
-from packagerix.nix import test_updated_code
+from packagerix.nix import execute_build_and_add_to_stack
 from packagerix.packaging_flow.model_prompts import set_up_project, summarize_github, fix_build_error, fix_hash_mismatch
 from packagerix.packaging_flow.user_prompts import get_project_url
 from packagerix import config
@@ -71,46 +71,87 @@ def package_project(output_dir=None, project_url=None):
     coordinator_message("Creating initial package configuration...")
     code = create_initial_package(starting_template, project_page, release_data)
     
-    # Step 7: Iterative build and fix loop
-    max_attempts = 5
-    is_initial_build = True
+    # Step 7: Nested build and fix loop
+    # Outer loop: Build iterations (unlimited, driven by progress)
+    # Inner loop: Evaluation error fixes (max 5 attempts)
     
-    for attempt in range(max_attempts):
-        # Test build
-        if attempt == 0:
-            coordinator_progress("Testing the initial build...")
-        else:
-            coordinator_progress(f"Testing build attempt {attempt + 1}...")
-            
-        error = test_updated_code(code, is_initial_build=is_initial_build)
-        is_initial_build = False
+    coordinator_progress("Testing the initial build...")
+    result = execute_build_and_add_to_stack(code)
+    
+    # Check if initial build succeeded
+    if result.success:
+        coordinator_message("✅ Build succeeded on first try!")
+        if output_dir:
+            save_package_output(code, project_url, output_dir)
+        return code
+    
+    # Handle initial build error
+    if result.error.type == NixErrorKind.HASH_MISMATCH:
+        coordinator_message("Hash mismatch detected, fixing...")
+        fixed_response = fix_hash_mismatch(code, result.error.error_message)
+        code = extract_updated_code(fixed_response)
         
-        # Check if build succeeded
-        if error is None:
-            if attempt == 0:
-                coordinator_message("✅ Build succeeded on first try!")
-            else:
-                coordinator_message(f"✅ Build succeeded after {attempt} fixes!")
+        # Test the hash fix
+        result = execute_build_and_add_to_stack(code)
+        if result.success:
+            coordinator_message("✅ Build succeeded after fixing hash!")
             if output_dir:
                 save_package_output(code, project_url, output_dir)
             return code
-        
-        # Build failed, show error
-        coordinator_message(f"Build attempt {attempt + 1}/{max_attempts} failed with error:")
-        coordinator_message(f"```\n{error.error_message}\n```")
-        
-        # Fix the error based on type
-        if error.type == NixErrorKind.HASH_MISMATCH:
-            coordinator_message("Hash mismatch detected, fixing...")
-            fixed_response = fix_hash_mismatch(code, error.error_message)
-        else:
-            # Regular error fixing
-            fixed_response = fix_build_error(code, error.error_message)
-        
-        code = extract_updated_code(fixed_response)
     
-    coordinator_error(f"Failed to build after {max_attempts} attempts. Manual intervention may be needed.")
-    return None
+    # Main build improvement loop
+    build_iteration = 1
+    max_inner_attempts = 6
+    
+    while True:
+        coordinator_message(f"Build iteration {build_iteration} - attempting to fix error:")
+        coordinator_message(f"```\n{result.error.error_message}\n```")
+        
+        # Inner loop: Fix evaluation errors with limited attempts
+        for inner_attempt in range(max_inner_attempts):
+            # Fix the error based on type
+            if result.error.type == NixErrorKind.HASH_MISMATCH:
+                coordinator_message("Hash mismatch detected, fixing...")
+                fixed_response = fix_hash_mismatch(code, result.error.error_message)
+            else:
+                # Regular error fixing  
+                fixed_response = fix_build_error(code, result.error.error_message)
+            
+            code = extract_updated_code(fixed_response)
+            
+            # Test the fix
+            coordinator_progress(f"Testing fix attempt {inner_attempt + 1}/{max_inner_attempts}...")
+            new_result = execute_build_and_add_to_stack(code)
+            
+            if new_result.success:
+                coordinator_message(f"✅ Build succeeded after {build_iteration} iterations!")
+                if output_dir:
+                    save_package_output(code, project_url, output_dir)
+                return code
+            
+            # Build still failed - check if we made progress or hit eval error
+            if new_result.error.type == NixErrorKind.EVAL_ERROR:
+                # Evaluation error - continue inner loop
+                coordinator_message(f"Evaluation error (attempt {inner_attempt + 1}/{max_inner_attempts}), retrying...")
+                result = new_result
+                continue
+            else:
+                # Build error - exit inner loop to check progress
+                result = new_result
+                break
+        else:
+            # Inner loop exhausted (all eval errors)
+            coordinator_error(f"Failed to fix evaluation errors after {max_inner_attempts} attempts.")
+            return None
+        
+        # TODO: Check progress using NixBuildErrorDiff and decide whether to continue
+        # For now, just increment and continue (will implement progress check next)
+        build_iteration += 1
+        
+        # Temporary limit to prevent infinite loop during development
+        if build_iteration > 10:
+            coordinator_error("Reached temporary build iteration limit.")
+            return None
 
 
 def save_package_output(code: str, project_url: str, output_dir: str):
