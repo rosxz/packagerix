@@ -26,6 +26,32 @@ jobs:
       - name: Install Nix
         uses: cachix/install-nix-action@v24
         
+      - name: Build packagerix
+        run: |
+          # Build packagerix development environment
+          nix develop .# --command echo "Development environment ready"
+          
+      - name: Cache packagerix config
+        run: |
+          # Create config directory
+          mkdir -p ~/.packagerix
+          
+          # Create model configuration file
+          cat > ~/.packagerix/config.json << EOF
+          {
+            "provider": "anthropic",
+            "model": "claude-3-5-haiku-20241022",
+            "backend": "litellm"
+          }
+          EOF
+          
+      - name: Upload packagerix config
+        uses: actions/upload-artifact@v4
+        with:
+          name: packagerix-config
+          path: ~/.packagerix/
+          retention-days: 1
+        
       - name: Create matrix from CSV
         id: create-matrix
         run: |
@@ -74,25 +100,17 @@ jobs:
       - name: Install Nix
         uses: cachix/install-nix-action@v24
         
-      # Dependencies are handled by nix develop, so we don't need to install them separately
+      - name: Download packagerix config
+        uses: actions/download-artifact@v4
+        with:
+          name: packagerix-config
+          path: ~/
           
-      - name: Setup packagerix configuration
+      - name: Setup environment
         run: |
-          # Create config directory
-          mkdir -p ~/.packagerix
-          
           # Set Anthropic API key as environment variable
           # (packagerix will pick it up from env vars as fallback)
           echo "ANTHROPIC_API_KEY=${{ secrets.ANTHROPIC_API_KEY }}" >> $GITHUB_ENV
-          
-          # Create model configuration file
-          cat > ~/.packagerix/config.json << EOF
-          {
-            "provider": "anthropic",
-            "model": "claude-3-5-haiku-20241022",
-            "backend": "litellm"
-          }
-          EOF
       
       - name: Process package request
         id: process
