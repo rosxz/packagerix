@@ -202,6 +202,33 @@ jobs:
           path: artifacts
           pattern: packagerix-output-*
           
+      - name: Aggregate results
+        run: |
+          echo "# Test Package Build Results" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          
+          total=0
+          success=0
+          failed=0
+          
+          for dir in artifacts/packagerix-output-*; do
+            if [ -d "$dir" ]; then
+              issue_num=$(basename "$dir" | sed 's/packagerix-output-//')
+              total=$((total + 1))
+              
+              # Check if there's a package.nix file in the output directory
+              if [ -n "$(find "$dir/output" -name "package.nix" 2>/dev/null)" ]; then
+                success=$((success + 1))
+              else
+                failed=$((failed + 1))
+              fi
+            fi
+          done
+          
+          echo "- Total processed: $total" >> $GITHUB_STEP_SUMMARY
+          echo "- Successful: $success" >> $GITHUB_STEP_SUMMARY
+          echo "- Failed: $failed" >> $GITHUB_STEP_SUMMARY
+          
       - name: Create combined artifact
         run: |
           mkdir -p combined-results
