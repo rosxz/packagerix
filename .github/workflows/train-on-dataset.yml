@@ -26,17 +26,17 @@ jobs:
       - name: Install Nix
         uses: cachix/install-nix-action@v24
         
-      - name: Build packagerix
+      - name: Cache Nix store
+        uses: actions/cache@v4
+        with:
+          path: /nix
+          key: nix-${{ runner.os }}-${{ hashFiles('flake.lock') }}
+          restore-keys: |
+            nix-${{ runner.os }}-
+        
+      - name: Create packagerix config
         run: |
-          # Build packagerix development environment
-          nix develop .# --command echo "Development environment ready"
-          
-      - name: Cache packagerix config
-        run: |
-          # Create config directory
           mkdir -p ~/.packagerix
-          
-          # Create model configuration file
           cat > ~/.packagerix/config.json << EOF
           {
             "provider": "anthropic",
@@ -45,12 +45,15 @@ jobs:
           }
           EOF
           
-      - name: Upload packagerix config
-        uses: actions/upload-artifact@v4
+      - name: Cache packagerix config
+        uses: actions/cache@v4
         with:
-          name: packagerix-config
-          path: /home/runner/.packagerix/
-          retention-days: 1
+          path: ~/.packagerix
+          key: packagerix-config-v1
+        
+      - name: Build packagerix environment
+        run: |
+          nix develop .# --command echo "Development environment ready"
         
       - name: Create matrix from CSV
         id: create-matrix
@@ -92,24 +95,26 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       
-      - name: Set up Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: '3.11'
-          
       - name: Install Nix
         uses: cachix/install-nix-action@v24
         
-      - name: Download packagerix config
-        uses: actions/download-artifact@v4
+      - name: Restore Nix cache
+        uses: actions/cache@v4
         with:
-          name: packagerix-config
-          path: /home/runner/
+          path: /nix
+          key: nix-${{ runner.os }}-${{ hashFiles('flake.lock') }}
+          restore-keys: |
+            nix-${{ runner.os }}-
+        
+      - name: Restore packagerix config
+        uses: actions/cache@v4
+        with:
+          path: ~/.packagerix
+          key: packagerix-config-v1
           
       - name: Setup environment
         run: |
           # Set Anthropic API key as environment variable
-          # (packagerix will pick it up from env vars as fallback)
           echo "ANTHROPIC_API_KEY=${{ secrets.ANTHROPIC_API_KEY }}" >> $GITHUB_ENV
       
       - name: Process package request
