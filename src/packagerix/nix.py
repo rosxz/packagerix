@@ -19,8 +19,43 @@ def search_nixpkgs_for_package(query: str) -> str:
     else:
         return f"no results found for query '{query}'"
 
-def invoke_build() -> subprocess.CompletedProcess :
-    return subprocess.run(["nix", "build", flake_dir], text=True, capture_output=True)
+def invoke_build() -> subprocess.CompletedProcess:
+    # First, evaluate the flake to get the derivation path
+    # If this fails, it's an evaluation error
+    eval_result = subprocess.run(
+        ["nix", "path-info", "--derivation", f"{flake_dir}#default"],
+        text=True,
+        capture_output=True
+    )
+    
+    if eval_result.returncode != 0:
+        return eval_result
+    
+    derivation_path = eval_result.stdout.strip()
+
+    build_result = subprocess.run(
+        ["nix", "build", derivation_path, "--no-link"],
+        text=True,
+        capture_output=True
+    )
+
+    log_result = subprocess.run(
+        ["nix", "log", derivation_path],
+        text=True,
+        capture_output=True
+    )
+    
+    if log_result.returncode != 0:
+        # This is unexpected - we should always be able to get logs after a build
+        # Except if the build of a dependency failed
+        raise RuntimeError(f"Failed to retrieve build logs for {derivation_path}: {log_result.stderr}")
+
+    return subprocess.CompletedProcess(
+        args=build_result.args,
+        returncode=build_result.returncode,
+        stdout=log_result.stdout,
+        stderr=log_result.stderr
+    )
 
 
 def get_last_ten_lines(s : str) -> str:
