@@ -27,9 +27,18 @@ Here is the information form the project's GitHub page:
 {project_page}
 ```
 
+And some relevant metadata of the latest release:
+{release_data}
+           
+You should conclude your response with a call to the try_build_package function, passing the template as you filled it out.
+
 Note: your reply should contain exaclty one code block with the updated Nix code.
-""")
-def set_up_project(code_template: str, project_page: str) -> StreamedStr:
+Note: Even though the provided themplate uses the mkDerivation function, this is not the appropriate way to package software for most software ecosystems (outside of C/C++).
+      Make sure you base your code on an appropriate function provdied by nixpkgs instead.
+
+"""
+)
+def set_up_project(code_template: str, project_page: str, release_data: dict = None) -> StreamedStr:
     """Initial setup of a Nix package from a GitHub project."""
     ...
 
@@ -48,8 +57,10 @@ Here is the information form the project's GitHub page:
 ```text
 {project_page}
 ```
+
+{release_data}
 """)
-def summarize_github(project_page: str) -> StreamedStr:
+def summarize_github(project_page: str, release_data: dict = None) -> StreamedStr:
     """Summarize a GitHub project page for packaging purposes."""
     ...
 

@@ -1,7 +1,7 @@
 """Business logic for packagerix using the coordinator pattern."""
 
 from packagerix.ui.conversation import ask_user,  coordinator_message, coordinator_error, coordinator_progress
-from packagerix.parsing import scrape_and_process, extract_updated_code
+from packagerix.parsing import scrape_and_process, extract_updated_code, fetch_combined_project_data
 from packagerix.flake import init_flake
 from packagerix.nix import test_updated_code
 from packagerix.packaging_flow.model_prompts import set_up_project, summarize_github, fix_build_error
@@ -10,16 +10,16 @@ from packagerix import config
 
 
 
-def analyze_project(project_page: str) -> str:
+def analyze_project(project_page: str, release_data: dict = None) -> str:
     """Analyze the project using the model."""
     # summarize_github already has the @ask_model decorator
-    return summarize_github(project_page)
+    return summarize_github(project_page, release_data)
 
 
-def create_initial_package(template: str, project_page: str) -> str:
+def create_initial_package(template: str, project_page: str, release_data: dict = None) -> str:
     """Create initial package configuration."""
     # set_up_project now has the @ask_model decorator that handles UI and streaming
-    result = set_up_project(template, project_page)
+    result = set_up_project(template, project_page, release_data)
     return extract_updated_code(result)
 
 
@@ -43,9 +43,19 @@ def package_project(output_dir=None, project_url=None):
         coordinator_error(f"Failed to fetch project page: {e}")
         return
     
+    # Step 2b: Fetch release data from GitHub API
+    release_data = None
+    try:
+        from packagerix.parsing import fetch_github_release_data
+        release_data = fetch_github_release_data(project_url)
+        if release_data:
+            coordinator_message("Found GitHub release information via API")
+    except Exception as e:
+        coordinator_message(f"Could not fetch release data: {e}")
+    
     # Step 3: Analyze project
     coordinator_message("I found the project information. Let me analyze it.")
-    summary = analyze_project(project_page)
+    summary = analyze_project(project_page, release_data)
     
     # Step 4: Initialize flake
     coordinator_progress("Setting up a temporary Nix flake for packaging")
@@ -58,7 +68,7 @@ def package_project(output_dir=None, project_url=None):
     
     # Step 6: Create initial package
     coordinator_message("Creating initial package configuration...")
-    code = create_initial_package(starting_template, project_page)
+    code = create_initial_package(starting_template, project_page, release_data)
     
     # Step 7: Test build
     coordinator_progress("Testing the initial build...")
