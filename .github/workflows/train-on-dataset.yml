@@ -6,7 +6,7 @@ on:
     branches:
       - main
     paths:
-      - 'research/nixpkgs_packaging_requests_training.csv'
+      - 'research/packaging_requests/used_during_implementation.csv'
       - 'src/**'
       - '.github/workflows/train-on-dataset.yml'
 
@@ -34,7 +34,7 @@ jobs:
           import json
           
           matrix_data = []
-          with open('research/nixpkgs_packaging_requests_training.csv', 'r') as f:
+          with open('research/packaging_requests/used_during_implementation.csv', 'r') as f:
               reader = csv.DictReader(f)
               for row in reader:
                   if row['repo_url']:  # Skip entries without repo URLs
