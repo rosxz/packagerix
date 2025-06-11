@@ -30,8 +30,11 @@ def scrape_and_process(url):
     return cleaned_text
 
 @cache.memoize()
-def fetch_github_release_data(url):
-    """Fetch release data from GitHub API for the given repository URL."""
+def fetch_github_release_data(url, git_hash=None):
+    """Fetch release data from GitHub API for the given repository URL.
+    
+    If git_hash is provided, fetch data for that specific commit instead of latest release.
+    """
     # Parse the GitHub URL to extract owner and repo
     parsed_url = urlparse(url)
     if parsed_url.netloc != 'github.com':
@@ -45,6 +48,29 @@ def fetch_github_release_data(url):
     
     owner = path_parts[0]
     repo = path_parts[1]
+    
+    # If git_hash is provided, fetch specific commit data
+    if git_hash:
+        try:
+            commit_url = f"https://api.github.com/repos/{owner}/{repo}/commits/{git_hash}"
+            response = requests.get(commit_url, headers={'Accept': 'application/vnd.github.v3+json'})
+            response.raise_for_status()
+            commit_data = response.json()
+            
+            return {
+                'tag_name': git_hash[:7],  # Use short hash as tag
+                'tarball_url': f"https://github.com/{owner}/{repo}/archive/{git_hash}.tar.gz",
+                'zipball_url': f"https://github.com/{owner}/{repo}/archive/{git_hash}.zip",
+                'commit': {
+                    'sha': commit_data['sha'],
+                    'url': commit_data['html_url']
+                },
+                'source': 'commit',
+                'custom_hash': True
+            }
+        except requests.RequestException as e:
+            logger.error(f"Failed to fetch commit data from GitHub API: {e}")
+            return None
     
     # Fetch latest release data from GitHub API
     # NOTE: To simplify the threat model, we only fetch auto-generated release artifacts
@@ -92,20 +118,23 @@ def fetch_github_release_data(url):
         logger.error(f"Failed to fetch release data from GitHub API: {e}")
         return None
 
-def fetch_combined_project_data(url):
+def fetch_combined_project_data(url, git_hash=None):
     """Fetch both HTML and API data for a GitHub project."""
     # Get HTML content
     html_content = scrape_and_process(url)
     
     # Get API release data
-    release_data = fetch_github_release_data(url)
+    release_data = fetch_github_release_data(url, git_hash)
     
     # Combine the data
     combined_data = f"{html_content}\n\n"
     
     if release_data:
         combined_data += "--- GitHub Release Information ---\n"
-        combined_data += f"Latest release/tag: {release_data.get('tag_name', 'N/A')}\n"
+        if release_data.get('custom_hash'):
+            combined_data += f"Using specific commit: {release_data.get('tag_name', 'N/A')}\n"
+        else:
+            combined_data += f"Latest release/tag: {release_data.get('tag_name', 'N/A')}\n"
         
         if release_data.get('name'):
             combined_data += f"Release name: {release_data['name']}\n"

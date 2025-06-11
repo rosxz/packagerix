@@ -26,16 +26,19 @@ def create_initial_package(template: str, project_page: str, release_data: dict 
 
 
 
-def package_project(output_dir=None, project_url=None):
+def package_project(output_dir=None, project_url=None, git_hash=None):
     """Main coordinator function for packaging a project."""
     # Step 1: Get project URL (includes welcome message)
     if project_url is None:
-        project_url = get_project_url()
+        project_url, git_hash = get_project_url()
     else:
         # When URL is provided via CLI, still show welcome but skip prompt
         coordinator_message("Welcome to packagerix!")
     
-    coordinator_progress(f"Fetching project information from {project_url}")
+    if git_hash:
+        coordinator_progress(f"Fetching project information from {project_url} at commit {git_hash}")
+    else:
+        coordinator_progress(f"Fetching project information from {project_url}")
     
     # Step 2: Scrape project page
     try:
@@ -48,9 +51,12 @@ def package_project(output_dir=None, project_url=None):
     release_data = None
     try:
         from packagerix.parsing import fetch_github_release_data
-        release_data = fetch_github_release_data(project_url)
+        release_data = fetch_github_release_data(project_url, git_hash)
         if release_data:
-            coordinator_message("Found GitHub release information via API")
+            if release_data.get('custom_hash'):
+                coordinator_message(f"Found commit information for {git_hash} via API")
+            else:
+                coordinator_message("Found GitHub release information via API")
     except Exception as e:
         coordinator_message(f"Could not fetch release data: {e}")
     
@@ -179,10 +185,10 @@ def save_package_output(code: str, project_url: str, output_dir: str):
     coordinator_message(f"Saved package to: {package_file}")
 
 
-def run_packaging_flow(output_dir=None, project_url=None):
+def run_packaging_flow(output_dir=None, project_url=None, git_hash=None):
     """Run the complete packaging flow."""
     try:
-        result = package_project(output_dir=output_dir, project_url=project_url)
+        result = package_project(output_dir=output_dir, project_url=project_url, git_hash=git_hash)
         if result:
             coordinator_message("Packaging completed successfully!")
             coordinator_message(f"Final package code:\n```nix\n{result}\n```")
