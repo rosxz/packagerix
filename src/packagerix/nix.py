@@ -74,9 +74,9 @@ def invoke_build() -> NixBuildResult:
     )
 
 
-def get_last_ten_lines(s : str) -> str:
+def get_tail_of_log(s : str) -> str:
     lines = s.split('\n')
-    return '\n'.join(lines[-30:])
+    return '\n'.join(lines[-500:])
 
 
 # read build log of previous step and this step
@@ -99,13 +99,9 @@ def eval_initial_build() -> NixError:
 
 # a significantly higher number of magical phrases indicates progress
 # an about equal amount goes to an llm to break the tie using same_build_error with the two tails of the two build logs
-def eval_progress() -> NixBuildErrorDiff:
-    current_result = error_stack[-1]
-    prev_result = error_stack[-2]
-    
-    error_message = current_result.error.error_message
-    error_message_trunc = f"\n```\n{get_last_ten_lines(current_result.error.error_message)}\n```\n"
-    prev_error_message_trunc = get_last_ten_lines(prev_result.error.error_message)
+def eval_progress(previous_result, current_result) -> NixBuildErrorDiff:    
+    error_message_trunc = f"\n```\n{get_tail_of_log(current_result.error.error_message)}\n```\n"
+    prev_error_message_trunc = get_tail_of_log(previous_result.error.error_message)
     logger.info(f"previous error: {prev_error_message_trunc}")
 
     logger.info(f"new error: {error_message_trunc}")
