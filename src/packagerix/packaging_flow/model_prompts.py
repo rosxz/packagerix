@@ -29,8 +29,6 @@ Here is the information form the project's GitHub page:
 
 And some relevant metadata of the latest release:
 {release_data}
-           
-You should conclude your response with a call to the try_build_package function, passing the template as you filled it out.
 
 Note: your reply should contain exaclty one code block with the updated Nix code.
 Note: Even though the provided themplate uses the mkDerivation function, this is not the appropriate way to package software for most software ecosystems (outside of C/C++).
