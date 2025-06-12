@@ -1,14 +1,13 @@
 # Packagerix - AI assistant for nix packaging
 
 The elevator pitch for this project is that you give it the URL of a GitHub project,
-and it starts from a template and iteratively improves on it until it finally succeeds (or fails)
-to build the package, at which point we might be able to still get it over the finish line with manual intervention.
+and it starts from a template and iteratively improves on that until it finally succeeds (or fails) to build the package.
 
 ### Disclaimer
 
 ---
 
-🚧 This is a very ealy prototype that has not successfully built anything yet. 🚧
+🚧 Can only build at most 20 % of all unseen things so far. 🚧
 
 ---
 
@@ -20,12 +19,12 @@ I could also imagine providing this functionality as a hosted service to custome
 
 ### How to run this
 
-To run the terminal UI use:
+To run the textual UI use:
 ```
 nix develop -c python -m packagerix
 ```
 
-You have to set an appropriate model in the `flake.nix` file.
+You will be asked to pick a model and also provide an API key if requried.
 In terms of local models right now I recommend `qwen2.5-coder:32b`, which works well as long as the input stays short enough, but needs a hair more than 24GB of VRAM to fit fully into VRAM. The 8b models I tried so far seem to struggle too much with hashes and function calling.
 All the local models I have tried struggle with inputs that are longer than `12000` characters, which some github pages exceed.
 In terms of hosted models, `claude-3-5-haiku-20241022` for example, can cope with longer prompts as well.
