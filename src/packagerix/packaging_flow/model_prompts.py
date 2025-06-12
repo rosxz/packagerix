@@ -67,7 +67,7 @@ def summarize_github(project_page: str, release_data: dict = None) -> StreamedSt
 
 @ask_model("""@model You are software packaging expert who can build any project using the Nix programming language.
 
-Please fix the folloing error in the following Nix code.      
+Please fix the following error in the following Nix code.      
 
 ```nix
 {code}
@@ -107,7 +107,7 @@ def evaluate_progress(initial_error: str, attempted_improvement: str) -> NixBuil
 
 @ask_model("""@model You are software packaging expert who can build any project using the Nix programming language.
 
-Please fix the folloing hash mismatch error in the following Nix code by replacing the relevant intance of lib.fakeHash wiith the actual value from the error message.      
+Please fix the following hash mismatch error in the following Nix code by replacing the relevant intance of lib.fakeHash wiith the actual value from the error message.      
 
 ```nix
 {code}

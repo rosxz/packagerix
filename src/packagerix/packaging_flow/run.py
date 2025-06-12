@@ -94,17 +94,17 @@ def package_project(output_dir=None, project_url=None):
     
     while True:
         coordinator_message(f"Build iteration {build_iteration} - attempting to fix error:")
-        coordinator_message(f"```\n{best_result.error.error_message}\n```")
+        coordinator_message(f"```\n{candidate_result.error.error_message}\n```")
         
         # Inner loop: Fix evaluation errors with limited attempts
         while True:
             # Fix the error based on type
             if candidate_result.error.type == NixErrorKind.HASH_MISMATCH:
                 coordinator_message("Hash mismatch detected, fixing...")
-                fixed_response = fix_hash_mismatch(candidate_code, best_result.error.error_message)
+                fixed_response = fix_hash_mismatch(candidate_code, candidate_result.error.error_message)
             else:
                 # Regular error fixing  
-                fixed_response = fix_build_error(candidate_code, best_result.error.error_message)
+                fixed_response = fix_build_error(candidate_code, candidate_result.error.error_message)
             
             candidate_code = extract_updated_code(fixed_response)
             
