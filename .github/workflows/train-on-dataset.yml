@@ -56,24 +56,6 @@ jobs:
           name: vibenix
           authToken: '${{ secrets.CACHIX_TOKEN }}'
         
-      - name: Create packagerix config
-        run: |
-          mkdir -p ~/.packagerix
-          cat > ~/.packagerix/config.json << EOF
-          {
-            "provider": "${{ github.event.inputs.model_provider }}",
-            "model": "${{ github.event.inputs.model }}",
-            "backend": "litellm",
-            "ollama_host": "${{ github.event.inputs.ollama_host }}"
-          }
-          EOF
-          
-      - name: Cache packagerix config
-        uses: actions/cache@v4
-        with:
-          path: ~/.packagerix
-          key: packagerix-config-v1
-        
       - name: Build packagerix environment
         run: |
           nix develop .# --command echo "Development environment ready"
@@ -140,12 +122,18 @@ jobs:
           oauth-client-id: ${{ secrets.TS_OAUTH_CLIENT_ID }}
           oauth-secret: ${{ secrets.TS_OAUTH_SECRET }}
           tags: tag:oauth-client-gh-action-hydralisk-ollama
-
-      - name: Restore packagerix config
-        uses: actions/cache@v4
-        with:
-          path: ~/.packagerix
-          key: packagerix-config-v1
+          
+      - name: Create packagerix config
+        run: |
+          mkdir -p ~/.packagerix
+          cat > ~/.packagerix/config.json << EOF
+          {
+            "provider": "${{ github.event.inputs.model_provider }}",
+            "model": "${{ github.event.inputs.model }}",
+            "backend": "litellm",
+            "ollama_host": "${{ github.event.inputs.ollama_host }}"
+          }
+          EOF
           
       - name: Setup environment
         run: |
@@ -197,6 +185,7 @@ jobs:
           path: |
             ${{ matrix.issue_number }}.log
             output/
+            ~/.packagerix/config.json
           retention-days: 1
           
       - name: Create summary
@@ -204,6 +193,8 @@ jobs:
         run: |
           echo "## Issue #${{ matrix.issue_number }}" >> $GITHUB_STEP_SUMMARY
           echo "- Repository: ${{ matrix.repo_url }}" >> $GITHUB_STEP_SUMMARY
+          echo "- Provider: ${{ github.event.inputs.model_provider }}" >> $GITHUB_STEP_SUMMARY
+          echo "- Model: ${{ github.event.inputs.model }}" >> $GITHUB_STEP_SUMMARY
           echo "- Status: ${{ steps.process.outputs.status }}" >> $GITHUB_STEP_SUMMARY
           if [ -n "${{ steps.process.outputs.package_name }}" ]; then
             echo "- Package name: ${{ steps.process.outputs.package_name }}" >> $GITHUB_STEP_SUMMARY
