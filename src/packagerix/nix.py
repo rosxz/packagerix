@@ -1,6 +1,6 @@
 import subprocess
 
-from packagerix.config import flake_dir, error_stack
+from packagerix import config
 from packagerix.packaging_flow.model_prompts import evaluate_progress
 from packagerix.errors import NixBuildResult, NixError, NixErrorKind, NixBuildErrorDiff
 
@@ -24,7 +24,7 @@ def invoke_build() -> NixBuildResult:
     # First, evaluate the flake to get the derivation path
     # If this fails, it's an evaluation error
     eval_result = subprocess.run(
-        ["nix", "path-info", "--derivation", f"{flake_dir}#default"],
+        ["nix", "path-info", "--derivation", f"{config.flake_dir}#default"],
         text=True,
         capture_output=True
     )
@@ -85,7 +85,7 @@ def get_tail_of_log(s : str) -> str:
 # "comiling ..." 
 def eval_initial_build() -> NixError:
     """Evaluate the initial build - look for hash mismatch which indicates progress."""
-    build_result = error_stack[-1]
+    build_result = config.error_stack[-1]
     error_message = build_result.error.error_message
     
     # Check if this is a hash mismatch error (indicates template was filled correctly)
@@ -106,7 +106,7 @@ def eval_progress(previous_result, current_result) -> NixBuildErrorDiff:
 
     logger.info(f"new error: {error_message_trunc}")
 
-    repo = git.Repo(flake_dir.as_posix())
+    repo = git.Repo(config.flake_dir.as_posix())
     logger.info(repo.commit().diff())
 
     return evaluate_progress(prev_error_message_trunc, error_message_trunc)
@@ -115,5 +115,5 @@ def execute_build_and_add_to_stack(updated_code: str) -> NixBuildResult:
     """Update flake with new code, build it, and add result to error stack."""
     update_flake(updated_code)
     result = invoke_build()
-    error_stack.append(result)
+    config.error_stack.append(result)
     return result
