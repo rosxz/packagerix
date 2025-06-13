@@ -8,6 +8,24 @@ on:
         required: false
         default: '5'
         type: number
+      model_provider:
+        description: 'Model provider to use'
+        required: false
+        default: 'anthropic'
+        type: choice
+        options:
+          - anthropic
+          - ollama
+      model:
+        description: 'Model to use (e.g., claude-3-5-haiku-20241022 or ollama/qwen2.5-coder)'
+        required: false
+        default: 'claude-3-5-haiku-20241022'
+        type: string
+      ollama_host:
+        description: 'Ollama host URL (e.g., http://your-host.tailnet:11434)'
+        required: false
+        default: 'https://hydralisk.van-duck.ts.net:11435'
+        type: string
   push:
     branches:
       - main
@@ -43,9 +61,10 @@ jobs:
           mkdir -p ~/.packagerix
           cat > ~/.packagerix/config.json << EOF
           {
-            "provider": "anthropic",
-            "model": "claude-3-5-haiku-20241022",
-            "backend": "litellm"
+            "provider": "${{ github.event.inputs.model_provider }}",
+            "model": "${{ github.event.inputs.model }}",
+            "backend": "litellm",
+            "ollama_host": "${{ github.event.inputs.ollama_host }}"
           }
           EOF
           
@@ -114,6 +133,14 @@ jobs:
           name: vibenix
           authToken: '${{ secrets.CACHIX_TOKEN }}'
         
+      - name: Tailscale
+        if: ${{ github.event.inputs.model_provider == 'ollama' }}
+        uses: tailscale/github-action@v3
+        with:
+          oauth-client-id: ${{ secrets.TS_OAUTH_CLIENT_ID }}
+          oauth-secret: ${{ secrets.TS_OAUTH_SECRET }}
+          tags: tag:oauth-client-gh-action-hydralisk-ollama
+
       - name: Restore packagerix config
         uses: actions/cache@v4
         with:
