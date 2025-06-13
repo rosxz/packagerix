@@ -116,7 +116,7 @@ jobs:
           authToken: '${{ secrets.CACHIX_TOKEN }}'
         
       - name: Tailscale
-        if: ${{ github.event.inputs.model_provider == 'ollama' }}
+        if: ${{ (github.event.inputs.model_provider || 'anthropic') == 'ollama' }}
         uses: tailscale/github-action@v3
         with:
           oauth-client-id: ${{ secrets.TS_OAUTH_CLIENT_ID }}
@@ -128,10 +128,10 @@ jobs:
           mkdir -p ~/.packagerix
           cat > ~/.packagerix/config.json << EOF
           {
-            "provider": "${{ github.event.inputs.model_provider }}",
-            "model": "${{ github.event.inputs.model }}",
+            "provider": "${{ github.event.inputs.model_provider || 'anthropic' }}",
+            "model": "${{ github.event.inputs.model || 'claude-3-5-haiku-20241022' }}",
             "backend": "litellm",
-            "ollama_host": "${{ github.event.inputs.ollama_host }}"
+            "ollama_host": "${{ github.event.inputs.ollama_host || 'https://hydralisk.van-duck.ts.net:11435' }}"
           }
           EOF
           
@@ -193,8 +193,8 @@ jobs:
         run: |
           echo "## Issue #${{ matrix.issue_number }}" >> $GITHUB_STEP_SUMMARY
           echo "- Repository: ${{ matrix.repo_url }}" >> $GITHUB_STEP_SUMMARY
-          echo "- Provider: ${{ github.event.inputs.model_provider }}" >> $GITHUB_STEP_SUMMARY
-          echo "- Model: ${{ github.event.inputs.model }}" >> $GITHUB_STEP_SUMMARY
+          echo "- Provider: ${{ github.event.inputs.model_provider || 'anthropic' }}" >> $GITHUB_STEP_SUMMARY
+          echo "- Model: ${{ github.event.inputs.model || 'claude-3-5-haiku-20241022' }}" >> $GITHUB_STEP_SUMMARY
           echo "- Status: ${{ steps.process.outputs.status }}" >> $GITHUB_STEP_SUMMARY
           if [ -n "${{ steps.process.outputs.package_name }}" ]; then
             echo "- Package name: ${{ steps.process.outputs.package_name }}" >> $GITHUB_STEP_SUMMARY
