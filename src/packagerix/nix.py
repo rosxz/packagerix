@@ -58,7 +58,7 @@ def invoke_build() -> NixBuildResult:
 
     # Not a hash mismatch, get logs for build error
     log_result = subprocess.run(
-        ["nix", "log", derivation_path],
+        ["nix", "log", f"{derivation_path}^*"],
         text=True,
         capture_output=True
     )
