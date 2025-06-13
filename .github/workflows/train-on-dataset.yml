@@ -17,7 +17,7 @@ on:
           - anthropic
           - ollama
       model:
-        description: 'Model to use (e.g., claude-3-5-haiku-20241022 or ollama/qwen2.5-coder)'
+        description: 'Model to use (e.g., claude-3-5-haiku-20241022 or ollama/qwen2.5-coder:32b)'
         required: false
         default: 'claude-3-5-haiku-20241022'
         type: string
