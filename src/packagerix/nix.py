@@ -85,21 +85,27 @@ def get_tail_of_log(s : str) -> str:
 
 
 def prepare_logs_for_comparison(initial_error: str, attempted_improvement: str, max_lines: int = 1000) -> dict:
-    """Prepare logs for comparison by finding divergence point and taking appropriate tail of logs."""
+    """Prepare logs for comparison by finding divergence point using sophisticated matching that handles reordered lines."""
     initial_lines_list = initial_error.splitlines()
     improvement_lines_list = attempted_improvement.splitlines()
     
     initial_lines = len(initial_lines_list)
     improvement_lines = len(improvement_lines_list)
     
-    # Find the first line where they differ
+    # Create one set for O(1) lookup
+    improvement_set = set(improvement_lines_list)
+    
+    # Find the first line from initial log that doesn't exist anywhere in improvement log
     divergence_line = 1
-    for i, (line1, line2) in enumerate(zip(initial_lines_list, improvement_lines_list), 1):
-        if line1 != line2:
-            divergence_line = i
+    for i in range(min(len(initial_lines_list), len(improvement_lines_list))):
+        initial_line = initial_lines_list[i]
+        
+        # If this line doesn't exist in the other log, this is where they diverge
+        if initial_line not in improvement_set:
+            divergence_line = i + 1
             break
     else:
-        # If one is longer than the other
+        # If we didn't find such a pair, diverge at the length difference
         divergence_line = min(initial_lines, improvement_lines) + 1
     
     # Calculate how many lines to take from the end, considering divergence point
