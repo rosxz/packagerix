@@ -131,13 +131,11 @@ def extract_updated_code(model_reply):
     pattern = r"^```nix\n(.*?)\n```$"
 
     matches = list(re.finditer(pattern, model_reply, re.DOTALL | re.MULTILINE))
-    if len(matches) == 1:
-        return matches[0].group(1)
-    elif len(matches) == 0:
+    if len(matches) == 0:
         error_msg = "No section delimited by triple backticks was found in the model's reply"
         logger.error(error_msg)
         raise ValueError(error_msg)
-    else:
-        error_msg = f"Reply contained {len(matches)} quoted sections, expected exactly 1"
-        logger.error(error_msg)
-        raise ValueError(error_msg)
+    elif len(matches) > 1:
+        logger.warning(f"Reply contained {len(matches)} quoted sections, using the first one")
+    
+    return matches[0].group(1)
