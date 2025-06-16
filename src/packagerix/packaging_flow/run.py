@@ -136,7 +136,7 @@ def package_project(output_dir=None, project_url=None):
             elif candidate_result.error.type == NixErrorKind.BUILD_ERROR:
                 break
             if eval_iteration > max_inner_attempts:
-                coordinator_error("Failed to make progress within {max_inner_attempts} attempts.")
+                coordinator_error(f"Failed to make progress within {max_inner_attempts} attempts.")
                 return None
     
         # TODO: Check progress using NixBuildErrorDiff and decide whether to continue
