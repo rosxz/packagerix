@@ -84,6 +84,52 @@ def get_tail_of_log(s : str) -> str:
     return '\n'.join(lines[-50:])
 
 
+def prepare_logs_for_comparison(initial_error: str, attempted_improvement: str, max_lines: int = 1000) -> dict:
+    """Prepare logs for comparison by finding divergence point and taking appropriate tail of logs."""
+    initial_lines_list = initial_error.splitlines()
+    improvement_lines_list = attempted_improvement.splitlines()
+    
+    initial_lines = len(initial_lines_list)
+    improvement_lines = len(improvement_lines_list)
+    
+    # Find the first line where they differ
+    divergence_line = 1
+    for i, (line1, line2) in enumerate(zip(initial_lines_list, improvement_lines_list), 1):
+        if line1 != line2:
+            divergence_line = i
+            break
+    else:
+        # If one is longer than the other
+        divergence_line = min(initial_lines, improvement_lines) + 1
+    
+    # Calculate how many lines to take from the end, considering divergence point
+    # We want at most max_lines, but if divergence is late, we take from divergence point
+    initial_start_line = max(0, initial_lines - max_lines, divergence_line - 1)
+    improvement_start_line = max(0, improvement_lines - max_lines, divergence_line - 1)
+    
+    # Add line numbers to the truncated logs
+    initial_truncated_lines = []
+    for i, line in enumerate(initial_lines_list[initial_start_line:], start=initial_start_line + 1):
+        initial_truncated_lines.append(f"{i:4d}: {line}")
+    
+    improvement_truncated_lines = []
+    for i, line in enumerate(improvement_lines_list[improvement_start_line:], start=improvement_start_line + 1):
+        improvement_truncated_lines.append(f"{i:4d}: {line}")
+    
+    initial_error_truncated = '\n'.join(initial_truncated_lines)
+    attempted_improvement_truncated = '\n'.join(improvement_truncated_lines)
+    
+    return {
+        'initial_lines': initial_lines,
+        'improvement_lines': improvement_lines,
+        'divergence_line': divergence_line,
+        'initial_error_truncated': initial_error_truncated,
+        'attempted_improvement_truncated': attempted_improvement_truncated,
+        '_initial_start_line': initial_start_line + 1,  # For logging only
+        '_improvement_start_line': improvement_start_line + 1  # For logging only
+    }
+
+
 # read build log of previous step and this step
 # to evalute if the model made progress towards building the project
 # this is done by counting magical phrases in the build output like
@@ -117,7 +163,23 @@ def eval_progress(previous_result, current_result, build_iteration) -> NixBuildE
     if build_iteration == 1:
         return NixBuildErrorDiff.PROGRESS
 
-    return evaluate_progress(prev_error_message_trunc, error_message_trunc)
+    # Prepare the full logs for comparison
+    log_comparison = prepare_logs_for_comparison(
+        previous_result.error.error_message,
+        current_result.error.error_message
+    )
+    
+    # Log the comparison details
+    logger.info(f"Log comparison details:")
+    logger.info(f"  Initial build: {log_comparison['initial_lines']} total lines")
+    logger.info(f"  Attempted improvement: {log_comparison['improvement_lines']} total lines")
+    logger.info(f"  Logs diverge at line: {log_comparison['divergence_line']}")
+    logger.info(f"  Sending to model - Initial: lines {log_comparison['_initial_start_line']}-{log_comparison['initial_lines']}")
+    logger.info(f"  Sending to model - Improvement: lines {log_comparison['_improvement_start_line']}-{log_comparison['improvement_lines']}")
+    
+    # Remove logging-only keys before passing to model
+    model_args = {k: v for k, v in log_comparison.items() if not k.startswith('_')}
+    return evaluate_progress(**model_args)
 
 def execute_build_and_add_to_stack(updated_code: str) -> NixBuildResult:
     """Update flake with new code, build it, and add result to error stack."""

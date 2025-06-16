@@ -87,19 +87,24 @@ def fix_build_error(code: str, error: str) -> StreamedStr:
 
 I am going to show you two log files, please make a judgement about which build proceeded further.
 
-Initial build:
+Initial build (total lines: {initial_lines}):
 ```nix
-{initial_error}
+{initial_error_truncated}
 ```
 
-Attempted improvement:
+Attempted improvement (total lines: {improvement_lines}):
 ```
-{attempted_improvement}
+{attempted_improvement_truncated}
 ```
+
+The logs diverge at line {divergence_line}. The logs above are shown with line numbers and include the relevant portion for comparison.
 
 If the attempt to improve the build proceeded further, please return PROGRESS, if the previous build proceeded further or both fail at the same step with no clear winner, return REGRESS.
+
+Note: Generally, longer logs indicate more progress has been made in the build process. Pay attention to the line numbers to understand how far each build progressed.
 """)
-def evaluate_progress(initial_error: str, attempted_improvement: str) -> NixBuildErrorDiff:
+def evaluate_progress(initial_error_truncated: str, attempted_improvement_truncated: str, 
+                     initial_lines: int, improvement_lines: int, divergence_line: int) -> NixBuildErrorDiff:
     ...
 
 @ask_model("""@model You are software packaging expert who can build any project using the Nix programming language.
