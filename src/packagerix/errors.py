@@ -22,4 +22,5 @@ class NixError(BaseModel):
 class NixBuildResult(BaseModel):
     """Result of a Nix build operation."""
     success: bool
+    is_src_attr_only: bool
     error: Optional[NixError] = None

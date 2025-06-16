@@ -20,11 +20,15 @@ def search_nixpkgs_for_package(query: str) -> str:
     else:
         return f"no results found for query '{query}'"
 
-def invoke_build() -> NixBuildResult:
+def invoke_build(is_src_attr_only: bool) -> NixBuildResult:
+    if is_src_attr_only:
+        target_attr = f"{config.flake_dir}#default.src"
+    else:
+        target_attr = f"{config.flake_dir}#default"
     # First, evaluate the flake to get the derivation path
     # If this fails, it's an evaluation error
     eval_result = subprocess.run(
-        ["nix", "path-info", "--derivation", f"{config.flake_dir}#default"],
+        ["nix", "path-info", "--derivation", target_attr],
         text=True,
         capture_output=True
     )
@@ -33,10 +37,12 @@ def invoke_build() -> NixBuildResult:
         if "hash mismatch in fixed-output derivation" in eval_result.stderr:
             return NixBuildResult(
                 success=False,
+                is_src_attr_only=is_src_attr_only,
                 error=NixError(type=NixErrorKind.HASH_MISMATCH, error_message=eval_result.stderr)
             )
         return NixBuildResult(
             success=False,
+            is_src_attr_only=is_src_attr_only,
             error=NixError(type=NixErrorKind.EVAL_ERROR, error_message=eval_result.stderr)
         )
     
@@ -52,12 +58,13 @@ def invoke_build() -> NixBuildResult:
 
     # If build succeeded, return success
     if build_result.returncode == 0:
-        return NixBuildResult(success=True)
+        return NixBuildResult(success=True, is_src_attr_only=is_src_attr_only)
 
     # Build failed, check if it's a hash mismatch before getting logs
     if "hash mismatch in fixed-output derivation" in build_result.stderr:
         return NixBuildResult(
             success=False,
+            is_src_attr_only=is_src_attr_only,
             error=NixError(type=NixErrorKind.HASH_MISMATCH, error_message=build_result.stderr)
         )
 
@@ -75,6 +82,7 @@ def invoke_build() -> NixBuildResult:
 
     return NixBuildResult(
         success=False,
+        is_src_attr_only=is_src_attr_only,
         error=NixError(type=NixErrorKind.BUILD_ERROR, error_message=log_result.stdout)
     )
 
@@ -156,7 +164,7 @@ def eval_initial_build() -> NixError:
 
 # a significantly higher number of magical phrases indicates progress
 # an about equal amount goes to an llm to break the tie using same_build_error with the two tails of the two build logs
-def eval_progress(previous_result, current_result, build_iteration) -> NixBuildErrorDiff:    
+def eval_progress(previous_result: NixBuildResult, current_result: NixBuildResult, build_iteration: int) -> NixBuildErrorDiff:    
     error_message_trunc = f"\n```\n{get_tail_of_log(current_result.error.error_message)}\n```\n"
     prev_error_message_trunc = f"\n```\n{get_tail_of_log(previous_result.error.error_message)}\n```\n"
     logger.info(f"previous error: {prev_error_message_trunc}")
@@ -168,6 +176,11 @@ def eval_progress(previous_result, current_result, build_iteration) -> NixBuildE
 
     if build_iteration == 1:
         return NixBuildErrorDiff.PROGRESS
+    
+    if not current_result.is_src_attr_only and previous_result.is_src_attr_only:
+        return NixBuildErrorDiff.PROGRESS
+    if current_result.is_src_attr_only:
+        return NixBuildErrorDiff.REGRESS
 
     # Prepare the full logs for comparison
     log_comparison = prepare_logs_for_comparison(
@@ -190,6 +203,8 @@ def eval_progress(previous_result, current_result, build_iteration) -> NixBuildE
 def execute_build_and_add_to_stack(updated_code: str) -> NixBuildResult:
     """Update flake with new code, build it, and add result to error stack."""
     update_flake(updated_code)
-    result = invoke_build()
+    result = invoke_build(True)
+    if result.success:
+        result = invoke_build(False)
     config.error_stack.append(result)
     return result
