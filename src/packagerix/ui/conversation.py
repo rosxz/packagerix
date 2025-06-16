@@ -156,6 +156,22 @@ def ask_user(prompt_text: str):
     return decorator
 
 
+def _calculate_retry_delay(attempt: int, base_delay: int = 5, max_delay: int = 600) -> float:
+    """Calculate retry delay using polynomial backoff.
+    
+    Args:
+        attempt: The current attempt number (0-indexed)
+        base_delay: Base delay in seconds
+        max_delay: Maximum delay cap in seconds
+        
+    Returns:
+        Delay in seconds
+    """
+    import math
+    delay = base_delay + base_delay * math.pow(float(attempt), 1.5)
+    return min(delay, max_delay)
+
+
 def ask_model(prompt_text: str):
     """Decorator for functions that need model input. Should only be used on stub functions.
     
@@ -173,7 +189,7 @@ def ask_model(prompt_text: str):
         @wraps(func)
         def wrapper(*args, **kwargs) -> str:
             adapter = get_ui_adapter()
-            max_retries = 30
+            max_retries = 20
             base_delay = 5  # seconds
             
             for attempt in range(max_retries):
@@ -195,23 +211,55 @@ def ask_model(prompt_text: str):
                     return adapter.handle_model_streaming(streamed_result)
                     
                 except Exception as e:
-                    # Import litellm to check for InternalServerError
+                    # Import litellm to check for rate limit and server errors
                     try:
                         import litellm
+                        is_rate_limit_error = isinstance(e, litellm.RateLimitError)
                         is_overload_error = isinstance(e, litellm.InternalServerError)
                     except ImportError:
+                        is_rate_limit_error = False
                         is_overload_error = False
                     
-                    if is_overload_error and attempt < max_retries - 1:
-                        # Wait with exponential backoff, capped at 10 minutes
-                        delay = min(base_delay * (1.16 ** attempt), 600)
-                        from packagerix.ui.logging_config import logger
-                        logger.warning(f"API overloaded, waiting {delay} seconds before retry...")
+                    # Check if it's an httpx error with 429 status (for completeness)
+                    is_429_error = False
+                    retry_after = None
+                    if hasattr(e, '__cause__') and e.__cause__:
+                        cause = e.__cause__
+                        if hasattr(cause, 'response') and hasattr(cause.response, 'status_code'):
+                            is_429_error = cause.response.status_code == 429
+                            # Try to get retry-after header
+                            if is_429_error and hasattr(cause.response, 'headers'):
+                                retry_after = cause.response.headers.get('retry-after')
+                    
+                    if (is_rate_limit_error or is_overload_error or is_429_error) and attempt < max_retries - 1:
+                        # Calculate delay based on retry-after header or polynomial backoff
+                        if retry_after:
+                            try:
+                                delay = int(retry_after)
+                                from packagerix.ui.logging_config import logger
+                                logger.warning(f"Rate limit hit, waiting {delay} seconds as specified by retry-after header...")
+                            except ValueError:
+                                # If retry-after is not a valid integer, fall back to polynomial backoff
+                                from packagerix.ui.logging_config import logger
+                                logger.warning(f"Invalid retry-after header value: {retry_after}, falling back to polynomial backoff")
+                                delay = _calculate_retry_delay(attempt, base_delay)
+                                # Add extra 5 minutes for good measure when retry-after parsing fails
+                                delay += 300
+                                logger.warning(f"Rate limit hit, waiting {delay:.1f} seconds (polynomial backoff + 5 min buffer)...")
+                        else:
+                            # Polynomial backoff
+                            delay = _calculate_retry_delay(attempt, base_delay)
+                            from packagerix.ui.logging_config import logger
+                            if is_rate_limit_error or is_429_error:
+                                logger.warning(f"Rate limit hit, waiting {delay:.1f} seconds before retry...")
+                            else:
+                                logger.warning(f"API overloaded, waiting {delay:.1f} seconds before retry...")
+                        
                         import time
                         time.sleep(delay)
                         continue
                     else:
-                        # Either not an overload error, or we've exhausted retries
+                        # Either not a retryable error, or we've exhausted retries
                         import traceback
                         tb = traceback.format_exc()
                         error_msg = f"Error in model function {func.__name__}: {str(e)}\n{tb}"
@@ -251,7 +299,7 @@ def ask_model_enum(prompt_text: str):
         @wraps(func)
         def wrapper(*args, **kwargs):
             adapter = get_ui_adapter()
-            max_retries = 30
+            max_retries = 20
             base_delay = 5  # seconds
             
             for attempt in range(max_retries):
@@ -285,23 +333,55 @@ def ask_model_enum(prompt_text: str):
                         return return_type(str(result).strip())
                         
                 except Exception as e:
-                    # Import litellm to check for InternalServerError
+                    # Import litellm to check for rate limit and server errors
                     try:
                         import litellm
+                        is_rate_limit_error = isinstance(e, litellm.RateLimitError)
                         is_overload_error = isinstance(e, litellm.InternalServerError)
                     except ImportError:
+                        is_rate_limit_error = False
                         is_overload_error = False
                     
-                    if is_overload_error and attempt < max_retries - 1:
-                        # Wait with exponential backoff, capped at 10 minutes
-                        delay = min(base_delay * (1.16 ** attempt), 600)
-                        from packagerix.ui.logging_config import logger
-                        logger.warning(f"API overloaded, waiting {delay} seconds before retry...")
+                    # Check if it's an httpx error with 429 status (for completeness)
+                    is_429_error = False
+                    retry_after = None
+                    if hasattr(e, '__cause__') and e.__cause__:
+                        cause = e.__cause__
+                        if hasattr(cause, 'response') and hasattr(cause.response, 'status_code'):
+                            is_429_error = cause.response.status_code == 429
+                            # Try to get retry-after header
+                            if is_429_error and hasattr(cause.response, 'headers'):
+                                retry_after = cause.response.headers.get('retry-after')
+                    
+                    if (is_rate_limit_error or is_overload_error or is_429_error) and attempt < max_retries - 1:
+                        # Calculate delay based on retry-after header or polynomial backoff
+                        if retry_after:
+                            try:
+                                delay = int(retry_after)
+                                from packagerix.ui.logging_config import logger
+                                logger.warning(f"Rate limit hit, waiting {delay} seconds as specified by retry-after header...")
+                            except ValueError:
+                                # If retry-after is not a valid integer, fall back to polynomial backoff
+                                from packagerix.ui.logging_config import logger
+                                logger.warning(f"Invalid retry-after header value: {retry_after}, falling back to polynomial backoff")
+                                delay = _calculate_retry_delay(attempt, base_delay)
+                                # Add extra 5 minutes for good measure when retry-after parsing fails
+                                delay += 300
+                                logger.warning(f"Rate limit hit, waiting {delay:.1f} seconds (polynomial backoff + 5 min buffer)...")
+                        else:
+                            # Polynomial backoff
+                            delay = _calculate_retry_delay(attempt, base_delay)
+                            from packagerix.ui.logging_config import logger
+                            if is_rate_limit_error or is_429_error:
+                                logger.warning(f"Rate limit hit, waiting {delay:.1f} seconds before retry...")
+                            else:
+                                logger.warning(f"API overloaded, waiting {delay:.1f} seconds before retry...")
+                        
                         import time
                         time.sleep(delay)
                         continue
                     else:
-                        # Either not an overload error, or we've exhausted retries
+                        # Either not a retryable error, or we've exhausted retries
                         import traceback
                         tb = traceback.format_exc()
                         error_msg = f"Error in model function {func.__name__}: {str(e)}\n{tb}"
