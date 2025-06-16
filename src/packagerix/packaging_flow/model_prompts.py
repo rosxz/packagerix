@@ -76,6 +76,7 @@ Error:
            
 Note: Your reply should contain exactly one code block with the updated Nix code.
 Note: If you need to introduce a new hash, use lib.fakeHash as a placeholder, and automated process will replace this with the actual hash.
+Note: Never replace existing hashes with `lib.fakeHash` or otherwise modify existing hashes.
 """)
 def fix_build_error(code: str, error: str) -> StreamedStr:
     """Fix a build error in Nix code."""
@@ -103,7 +104,12 @@ def evaluate_progress(initial_error: str, attempted_improvement: str) -> NixBuil
 
 @ask_model("""@model You are software packaging expert who can build any project using the Nix programming language.
 
-Please fix the following hash mismatch error in the following Nix code by replacing the relevant intance of lib.fakeHash wiith the actual value from the error message.      
+Please fix the following hash mismatch error in the following Nix code.
+In the error message lib.fakeHash is represented as `sha256-AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=`.
+
+Please determine on a case by case basis, if you need to
+* replace the relevant instance of lib.fakeHash with the actual value from the error message, or
+* make lib.fakeHash and an actual hash value switch places in the Nix code.    
 
 ```nix
 {code}
@@ -115,6 +121,10 @@ Error:
 ```
            
 Note: Your reply should contain exactly one code block with the updated Nix code.
+Note: Never replace more than one instance of lib.fakeHash.
+Note: Never put sha256-AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA= in the code.
+Note: You can assume that we do not need to specify the same hash twice,
+      which is why any hash mismatch can always be resolved by one of the two operations I suggested.
 """)
 def fix_hash_mismatch(code: str, error: str) -> StreamedStr:
     ...
