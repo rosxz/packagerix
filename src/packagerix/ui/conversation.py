@@ -186,83 +186,33 @@ def ask_model(prompt_text: str):
         @wraps(func)
         def wrapper(*args, **kwargs) -> str:
             adapter = get_ui_adapter()
-            max_retries = 20
-            base_delay = 5  # seconds
             
-            for attempt in range(max_retries):
-                try:
-                    # Show the coordinator message (only on first attempt)
-                    if attempt == 0:
-                        adapter.show_message(Message(Actor.COORDINATOR, prompt_text))
-                    else:
-                        from packagerix.ui.logging_config import logger
-                        logger.info(f"Retrying model call (attempt {attempt + 1}/{max_retries})")
-                    
-                    # Call the prompt-decorated function to get StreamedStr
-                    streamed_result = prompt_decorated_func(*args, **kwargs)
-                    
-                    if streamed_result is None:
-                        raise ValueError(f"Model function {func.__name__} returned None - this indicates a problem with the prompt or model configuration")
-                    
-                    # Handle the streaming in the adapter and return final string
-                    return adapter.handle_model_streaming(streamed_result)
-                    
-                except Exception as e:
-                    # Import litellm to check for rate limit and server errors
-                    try:
-                        import litellm
-                        is_rate_limit_error = isinstance(e, litellm.RateLimitError)
-                        is_overload_error = isinstance(e, litellm.InternalServerError)
-                    except ImportError:
-                        is_rate_limit_error = False
-                        is_overload_error = False
-                    
-                    # Check if it's an httpx error with 429 status (for completeness)
-                    is_429_error = False
-                    retry_after = None
-                    if hasattr(e, '__cause__') and e.__cause__:
-                        cause = e.__cause__
-                        if hasattr(cause, 'response') and hasattr(cause.response, 'status_code'):
-                            is_429_error = cause.response.status_code == 429
-                            # Try to get retry-after header
-                            if is_429_error and hasattr(cause.response, 'headers'):
-                                retry_after = cause.response.headers.get('retry-after')
-                    
-                    if (is_rate_limit_error or is_overload_error or is_429_error) and attempt < max_retries - 1:
-                        # Calculate delay based on retry-after header or polynomial backoff
-                        if retry_after:
-                            try:
-                                delay = int(retry_after)
-                                from packagerix.ui.logging_config import logger
-                                logger.warning(f"Rate limit hit, waiting {delay} seconds as specified by retry-after header...")
-                            except ValueError:
-                                # If retry-after is not a valid integer, fall back to polynomial backoff
-                                from packagerix.ui.logging_config import logger
-                                logger.warning(f"Invalid retry-after header value: {retry_after}, falling back to polynomial backoff")
-                                delay = _calculate_retry_delay(attempt, base_delay)
-                                # Add extra 5 minutes for good measure when retry-after parsing fails
-                                delay += 300
-                                logger.warning(f"Rate limit hit, waiting {delay:.1f} seconds (polynomial backoff + 5 min buffer)...")
-                        else:
-                            # Polynomial backoff
-                            delay = _calculate_retry_delay(attempt, base_delay)
-                            from packagerix.ui.logging_config import logger
-                            if is_rate_limit_error or is_429_error:
-                                logger.warning(f"Rate limit hit, waiting {delay:.1f} seconds before retry...")
-                            else:
-                                logger.warning(f"API overloaded, waiting {delay:.1f} seconds before retry...")
-                        
-                        import time
-                        time.sleep(delay)
-                        continue
-                    else:
-                        # Either not a retryable error, or we've exhausted retries
-                        import traceback
-                        tb = traceback.format_exc()
-                        error_msg = f"Error in model function {func.__name__}: {str(e)}\n{tb}"
-                        from packagerix.ui.logging_config import logger
-                        logger.error(error_msg)
-                        raise
+            # Show the coordinator message
+            adapter.show_message(Message(Actor.COORDINATOR, prompt_text))
+            
+            def _model_call_and_stream():
+                # Call the prompt-decorated function to get StreamedStr
+                streamed_result = prompt_decorated_func(*args, **kwargs)
+                
+                if streamed_result is None:
+                    raise ValueError(f"Model function {func.__name__} returned None - this indicates a problem with the prompt or model configuration")
+                
+                # Handle the streaming in the adapter and return final string
+                # This is where the actual API call and streaming happens
+                return adapter.handle_model_streaming(streamed_result)
+            
+            try:
+                # Use the retry wrapper for the entire model call including streaming
+                return _retry_with_rate_limit(_model_call_and_stream)
+                
+            except Exception as e:
+                # Log the error with traceback
+                import traceback
+                tb = traceback.format_exc()
+                error_msg = f"Error in model function {func.__name__}: {str(e)}\n{tb}"
+                from packagerix.ui.logging_config import logger
+                logger.error(error_msg)
+                raise
         
         return wrapper
     return decorator
@@ -296,95 +246,44 @@ def ask_model_enum(prompt_text: str):
         @wraps(func)
         def wrapper(*args, **kwargs):
             adapter = get_ui_adapter()
-            max_retries = 20
-            base_delay = 5  # seconds
             
-            for attempt in range(max_retries):
-                try:
-                    # Show the coordinator message (only on first attempt)
-                    if attempt == 0:
-                        adapter.show_message(Message(Actor.COORDINATOR, prompt_text))
-                    else:
-                        from packagerix.ui.logging_config import logger
-                        logger.info(f"Retrying model call (attempt {attempt + 1}/{max_retries})")
-                    
-                    # Call the prompt-decorated function to get result
-                    result = prompt_decorated_func(*args, **kwargs)
-                    
-                    if result is None:
-                        raise ValueError(f"Model function {func.__name__} returned None - this indicates a problem with the prompt or model configuration")
-                    
-                    # Convert result to Enum if needed
-                    if isinstance(result, return_type):
-                        # Already the correct enum type
-                        return result
-                    elif isinstance(result, str):
-                        # String result, convert to enum
-                        try:
-                            return return_type(result.strip())
-                        except ValueError:
-                            # If direct conversion fails, try by name
-                            return return_type[result.strip()]
-                    else:
-                        # Try to convert whatever we got
-                        return return_type(str(result).strip())
-                        
-                except Exception as e:
-                    # Import litellm to check for rate limit and server errors
+            # Show the coordinator message
+            adapter.show_message(Message(Actor.COORDINATOR, prompt_text))
+            
+            def _model_call():
+                # Call the prompt-decorated function to get result
+                result = prompt_decorated_func(*args, **kwargs)
+                
+                if result is None:
+                    raise ValueError(f"Model function {func.__name__} returned None - this indicates a problem with the prompt or model configuration")
+                
+                # Convert result to Enum if needed
+                if isinstance(result, return_type):
+                    # Already the correct enum type
+                    return result
+                elif isinstance(result, str):
+                    # String result, convert to enum
                     try:
-                        import litellm
-                        is_rate_limit_error = isinstance(e, litellm.RateLimitError)
-                        is_overload_error = isinstance(e, litellm.InternalServerError)
-                    except ImportError:
-                        is_rate_limit_error = False
-                        is_overload_error = False
-                    
-                    # Check if it's an httpx error with 429 status (for completeness)
-                    is_429_error = False
-                    retry_after = None
-                    if hasattr(e, '__cause__') and e.__cause__:
-                        cause = e.__cause__
-                        if hasattr(cause, 'response') and hasattr(cause.response, 'status_code'):
-                            is_429_error = cause.response.status_code == 429
-                            # Try to get retry-after header
-                            if is_429_error and hasattr(cause.response, 'headers'):
-                                retry_after = cause.response.headers.get('retry-after')
-                    
-                    if (is_rate_limit_error or is_overload_error or is_429_error) and attempt < max_retries - 1:
-                        # Calculate delay based on retry-after header or polynomial backoff
-                        if retry_after:
-                            try:
-                                delay = int(retry_after)
-                                from packagerix.ui.logging_config import logger
-                                logger.warning(f"Rate limit hit, waiting {delay} seconds as specified by retry-after header...")
-                            except ValueError:
-                                # If retry-after is not a valid integer, fall back to polynomial backoff
-                                from packagerix.ui.logging_config import logger
-                                logger.warning(f"Invalid retry-after header value: {retry_after}, falling back to polynomial backoff")
-                                delay = _calculate_retry_delay(attempt, base_delay)
-                                # Add extra 5 minutes for good measure when retry-after parsing fails
-                                delay += 300
-                                logger.warning(f"Rate limit hit, waiting {delay:.1f} seconds (polynomial backoff + 5 min buffer)...")
-                        else:
-                            # Polynomial backoff
-                            delay = _calculate_retry_delay(attempt, base_delay)
-                            from packagerix.ui.logging_config import logger
-                            if is_rate_limit_error or is_429_error:
-                                logger.warning(f"Rate limit hit, waiting {delay:.1f} seconds before retry...")
-                            else:
-                                logger.warning(f"API overloaded, waiting {delay:.1f} seconds before retry...")
-                        
-                        import time
-                        time.sleep(delay)
-                        continue
-                    else:
-                        # Either not a retryable error, or we've exhausted retries
-                        import traceback
-                        tb = traceback.format_exc()
-                        error_msg = f"Error in model function {func.__name__}: {str(e)}\n{tb}"
-                        from packagerix.ui.logging_config import logger
-                        logger.error(error_msg)
-                        raise
+                        return return_type(result.strip())
+                    except ValueError:
+                        # If direct conversion fails, try by name
+                        return return_type[result.strip()]
+                else:
+                    # Try to convert whatever we got
+                    return return_type(str(result).strip())
+            
+            try:
+                # Use the retry wrapper for the model call
+                return _retry_with_rate_limit(_model_call)
+                
+            except Exception as e:
+                # Log the error with traceback
+                import traceback
+                tb = traceback.format_exc()
+                error_msg = f"Error in model function {func.__name__}: {str(e)}\n{tb}"
+                from packagerix.ui.logging_config import logger
+                logger.error(error_msg)
+                raise
         
         return wrapper
     return decorator
@@ -406,6 +305,80 @@ def coordinator_progress(message: str):
     """Show a progress update from the coordinator."""
     adapter = get_ui_adapter()
     adapter.show_progress(message)
+
+
+def _retry_with_rate_limit(func, *args, max_retries=20, base_delay=5, **kwargs):
+    """Execute a function with rate limit retry logic.
+    
+    Args:
+        func: The function to execute
+        *args: Positional arguments for func
+        max_retries: Maximum number of retry attempts
+        base_delay: Base delay in seconds for exponential backoff
+        **kwargs: Keyword arguments for func
+        
+    Returns:
+        The result of func
+        
+    Raises:
+        The last exception if all retries are exhausted
+    """
+    import time
+    import traceback
+    from packagerix.ui.logging_config import logger
+    
+    for attempt in range(max_retries):
+        try:
+            return func(*args, **kwargs)
+        except Exception as e:
+            # Import litellm to check for rate limit and server errors
+            try:
+                import litellm
+                is_rate_limit_error = isinstance(e, litellm.RateLimitError)
+                is_overload_error = isinstance(e, litellm.InternalServerError)
+            except ImportError:
+                is_rate_limit_error = False
+                is_overload_error = False
+            
+            # Check if it's an httpx error with 429 status (for completeness)
+            is_429_error = False
+            retry_after = None
+            if hasattr(e, '__cause__') and e.__cause__:
+                cause = e.__cause__
+                if hasattr(cause, 'response') and hasattr(cause.response, 'status_code'):
+                    is_429_error = cause.response.status_code == 429
+                    # Try to get retry-after header
+                    if is_429_error and hasattr(cause.response, 'headers'):
+                        retry_after = cause.response.headers.get('retry-after')
+            
+            if (is_rate_limit_error or is_overload_error or is_429_error) and attempt < max_retries - 1:
+                # Calculate delay based on retry-after header or polynomial backoff
+                if retry_after:
+                    try:
+                        delay = int(retry_after)
+                        logger.warning(f"Rate limit hit, waiting {delay} seconds as specified by retry-after header...")
+                    except ValueError:
+                        # If retry-after is not a valid integer, fall back to polynomial backoff
+                        logger.warning(f"Invalid retry-after header value: {retry_after}, falling back to polynomial backoff")
+                        delay = _calculate_retry_delay(attempt, base_delay)
+                        # Add extra 5 minutes for good measure when retry-after parsing fails
+                        delay += 300
+                        logger.warning(f"Rate limit hit, waiting {delay:.1f} seconds (polynomial backoff + 5 min buffer)...")
+                else:
+                    # Polynomial backoff
+                    delay = _calculate_retry_delay(attempt, base_delay)
+                    if is_rate_limit_error or is_429_error:
+                        logger.warning(f"Rate limit hit, waiting {delay:.1f} seconds before retry...")
+                    else:
+                        logger.warning(f"API overloaded, waiting {delay:.1f} seconds before retry...")
+                
+                time.sleep(delay)
+                continue
+            else:
+                # Either not a retryable error, or we've exhausted retries
+                if attempt == max_retries - 1:
+                    logger.error(f"Exhausted {max_retries} retries due to rate limiting")
+                raise
 
 
 def handle_model_chat(chat: Chat) -> str:
@@ -435,6 +408,6 @@ def handle_model_chat(chat: Chat) -> str:
                 ends_with_function_call = True
         
         if ends_with_function_call:
-            chat = chat.submit()
+            chat = _retry_with_rate_limit(chat.submit)
 
     return str(output)
