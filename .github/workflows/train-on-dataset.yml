@@ -98,7 +98,7 @@ jobs:
     needs: setup
     runs-on: ubuntu-latest
     name: Package ${{ matrix.repo_name }}
-    timeout-minutes: 60
+    timeout-minutes: 15
     strategy:
       matrix: ${{ fromJson(needs.setup.outputs.matrix) }}
       max-parallel: 2  # Run 2 jobs in parallel to avoid API rate limits
