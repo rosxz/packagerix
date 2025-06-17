@@ -11,7 +11,7 @@ from magentic import Chat, UserMessage, StreamedResponse
 from packagerix.function_calls import *
 
 
-def set_up_project(code_template: str, project_page: str, release_data: dict = None) -> StreamedStr:
+def set_up_project(code_template: str, project_page: str, release_data: dict = None, template_notes: str = None) -> StreamedStr:
     """Initial setup of a Nix package from a GitHub project."""
 
     prompt = """You are software packaging expert who can build any project using the Nix programming language.
@@ -23,6 +23,8 @@ This is the code template you have to fill out:
 {code_template}
 ```   
 
+{template_notes_section}
+
 Here is the information form the project's GitHub page:
 ```text
 {project_page}
@@ -33,15 +35,28 @@ And some relevant metadata of the latest release:
 {release_data}
 ```
 
+Note: Nothing in the meta attribute of a derivation has any impact on its build output, so do not provide a meta attribute.
+Note: Do not change any other arguments of fetchFromGitHub or another fetcher if it has an actual hash already.
 Note: Your reply should always contain exactly one code block with the updated Nix code.
 Note: Even though the provided template uses the mkDerivation function, this is not the appropriate way to package software for most software ecosystems (outside of C/C++).
       Make sure you base your code on an appropriate function provided by nixpkgs instead.
 """
+    
+    # Include template notes if available
+    template_notes_section = ""
+    if template_notes:
+        template_notes_section = f"""Here are some notes about this template to help you package this type of project:
+```
+{template_notes}
+```
+"""
+    
     chat = Chat(
         messages=[UserMessage(prompt.format(
             code_template=code_template, 
             project_page=project_page, 
-            release_data=release_data
+            release_data=release_data,
+            template_notes_section=template_notes_section
         ))],
         functions=[search_nixpkgs_for_package, web_search, fetch_url_content],
         output_types=[StreamedResponse],
@@ -76,7 +91,7 @@ def pick_template(project_page: str) -> TemplateType:
     ...
 
 
-def fix_build_error(code: str, error: str) -> StreamedStr:
+def fix_build_error(code: str, error: str, project_page: str = None, release_data: dict = None, template_notes: str = None) -> StreamedStr:
     """Fix a build error in Nix code."""
     prompt = """You are software packaging expert who can build any project using the Nix programming language.
 
@@ -90,14 +105,49 @@ Error:
 ```
 {error}
 ```
-           
+
+{project_info_section}
+
+{template_notes_section}
+
+Note: Nothing in the meta attribute of a derivation has any impact on its build output, so do not provide a meta attribute.
+Note: Do not change any other arguments of fetchFromGitHub or another fetcher if it has an actual hash already.
 Note: Your reply should contain exactly one code block with the updated Nix code.
 Note: If you need to introduce a new hash, use lib.fakeHash as a placeholder, and automated process will replace this with the actual hash.
 Note: Never replace existing hashes with `lib.fakeHash` or otherwise modify existing hashes."""
 
+    # Include project information if available
+    project_info_section = ""
+    if project_page:
+        project_info_section = f"""Here is the information from the project's GitHub page:
+```text
+{project_page}
+```
+"""
+        if release_data:
+            project_info_section += f"""
+And some relevant metadata of the latest release:
+```
+{release_data}
+```
+"""
+
+    # Include template notes if available
+    template_notes_section = ""
+    if template_notes:
+        template_notes_section = f"""Here are some notes about this template to help you package this type of project:
+```
+{template_notes}
+```
+"""
 
     chat = Chat(
-        messages=[UserMessage(prompt.format(code=code, error=error))],
+        messages=[UserMessage(prompt.format(
+            code=code, 
+            error=error,
+            project_info_section=project_info_section,
+            template_notes_section=template_notes_section
+        ))],
         functions=[search_nixpkgs_for_package, web_search, fetch_url_content],
         output_types=[StreamedResponse],
     ).submit()

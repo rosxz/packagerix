@@ -6,7 +6,7 @@ from packagerix.ui.conversation import ask_user,  coordinator_message, coordinat
 from packagerix.parsing import scrape_and_process, extract_updated_code, fetch_combined_project_data
 from packagerix.flake import init_flake
 from packagerix.nix import eval_progress, execute_build_and_add_to_stack
-from packagerix.packaging_flow.model_prompts import set_up_project, summarize_github, fix_build_error, fix_hash_mismatch
+from packagerix.packaging_flow.model_prompts import pick_template, set_up_project, summarize_github, fix_build_error, fix_hash_mismatch
 from packagerix.packaging_flow.user_prompts import get_project_url
 from packagerix import config
 from packagerix.errors import NixBuildErrorDiff, NixErrorKind, NixBuildResult
@@ -25,14 +25,11 @@ def analyze_project(project_page: str, release_data: dict = None) -> str:
     return summarize_github(project_page, release_data)
 
 
-def create_initial_package(template: str, project_page: str, release_data: dict = None) -> str:
+def create_initial_package(template: str, project_page: str, release_data: dict = None, template_notes: str = None) -> str:
     """Create initial package configuration."""
     # set_up_project now has the @ask_model decorator that handles UI and streaming
-    result = set_up_project(template, project_page, release_data)
+    result = set_up_project(template, project_page, release_data, template_notes)
     return extract_updated_code(result)
-
-
-
 
 def package_project(output_dir=None, project_url=None):
     """Main coordinator function for packaging a project."""
@@ -72,12 +69,20 @@ def package_project(output_dir=None, project_url=None):
     coordinator_message(f"Working on temporary flake at {config.flake_dir}")
     
     # Step 5: Load template
-    template_path = config.template_dir / "package.nix"
+    template_type = pick_template(project_page)
+    coordinator_message(f"Selected template: {template_type.value}")
+    template_filename = f"{template_type.value}.nix"
+    template_path = config.template_dir / template_filename
     starting_template = template_path.read_text()
+    
+    # Load optional notes file
+    notes_filename = f"{template_type.value}.notes"
+    notes_path = config.template_dir / notes_filename
+    template_notes = notes_path.read_text() if notes_path.exists() else None
     
     # Step 6: Create initial package
     coordinator_message("Creating initial package configuration...")
-    initial_code = create_initial_package(starting_template, project_page, release_data)
+    initial_code = create_initial_package(starting_template, project_page, release_data, template_notes)
     
     # Step 7: Nested build and fix loop
     # Outer loop: Build iterations (unlimited, driven by progress)
@@ -116,7 +121,7 @@ def package_project(output_dir=None, project_url=None):
                 coordinator_message("Other error detected, fixing...")
                 coordinator_message(f"code:\n{candidate.code}\n")
                 coordinator_message(f"error:\n{candidate.result.error.error_message}\n")
-                fixed_response = fix_build_error(candidate.code, candidate.result.error.error_message)
+                fixed_response = fix_build_error(candidate.code, candidate.result.error.error_message, project_page, release_data, template_notes)
             
             updated_code = extract_updated_code(fixed_response)
             
