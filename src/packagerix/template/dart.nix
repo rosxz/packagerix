@@ -1,11 +1,6 @@
 { lib
 , fetchFromGitHub
 , buildDartApplication
-# Additional dependencies that might be needed:
-# , buf              # For protobuf generation
-# , protoc-gen-dart  # For protobuf generation
-# , pkg-config       # For packages that use native libraries
-# , makeWrapper      # For adding runtime dependencies to PATH
 }:
 
 buildDartApplication rec {
@@ -56,12 +51,4 @@ buildDartApplication rec {
   #   # Create symlinks for alternative binary names
   #   ln -s $out/bin/${pname} $out/bin/alternate-name
   # '';
-
-  meta = with lib; {
-    description = ...;
-    homepage = ...;
-    license = licenses...; # e.g., licenses.mit
-    maintainers = with maintainers; [ ... ];
-    mainProgram = pname;
-  };
 }

@@ -10,7 +10,7 @@ python3Packages.buildPythonApplication rec {
   src = fetchFromGitHub {
     owner = ...;
     repo = ...;
-    rev = "v${version}";
+    rev = ...;
     hash = lib.fakeHash;
   };
 

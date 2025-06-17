@@ -12,7 +12,7 @@ stdenv.mkDerivation rec {
   src = fetchFromGitHub {
     owner = ...;
     repo = ...;
-    rev = "v${version}";
+    rev = ...;
     hash = lib.fakeHash;
   };
 

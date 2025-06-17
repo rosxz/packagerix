@@ -23,7 +23,7 @@ flutter.buildFlutterApplication rec {
   src = fetchFromGitHub {
     owner = ...;
     repo = ...;
-    rev = "v${version}";
+    rev = ...;
     hash = lib.fakeHash;
   };
 
@@ -88,13 +88,4 @@ flutter.buildFlutterApplication rec {
     #   $out/app/${pname}-linux/lib/libwebrtc.so
   '';
 
-  meta = with lib; {
-    description = ...;
-    homepage = ...;
-    license = licenses...; # e.g., licenses.gpl3Plus
-    maintainers = with maintainers; [ ... ];
-    mainProgram = pname;
-    platforms = [ "x86_64-linux" "aarch64-linux" ];
-    sourceProvenance = [ sourceTypes.fromSource ];
-  };
 }
