@@ -1,0 +1,39 @@
+Important notes for packaging Python projects that use UV:
+
+1. UV Support Status:
+   - UV support in nixpkgs is minimal and experimental
+   - Use uv-build as the build backend for projects using UV
+   - Full UV workflow (dependency resolution, locking) is not yet integrated
+
+2. Build System:
+   - Set pyproject = true; (UV projects always use pyproject.toml)
+   - Use uv-build in build-system array
+   - UV is designed to handle its own dependency management, which conflicts with Nix's approach
+
+3. Dependency Management:
+   - Extract dependencies from pyproject.toml manually
+   - UV's lock file (uv.lock) is not directly supported by Nix
+   - Dependencies must be specified in the Nix expression
+
+4. Environment Variables:
+   - UV_NO_SYNC=1: Prevent UV from trying to sync dependencies
+   - UV_PYTHON: Point to the Nix-provided Python interpreter
+   - UV_CACHE_DIR: May need to set for build isolation
+
+5. Common Issues:
+   - UV expects to manage virtual environments itself
+   - Network access during build will fail (UV tries to fetch deps)
+   - Tests that rely on UV's dependency management will likely fail
+
+6. Migration Path:
+   - Consider using the migrate-to-uv tool in reverse if needed
+   - Many UV projects can also build with setuptools or hatchling
+
+7. Alternative Approach:
+   - If uv-build doesn't work, try using hatchling or setuptools
+   - Most UV projects still maintain compatibility with standard tools
+
+8. Future Considerations:
+   - UV support in nixpkgs is evolving
+   - More comprehensive UV integration may come in the future
+   - Check for updates to UV packaging infrastructure in nixpkgs

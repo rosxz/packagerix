@@ -1,0 +1,35 @@
+# Dart Packaging Notes
+
+## Key Requirements
+
+1. **pubspec.lock to JSON conversion**: The pubspec.lock file MUST be converted to JSON format. Use `yq . pubspec.lock > pubspec.lock.json` and commit this file.
+
+2. **Git dependencies**: If your pubspec.yaml includes git dependencies, you must specify their commit hashes in the `gitHashes` attribute.
+
+3. **Flutter SDK packages**: Dart packages can depend on packages from the Flutter SDK. These are handled automatically by the build system.
+
+## Common Issues and Solutions
+
+- **SSL certificates**: The Dart build system handles SSL certificates automatically, no manual configuration needed.
+
+- **Protobuf generation**: If your package uses protobuf, add `buf` and `protoc-gen-dart` to `nativeBuildInputs` and generate in `preConfigure`.
+
+- **Version injection**: Use `dartCompileFlags = [ "--define=version=${version}" ]` to inject version at compile time.
+
+- **Multiple binaries**: Use `dartEntryPoints` to specify multiple entry points, or let it auto-detect from pubspec.yaml.
+
+## Build Output Types
+
+- `exe`: Standalone executable (default)
+- `aot-snapshot`: AOT snapshot (requires dartaotruntime)
+- `jit-snapshot`: JIT snapshot (requires dart runtime)
+- `kernel`: Kernel file (requires dart runtime)
+- `js`: JavaScript output (requires Node.js runtime)
+
+## Testing
+
+Always test the built package with:
+```bash
+nix-build -A yourPackage
+./result/bin/yourPackage --version
+```

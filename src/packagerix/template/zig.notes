@@ -1,0 +1,52 @@
+Important notes for packaging Zig applications:
+
+1. Zig Version Selection:
+   - Always specify a specific Zig version (zig_0_11, zig_0_12, zig_0_13, zig_0_14)
+   - Check build.zig for minimum Zig version requirements
+   - Newer versions may have breaking changes
+
+2. Build System:
+   - zig.hook automatically handles build, check, and install phases
+   - Uses Zig's build system (build.zig)
+   - No need to manually invoke zig build commands
+
+3. Dependency Management:
+   - For projects with build.zig.zon dependencies:
+     a) Old format: Create deps.nix and link in postPatch
+     b) New format: Create build.zig.zon.nix and use --system flag
+   - Dependencies are usually fetched and hashed similar to Go/Rust
+
+4. Common Build Flags:
+   - -Doptimize=ReleaseSafe (default, with safety checks)
+   - -Doptimize=ReleaseFast (faster, no safety)
+   - -Doptimize=ReleaseSmall (smallest binary)
+   - -Dcpu=baseline (better compatibility than native)
+   - Custom -D flags for project-specific features
+
+5. C Library Dependencies:
+   - Use pkg-config in nativeBuildInputs
+   - Add C libraries to buildInputs
+   - Zig can link with C libraries seamlessly
+
+6. Testing:
+   - Tests run by default with zigCheckPhase
+   - Disable with dontUseZigCheck = true
+   - Use zigCheckFlags for test-specific flags
+
+7. Platform Support:
+   - Inherit platforms from zig.meta.platforms
+   - Cross-compilation generally works well with Zig
+
+8. Common Issues:
+   - Ensure fetchSubmodules = true if project uses git submodules
+   - Some projects may need ZIG_GLOBAL_CACHE_DIR set
+   - Watch for hardcoded paths that need patching
+
+9. Advanced Features:
+   - Override optimization with custom zig.hook
+   - Use finalAttrs pattern for self-references
+   - Multiple outputs supported (out, man, doc, etc.)
+
+10. Version Checking:
+    - Many Zig apps support --version
+    - Can add version check in installCheckPhase

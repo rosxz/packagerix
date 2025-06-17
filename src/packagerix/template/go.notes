@@ -1,0 +1,27 @@
+Important notes for packaging Go applications:
+
+1. Use buildGoModule for Go modules (Go 1.11+), buildGoPackage for older projects
+2. vendorHash management:
+   - Set to lib.fakeHash initially, then update with the correct hash from build error
+   - Use null if the project has no vendor dependencies
+   - Use lib.fakeHash for new packages to get the correct hash
+3. Common ldflags patterns:
+   - "-s": Strip symbol table
+   - "-w": Strip debug info
+   - "-X main.version=${version}": Inject version info
+   - "-X package/path.Variable=value": Set build-time variables
+4. CGO considerations:
+   - Set env.CGO_ENABLED = 0 for static binaries
+   - Required for cross-compilation
+   - Some packages may need CGO enabled for C dependencies
+5. subPackages: Specify which packages to build (e.g., ["cmd/myapp"])
+6. Build tags: Use tags = ["tag1" "tag2"] for conditional compilation
+7. Shell completions:
+   - Add installShellFiles to nativeBuildInputs
+   - Use postInstall to generate and install completions
+   - Check if app supports --completion flag
+8. Version checking:
+   - Use doInstallCheck = true with custom installCheckPhase
+   - Or use versionCheckHook from nixpkgs
+9. For applications with assets/templates, may need to copy them in postInstall
+10. Cross-compilation usually works out of the box with Go

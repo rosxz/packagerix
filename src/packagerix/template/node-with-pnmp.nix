@@ -1,14 +1,10 @@
 { lib
-, stden
+, stdenv
 , fetchFromGitHub
 , nodejs
-, pnpm
+, pnpm  # You can use specific versions like pnpm_8, pnpm_9, or pnpm_10 instead
 , npmHooks
 }:
-let
-  # pick different pnpm version e.g. pnpm_9 or pnpm_10
-  pnpm = pnpm;
-in
 stdenv.mkDerivation rec {
   pname = ...;
   version = ...;

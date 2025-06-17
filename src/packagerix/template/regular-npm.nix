@@ -16,4 +16,10 @@ buildNpmPackage rec {
   };
 
   npmDepsHash = lib.fakeHash;
+
+  # Common attributes that might be needed:
+  # npmFlags = [ "--legacy-peer-deps" ];
+  # npmBuildScript = "build";
+  # makeCacheWritable = true;
+  # dontNpmBuild = true;
 }

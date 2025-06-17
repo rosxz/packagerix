@@ -1,0 +1,16 @@
+Important notes for packaging Python projects:
+
+1. Use buildPythonApplication for executables, buildPythonPackage for libraries
+2. Check pyproject.toml, setup.py, or setup.cfg to determine the build system
+3. Modern projects with pyproject.toml: set pyproject = true;
+4. Legacy projects: set format = "setuptools"; (or other format)
+5. Dependencies: 
+   - build-system: build-time dependencies (setuptools, poetry-core, hatchling, etc.)
+   - dependencies: runtime dependencies
+   - nativeCheckInputs: test dependencies
+6. Common test frameworks: pytestCheckHook (preferred), unittestCheckHook
+7. If tests fail due to network access or sandboxing, either:
+   - Disable specific tests: pytestFlagsArray = [ "-k 'not test_network'" ];
+   - Disable all tests: doCheck = false;
+8. For projects using poetry: add poetry-core to build-system
+9. For projects using hatch: add hatchling to build-system

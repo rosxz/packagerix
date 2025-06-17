@@ -4,6 +4,7 @@ This module contains all functions decorated with @ask_model that interact with 
 """
 
 from magentic import StreamedStr
+from packagerix.template.template_types import TemplateType
 from packagerix.ui.conversation import ask_model, ask_model_enum, handle_model_chat
 from packagerix.errors import NixBuildErrorDiff
 from magentic import Chat, UserMessage, StreamedResponse
@@ -62,6 +63,16 @@ Here is the information form the project's GitHub page:
 """)
 def summarize_github(project_page: str, release_data: dict = None) -> StreamedStr:
     """Summarize a GitHub project page for packaging purposes."""
+    ...
+
+@ask_model_enum("""@model You are software packaging expert who can build any project using the Nix programming language.
+
+Please pick the most appropriate project template from the following list.
+```text
+{project_page}
+```
+""")
+def pick_template(project_page: str) -> TemplateType:
     ...
 
 

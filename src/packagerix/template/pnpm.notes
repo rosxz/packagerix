@@ -1,0 +1,7 @@
+Important notes for packaging Node.js/pnpm projects:
+
+1. pnpm version selection: Replace 'pnpm' with 'pnpm_8', 'pnpm_9', or 'pnpm_10' based on the project's requirements (check package.json for "packageManager" field)
+2. pnpmDeps.hash must be updated after the first build attempt - use the hash from the error message
+3. The buildPhase cleanup removes TypeScript files from dist - adjust based on what files the project actually needs
+4. For monorepos/workspaces, you may need to add: pnpmWorkspace = "packages/specific-package";
+5. If the project uses shamefully-hoist, add to pnpm.configHook: PNPM_FLAGS="--shamefully-hoist"
