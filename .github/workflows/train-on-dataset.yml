@@ -101,7 +101,7 @@ jobs:
     timeout-minutes: 15
     strategy:
       matrix: ${{ fromJson(needs.setup.outputs.matrix) }}
-      max-parallel: 2  # Run 2 jobs in parallel to avoid API rate limits
+      max-parallel: 1  # Run only 1 job at a time to avoid API rate limits
       fail-fast: false
     steps:
       - uses: actions/checkout@v4
