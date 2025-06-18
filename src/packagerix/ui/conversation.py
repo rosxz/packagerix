@@ -336,9 +336,17 @@ def _retry_with_rate_limit(func, *args, max_retries=20, base_delay=5, **kwargs):
                 import litellm
                 is_rate_limit_error = isinstance(e, litellm.RateLimitError)
                 is_overload_error = isinstance(e, litellm.InternalServerError)
+                
+                # Also check for AnthropicError from litellm.llms.anthropic.common_utils
+                try:
+                    from litellm.llms.anthropic.common_utils import AnthropicError
+                    is_anthropic_error = isinstance(e, AnthropicError)
+                except ImportError:
+                    is_anthropic_error = False
             except ImportError:
                 is_rate_limit_error = False
                 is_overload_error = False
+                is_anthropic_error = False
             
             # Check if it's an httpx error with 429 status (for completeness)
             is_429_error = False
@@ -351,7 +359,7 @@ def _retry_with_rate_limit(func, *args, max_retries=20, base_delay=5, **kwargs):
                     if is_429_error and hasattr(cause.response, 'headers'):
                         retry_after = cause.response.headers.get('retry-after')
             
-            if (is_rate_limit_error or is_overload_error or is_429_error) and attempt < max_retries - 1:
+            if (is_rate_limit_error or is_overload_error or is_anthropic_error or is_429_error) and attempt < max_retries - 1:
                 # Calculate delay based on retry-after header or polynomial backoff
                 if retry_after:
                     try:
@@ -369,6 +377,8 @@ def _retry_with_rate_limit(func, *args, max_retries=20, base_delay=5, **kwargs):
                     delay = _calculate_retry_delay(attempt, base_delay)
                     if is_rate_limit_error or is_429_error:
                         logger.warning(f"Rate limit hit, waiting {delay:.1f} seconds before retry...")
+                    elif is_anthropic_error:
+                        logger.warning(f"Anthropic API error ({str(e)}), waiting {delay:.1f} seconds before retry...")
                     else:
                         logger.warning(f"API overloaded, waiting {delay:.1f} seconds before retry...")
                 
@@ -390,24 +400,29 @@ def handle_model_chat(chat: Chat) -> str:
     Returns:
         The final string response from the model
     """
-    output = None
-    ends_with_function_call = True
-    adapter = get_ui_adapter()
+    def _chat_processing():
+        output = None
+        ends_with_function_call = True
+        adapter = get_ui_adapter()
+        current_chat = chat
 
-    while ends_with_function_call:
-        ends_with_function_call = False
-        for item in chat.last_message.content:
-            if isinstance(item, StreamedStr):
-                adapter.handle_model_streaming(item)
-                output = item
-                ends_with_function_call = False
-            elif isinstance(item, FunctionCall):
-                function_call = item()
-                adapter.show_message(Message(Actor.MODEL, function_call))
-                chat = chat.add_message(ToolResultMessage(function_call, item._unique_id))
-                ends_with_function_call = True
-        
-        if ends_with_function_call:
-            chat = _retry_with_rate_limit(chat.submit)
+        while ends_with_function_call:
+            ends_with_function_call = False
+            for item in current_chat.last_message.content:
+                if isinstance(item, StreamedStr):
+                    adapter.handle_model_streaming(item)
+                    output = item
+                    ends_with_function_call = False
+                elif isinstance(item, FunctionCall):
+                    function_call = item()
+                    adapter.show_message(Message(Actor.MODEL, function_call))
+                    current_chat = current_chat.add_message(ToolResultMessage(function_call, item._unique_id))
+                    ends_with_function_call = True
+            
+            if ends_with_function_call:
+                current_chat = current_chat.submit()
 
-    return str(output)
+        return str(output)
+    
+    # Use retry wrapper for the entire chat processing
+    return _retry_with_rate_limit(_chat_processing)
