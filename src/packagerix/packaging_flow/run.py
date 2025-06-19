@@ -3,7 +3,7 @@
 from pydantic import BaseModel
 
 from packagerix.ui.conversation import ask_user,  coordinator_message, coordinator_error, coordinator_progress
-from packagerix.parsing import scrape_and_process, extract_updated_code, fetch_combined_project_data
+from packagerix.parsing import scrape_and_process, extract_updated_code, fetch_combined_project_data, fill_src_attribute
 from packagerix.flake import init_flake
 from packagerix.nix import eval_progress, execute_build_and_add_to_stack
 from packagerix.packaging_flow.model_prompts import pick_template, set_up_project, summarize_github, fix_build_error, fix_hash_mismatch
@@ -79,10 +79,14 @@ def package_project(output_dir=None, project_url=None):
     notes_filename = f"{template_type.value}.notes"
     notes_path = config.template_dir / notes_filename
     template_notes = notes_path.read_text() if notes_path.exists() else None
+
+    # Step 6.a: Manual src setup
+    coordinator_message("Setting up the src attribute in the template...")
+    initial_code = fill_src_attribute(starting_template, project_url, release_data.get('tag_name'))
     
-    # Step 6: Create initial package
-    coordinator_message("Creating initial package configuration...")
-    initial_code = create_initial_package(starting_template, project_page, release_data, template_notes)
+    # Step 6.b: Create initial package (with LLM assisted src setup)
+    #coordinator_message("Creating initial package configuration...")
+    #initial_code = create_initial_package(starting_template, project_page, release_data, template_notes)
     
     # Step 7: Nested build and fix loop
     # Outer loop: Build iterations (unlimited, driven by progress)

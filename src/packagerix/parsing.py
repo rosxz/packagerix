@@ -5,6 +5,7 @@ from bs4 import BeautifulSoup
 import re
 import json
 from urllib.parse import urlparse
+import subprocess
 
 from diskcache import Cache
 from packagerix.ui.logging_config import logger
@@ -91,6 +92,37 @@ def fetch_github_release_data(url):
     except requests.RequestException as e:
         logger.error(f"Failed to fetch release data from GitHub API: {e}")
         return None
+
+def fill_src_attribute(template, project_url, version):
+    """Fill the pname, version and src attributes in the template."""
+    # Run nurl on the project URL to get src attribute
+    command = ["nurl", project_url] + ([version] if version else [])
+    nurl_output = subprocess.run(command, capture_output=True, text=True)
+    src_attr = str(nurl_output.stdout)
+    # Replace rev = ... with ${version}
+    src_attr = re.sub(r'rev\s*=\s*".*?"', 'rev = "${version}"', src_attr)
+
+    # Indent properly
+    lines = src_attr.splitlines()
+    for i in range(1, len(lines)):
+        lines[i] = "  " + lines[i]
+    src_attr = "\n".join(lines)
+    logger.debug(f"nurl output: {src_attr}")
+
+    if not (match := re.search(r'repo\s*=\s*"(.*?)"', src_attr)):
+        logger.error("Could not extract repo")
+    else:
+        repo = match.group(1)
+    # Fill in the "pname = ...", "version = ..." attributes in the template
+    filled_template = template.replace("pname = ...", f"pname = \"{repo}\"")
+    filled_template = filled_template.replace("version = ...", f"version = \"{version}\"")
+
+    # Replace the src attribute in the template with the extracted src
+    pattern = r"fetchFromGitHub\s*\{.*?\}"
+    filled_template = re.sub(pattern, src_attr, filled_template, flags=re.DOTALL)
+    logger.debug(f"Final filled template: {filled_template}")
+    
+    return filled_template
 
 def fetch_combined_project_data(url):
     """Fetch both HTML and API data for a GitHub project."""
