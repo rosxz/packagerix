@@ -24,15 +24,15 @@
       let
         pkgs = nixpkgs.legacyPackages.${system};
         python = pkgs.python312;
-        
+
         # Load the workspace
         workspace = uv2nix.lib.workspace.loadWorkspace { workspaceRoot = ./.; };
-        
+
         # Create overlay
         overlay = workspace.mkPyprojectOverlay {
           sourcePreference = "wheel";
         };
-        
+
         # Python package set
         pythonSet = (pkgs.callPackage pyproject-nix.build.packages {
           inherit python;
@@ -42,7 +42,7 @@
         packages = {
           # Create a virtual environment with all dependencies
           default = pythonSet.mkVirtualEnv "packagerix-env" workspace.deps.default;
-          
+
           # The packagerix application itself
           packagerix = pythonSet.packagerix;
         };
@@ -53,18 +53,19 @@
             OLLAMA_HOST= "https://hydralisk.van-duck.ts.net:11435";
 #            MAGENTIC_LITELLM_MAX_TOKENS = "1024";
 #             ANTHROPIC_LOG="debug";
-            
+
             # Use only dependencies environment, not the built package
             packages = [
               python
               (pythonSet.mkVirtualEnv "packagerix-dev-deps" workspace.deps.default)
+              pkgs.nurl
               pkgs.jq
             ];
-            
+
             # Point to source files for development
             PYTHONPATH = "src";
           };
-          
+
           # Impure shell for generating uv.lock
           impure = pkgs.mkShell {
             packages = [
