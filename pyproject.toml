@@ -22,6 +22,7 @@ dependencies = [
     "keyring",
     "keyrings.alt",
     "ddgr (>=2.2,<3.0)",
+    "pytest>=8.4.1",
 ]
 
 [project.scripts]
@@ -32,3 +33,14 @@ where = ["src"]
 
 [tool.setuptools.package-data]
 packagerix = ["template/*"]
+
+[project.optional-dependencies]
+test = [
+    "pytest>=7.0.0",
+    "pytest-mock>=3.10.0",
+]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_paths = ["src"]
+addopts = "-v --tb=short"
