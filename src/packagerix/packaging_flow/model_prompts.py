@@ -8,7 +8,7 @@ from packagerix.template.template_types import TemplateType
 from packagerix.ui.conversation import ask_model, ask_model_enum, handle_model_chat
 from packagerix.errors import NixBuildErrorDiff
 from magentic import Chat, UserMessage, StreamedResponse
-from packagerix.function_calls import *
+from packagerix.function_calls import search_nixpkgs_for_package, web_search, fetch_url_content, search_nix_functions
 
 
 def set_up_project(code_template: str, project_page: str, release_data: dict = None, template_notes: str = None) -> StreamedStr:
@@ -58,7 +58,7 @@ Note: Even though the provided template uses the mkDerivation function, this is 
             release_data=release_data,
             template_notes_section=template_notes_section
         ))],
-        functions=[search_nixpkgs_for_package, web_search, fetch_url_content],
+        functions=[search_nixpkgs_for_package, web_search, fetch_url_content, search_nix_functions],
         output_types=[StreamedResponse],
     ).submit()
 
@@ -154,7 +154,7 @@ And some relevant metadata of the latest release:
             project_info_section=project_info_section,
             template_notes_section=template_notes_section
         ))],
-        functions=[search_nixpkgs_for_package, web_search, fetch_url_content],
+        functions=[search_nixpkgs_for_package, web_search, fetch_url_content, search_nix_functions],
         output_types=[StreamedResponse],
     ).submit()
 

@@ -17,14 +17,23 @@
      url = "github:jackmpcollins/magentic/v0.39.3";
      flake = false;
     };
+    noogle.url = github:nix-community/noogle;
   };
 
-  outputs = { self, nixpkgs, flake-utils, pyproject-nix, uv2nix, magentic }:
+  outputs = { self, nixpkgs, flake-utils, pyproject-nix, uv2nix, magentic, noogle }:
     flake-utils.lib.eachDefaultSystem (system:
       let
         pkgs = nixpkgs.legacyPackages.${system};
         python = pkgs.python312;
 
+        
+        # Preprocessed noogle function names
+        noogleFunctionNames = pkgs.runCommand "noogle-function-names" {
+          buildInputs = [ pkgs.jq ];
+        } ''
+          ${pkgs.jq}/bin/jq -r '.[].meta.title' ${noogle.packages.${system}.data-json} > $out
+        '';
+        
         # Load the workspace
         workspace = uv2nix.lib.workspace.loadWorkspace { workspaceRoot = ./.; };
 
@@ -45,6 +54,9 @@
 
           # The packagerix application itself
           packagerix = pythonSet.packagerix;
+          
+          # Preprocessed noogle function names for search
+          noogle-function-names = noogleFunctionNames;
         };
 
         devShells = {
@@ -54,12 +66,16 @@
 #            MAGENTIC_LITELLM_MAX_TOKENS = "1024";
 #             ANTHROPIC_LOG="debug";
 
+            # Path to preprocessed noogle function names
+            NOOGLE_FUNCTION_NAMES = "${noogleFunctionNames}";
+            
             # Use only dependencies environment, not the built package
             packages = [
               python
               (pythonSet.mkVirtualEnv "packagerix-dev-deps" workspace.deps.default)
               pkgs.nurl
               pkgs.jq
+              pkgs.fzf
             ];
 
             # Point to source files for development
