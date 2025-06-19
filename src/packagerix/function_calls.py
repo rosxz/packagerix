@@ -1,12 +1,18 @@
 import subprocess
 import requests
+import json
 
 def search_nixpkgs_for_package(query: str) -> str:
     """Search the nixpkgs repository of Nix code for the given package"""
 
     print("📞 Function called: search_nixpkgs_for_package with query: ", query)
-    result = subprocess.run(["nix", "search", "nixpkgs", query], text=True, capture_output=True)
-    if result.returncode == 0:
+    
+    # Use shell=True to run the piped command with jq
+    # TODO: fix platform dependence here for mac support support
+    cmd = f'nix search --json nixpkgs {query} | jq "with_entries(.key |= sub(\\"legacyPackages\\\\.x86_64-linux\\\\.\\"; \\"\\"))"'
+    result = subprocess.run(cmd, shell=True, text=True, capture_output=True)
+    
+    if result.returncode == 0 and result.stdout.strip():
         print("Result: ", result.stdout)
         return result.stdout
     else:
