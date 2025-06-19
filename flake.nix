@@ -52,8 +52,17 @@
           # Create a virtual environment with all dependencies
           default = pythonSet.mkVirtualEnv "packagerix-env" workspace.deps.default;
 
-          # The packagerix application itself
-          packagerix = pythonSet.packagerix;
+          # The packagerix application itself with runtime dependencies
+          packagerix = pkgs.symlinkJoin {
+            name = "packagerix-wrapped";
+            paths = [ pythonSet.packagerix ];
+            buildInputs = [ pkgs.makeWrapper ];
+            postBuild = ''
+              wrapProgram $out/bin/packagerix \
+                --set NOOGLE_FUNCTION_NAMES "${noogleFunctionNames}" \
+                --prefix PATH : "${pkgs.lib.makeBinPath [pkgs.fzf pkgs.jq pkgs.nurl]}"
+            '';
+          };
           
           # Preprocessed noogle function names for search
           noogle-function-names = noogleFunctionNames;
