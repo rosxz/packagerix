@@ -82,7 +82,7 @@ def search_nix_functions(query: str) -> str:
         
         # Use fzf to filter the function names
         result = subprocess.run(
-            ["fzf", f"--filter={query}", "--exact"],
+            ["fzf", f"--filter={query}", "--exact", "-i"],
             stdin=open(function_names_path, 'r'),
             text=True,
             capture_output=True
