@@ -8,16 +8,34 @@ def search_nixpkgs_for_package(query: str) -> str:
 
     print("📞 Function called: search_nixpkgs_for_package with query: ", query)
     
-    # Use shell=True to run the piped command with jq
-    # TODO: fix platform dependence here for mac support support
-    cmd = f'nix search --json nixpkgs {query} | jq "with_entries(.key |= sub(\\"legacyPackages\\\\.x86_64-linux\\\\.\\"; \\"\\"))"'
-    result = subprocess.run(cmd, shell=True, text=True, capture_output=True)
+    # Run nix search first, explicitly separate stdout and stderr
+    nix_result = subprocess.run(
+        ["nix", "search", "--json", "nixpkgs", query],
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        text=True
+    )
     
-    if result.returncode == 0 and result.stdout.strip():
-        print("Result: ", result.stdout)
-        return result.stdout
-    else:
+    if nix_result.returncode != 0 or not nix_result.stdout.strip():
         return f"no results found for query '{query}'"
+    
+    # Pipe to jq to remove the platform-specific prefix
+    # TODO: fix platform dependence here for mac support
+    jq_filter = r'with_entries(.key |= sub("legacyPackages\\.x86_64-linux\\."; ""))'
+    jq_result = subprocess.run(
+        ["jq", jq_filter],
+        input=nix_result.stdout,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        text=True
+    )
+    
+    if jq_result.returncode == 0 and jq_result.stdout.strip():
+        return jq_result.stdout
+    elif not jq_result.stdout.strip():
+        return f"nixpkgs search returned no results for {query}"
+    elif jq_result.returncode != 0:
+        raise ValueError(f"jq failed with return code {jq_result.returncode}, stderr: {jq_result.stderr}")
 
 
 def web_search(query: str) -> str:
