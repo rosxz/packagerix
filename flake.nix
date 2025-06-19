@@ -59,6 +59,7 @@
               python
               (pythonSet.mkVirtualEnv "packagerix-dev-deps" workspace.deps.default)
               pkgs.nurl
+              pkgs.jq
             ];
 
             # Point to source files for development
