@@ -239,20 +239,51 @@ jobs:
           success=0
           failed=0
           
+          # Debug: List available artifacts
+          echo "Available artifacts:" >> $GITHUB_STEP_SUMMARY
+          if [ -d artifacts ]; then
+            ls -la artifacts/ >> $GITHUB_STEP_SUMMARY || echo "No artifacts directory found" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "No artifacts directory found" >> $GITHUB_STEP_SUMMARY
+          fi
+          echo "" >> $GITHUB_STEP_SUMMARY
+          
+          # Process each artifact directory
           for dir in artifacts/packagerix-output-*; do
             if [ -d "$dir" ]; then
               issue_num=$(basename "$dir" | sed 's/packagerix-output-//')
               total=$((total + 1))
               
-              # Check if there's a package.nix file in the output directory
-              if [ -n "$(find "$dir/output" -name "package.nix" 2>/dev/null)" ]; then
+              echo "Processing issue $issue_num:" >> $GITHUB_STEP_SUMMARY
+              
+              # Check if there's a package.nix file in any subdirectory
+              package_nix_found=$(find "$dir" -name "package.nix" -type f 2>/dev/null | head -1)
+              
+              if [ -n "$package_nix_found" ]; then
                 success=$((success + 1))
+                echo "  ✓ Success - Found package.nix at: $package_nix_found" >> $GITHUB_STEP_SUMMARY
               else
                 failed=$((failed + 1))
+                echo "  ✗ Failed - No package.nix found" >> $GITHUB_STEP_SUMMARY
+                # Debug: show directory contents
+                echo "  Contents of $dir:" >> $GITHUB_STEP_SUMMARY
+                find "$dir" -type f | head -10 >> $GITHUB_STEP_SUMMARY
               fi
             fi
           done
           
+          # Handle case where no artifacts were found
+          if [ $total -eq 0 ]; then
+            echo "No packagerix-output-* directories found in artifacts/" >> $GITHUB_STEP_SUMMARY
+            # Try to list what's actually there
+            if [ -d artifacts ]; then
+              echo "Available files in artifacts/:" >> $GITHUB_STEP_SUMMARY
+              find artifacts -type f | head -20 >> $GITHUB_STEP_SUMMARY
+            fi
+          fi
+          
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "## Summary:" >> $GITHUB_STEP_SUMMARY
           echo "- Total processed: $total" >> $GITHUB_STEP_SUMMARY
           echo "- Successful: $success" >> $GITHUB_STEP_SUMMARY
           echo "- Failed: $failed" >> $GITHUB_STEP_SUMMARY
