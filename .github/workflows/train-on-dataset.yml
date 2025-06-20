@@ -16,8 +16,9 @@ on:
         options:
           - anthropic
           - ollama
+          - gemini
       model:
-        description: 'Model to use (e.g., claude-3-5-haiku-20241022 or ollama/qwen2.5-coder:32b)'
+        description: 'Model to use (e.g., claude-3-5-haiku-20241022, ollama/qwen2.5-coder:32b, or gemini/gemini-2.5-pro)'
         required: false
         default: 'claude-3-5-haiku-20241022'
         type: string
@@ -137,8 +138,12 @@ jobs:
           
       - name: Setup environment
         run: |
-          # Set Anthropic API key as environment variable
-          echo "ANTHROPIC_API_KEY=${{ secrets.ANTHROPIC_API_KEY }}" >> $GITHUB_ENV
+          # Set API keys as environment variables based on provider
+          if [ "${{ github.event.inputs.model_provider || 'anthropic' }}" = "anthropic" ]; then
+            echo "ANTHROPIC_API_KEY=${{ secrets.ANTHROPIC_API_KEY }}" >> $GITHUB_ENV
+          elif [ "${{ github.event.inputs.model_provider || 'anthropic' }}" = "gemini" ]; then
+            echo "GEMINI_API_KEY=${{ secrets.GEMINI_API_KEY }}" >> $GITHUB_ENV
+          fi
       
       - name: Process package request
         id: process
