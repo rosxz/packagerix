@@ -8,9 +8,13 @@ from itertools import islice
 
 MAX_LINES_TO_READ = 500
 
-def create_source_function_calls(store_path: str) -> List[Callable]:
+def create_source_function_calls(store_path: str, prefix: str = "") -> List[Callable]:
     """
-    Create a dictionary of project source analysis related function calls.
+    Create a list of source analysis related function calls.
+    
+    Args:
+        store_path: The root directory path
+        prefix: Optional prefix to add to function names (e.g., "nixpkgs_" or "project_")
     """
     root_dir = Path(store_path).resolve()
     
@@ -41,9 +45,12 @@ def create_source_function_calls(store_path: str) -> List[Callable]:
         result = magika.identify_path(path)
         return result.output.is_text
 
+    # Create the function names with prefix
+    source_description = f"{prefix}source" if prefix else "project source"
+    
     def list_directory_contents(relative_path: str) -> str:
-        """List contents of a relative directory within the project source given its relative path to the root directory."""
-        print("📞 Function called: list_directory_contents with path: ", relative_path)
+        f"""List contents of a relative directory within the {source_description} given its relative path to the root directory."""
+        print(f"📞 Function called: {prefix}list_directory_contents with path: ", relative_path)
         try:
             _validate_path(relative_path)
             # Use command ls -lha to list directory contents
@@ -52,14 +59,13 @@ def create_source_function_calls(store_path: str) -> List[Callable]:
             if result.returncode == 0 and result.stdout.strip():
                 return str(result.stdout)
             else:
-                return f"Failed to list contents of directory '{relative_path}'\
-                        on the project source directory."
+                return f"Failed to list contents of directory '{relative_path}' in {source_description}."
         except Exception as e:
             return f"Error listing directory contents: {str(e)}"
 
     def read_file_content(relative_path: str, line_offset: int = 0, number_lines_to_read: int = MAX_LINES_TO_READ) -> str:
-        """Read the content of a file within the project source given its relative path to the root directory."""
-        print("📞 Function called: read_file_content with path: ", relative_path)
+        f"""Read the content of a file within the {source_description} given its relative path to the root directory."""
+        print(f"📞 Function called: {prefix}read_file_content with path: ", relative_path)
         try:
             path = _validate_path(relative_path)
             if not _is_text_file(path):
@@ -73,8 +79,8 @@ def create_source_function_calls(store_path: str) -> List[Callable]:
             return f"Error reading file content: {str(e)}"
     
     def detect_file_type_and_size(relative_path: str) -> str:
-        """Detect the type and size of a file within the project source using magika given its relative path to the root directory."""
-        print("📞 Function called: detect_file_type_and_size with path: ", relative_path)
+        f"""Detect the type and size of a file within the {source_description} using magika given its relative path to the root directory."""
+        print(f"📞 Function called: {prefix}detect_file_type_and_size with path: ", relative_path)
         try:
             path = _validate_path(relative_path)
             if not path.exists():
@@ -123,14 +129,14 @@ def create_source_function_calls(store_path: str) -> List[Callable]:
         return f"{size_bytes:.2f} PB"
     
     def search_in_files(pattern: str, relative_path: str = ".", custom_args: str = None) -> str:
-        """Search for a pattern in files using ripgrep with sensible defaults for LLM usage.
+        f"""Search for a pattern in files within the {source_description} using ripgrep with sensible defaults for LLM usage.
         
         Args:
             pattern: The search pattern (regex or literal string)
             relative_path: The relative path to search in (default: current directory)
             custom_args: Optional custom ripgrep arguments to override defaults
         """
-        print(f"📞 Function called: search_in_files with pattern: '{pattern}', path: '{relative_path}'")
+        print(f"📞 Function called: {prefix}search_in_files with pattern: '{pattern}', path: '{relative_path}'")
         try:
             path = _validate_path(relative_path)
             
@@ -164,5 +170,11 @@ def create_source_function_calls(store_path: str) -> List[Callable]:
                 
         except Exception as e:
             return f"Error in search_in_files: {str(e)}"
+    
+    # Set function names with prefix and return them
+    list_directory_contents.__name__ = f"{prefix}list_directory_contents"
+    read_file_content.__name__ = f"{prefix}read_file_content"
+    detect_file_type_and_size.__name__ = f"{prefix}detect_file_type_and_size"
+    search_in_files.__name__ = f"{prefix}search_in_files"
     
     return [list_directory_contents, read_file_content, detect_file_type_and_size, search_in_files]

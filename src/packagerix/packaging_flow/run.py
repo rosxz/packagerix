@@ -86,7 +86,10 @@ def package_project(output_dir=None, project_url=None):
     initial_code, store_path = fill_src_attribute(starting_template, project_url,
                                                   release_data.get('tag_name'))
 
-    additional_functions = create_source_function_calls(store_path)
+    # Create functions for both the project source and nixpkgs
+    project_functions = create_source_function_calls(store_path, "project_")
+    nixpkgs_functions = create_source_function_calls("/nix/store/wkkb42brrc0w3mz9yin33jy7f8bqfhx5-source", "nixpkgs_")
+    additional_functions = project_functions + nixpkgs_functions
     # Step 6.b: Create initial package (with LLM assisted src setup)
     #coordinator_message("Creating initial package configuration...")
     #initial_code = create_initial_package(starting_template, project_page, release_data, template_notes)
