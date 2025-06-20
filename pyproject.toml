@@ -23,6 +23,7 @@ dependencies = [
     "keyrings.alt",
     "ddgr (>=2.2,<3.0)",
     "pytest>=8.4.1",
+    "magika>=0.6.2",
 ]
 
 [project.scripts]
