@@ -1,5 +1,6 @@
 """Business logic for packagerix using the coordinator pattern."""
 
+import subprocess
 from pydantic import BaseModel
 
 from packagerix.ui.conversation import ask_user,  coordinator_message, coordinator_error, coordinator_progress
@@ -17,6 +18,22 @@ class Solution(BaseModel):
     """Represents a solution candidate with its code and build result."""
     code: str
     result: NixBuildResult
+
+
+def get_nixpkgs_source_path() -> str:
+    """Get the nixpkgs source path from the template flake."""
+    try:
+        result = subprocess.run(
+            ["nix", "build", ".#nixpkgs-src", "--no-link", "--print-out-paths"],
+            cwd=config.template_dir,
+            capture_output=True,
+            text=True,
+            check=True
+        )
+        return result.stdout.strip()
+    except subprocess.CalledProcessError as e:
+        coordinator_error(f"Failed to get nixpkgs source path: {e}")
+        raise
 
 
 
@@ -88,7 +105,8 @@ def package_project(output_dir=None, project_url=None):
 
     # Create functions for both the project source and nixpkgs
     project_functions = create_source_function_calls(store_path, "project_")
-    nixpkgs_functions = create_source_function_calls("/nix/store/wkkb42brrc0w3mz9yin33jy7f8bqfhx5-source", "nixpkgs_")
+    nixpkgs_path = get_nixpkgs_source_path()
+    nixpkgs_functions = create_source_function_calls(nixpkgs_path, "nixpkgs_")
     additional_functions = project_functions + nixpkgs_functions
     # Step 6.b: Create initial package (with LLM assisted src setup)
     #coordinator_message("Creating initial package configuration...")

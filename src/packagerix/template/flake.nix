@@ -12,6 +12,7 @@
    {
 
     packages.x86_64-linux.default = pkgs.callPackage ./package.nix {};
+    packages.x86_64-linux.nixpkgs-src = nixpkgs.outPath;
 
   };
 }
