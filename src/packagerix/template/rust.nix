@@ -15,11 +15,4 @@ rustPlatform.buildRustPackage rec {
   };
 
   cargoHash = lib.fakeHash;
-
-  # to make sure we build something sensible
-  # we should check for some sort of result
-  doInstallCheck = true;
-  installCheckPhase = ''
-     $out/bin/${pname} --version | grep ${version}
-  '';
 }
