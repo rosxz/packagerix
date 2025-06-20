@@ -1,6 +1,7 @@
 from typing import List, Callable, Any
 from pathlib import Path
 import subprocess
+from magika import Magika
 
 def create_source_function_calls(store_path: str) -> List[Callable]:
     """
@@ -22,6 +23,17 @@ def create_source_function_calls(store_path: str) -> List[Callable]:
             raise ValueError(f"Path '{path}' is outside the allowed root directory '{root_dir}'")
         
         return target_path
+    
+    def _is_text_file(path: Path) -> bool:
+        """Helper function to check if a file is text using magika."""
+        if not path.exists():
+            raise FileNotFoundError(f"File '{path}' does not exist")
+        if not path.is_file():
+            raise ValueError(f"Path '{path}' is not a file")
+        
+        magika = Magika()
+        result = magika.identify_path(path)
+        return result.output.is_text
     def list_directory_contents(relative_path: str) -> str:
         """List contents of a relative directory within the project source given its relative path to the root directory."""
         print("📞 Function called: list_directory_contents with path: ", relative_path)
@@ -46,4 +58,49 @@ def create_source_function_calls(store_path: str) -> List[Callable]:
                 return file.read()
         except Exception as e:
             return f"Error reading file content: {str(e)}"
-    return [list_directory_contents, read_file_content]
+    
+    def detect_file_type_and_size(relative_path: str) -> str:
+        """Detect the type and size of a file within the project source using magika given its relative path to the root directory."""
+        print("📞 Function called: detect_file_type_and_size with path: ", relative_path)
+        try:
+            path = _validate_path(relative_path)
+            if not path.exists():
+                return f"File '{relative_path}' does not exist"
+            if not path.is_file():
+                return f"Path '{relative_path}' is not a file"
+            
+            magika = Magika()
+            result = magika.identify_path(path)
+            
+            # Get file size
+            size_bytes = path.stat().st_size
+            
+            if result.output.is_text:
+                # Count lines for text files
+                try:
+                    with open(path, 'r', encoding='utf-8') as f:
+                        line_count = sum(1 for _ in f)
+                    size_info = f"{line_count} lines"
+                except Exception:
+                    # Fallback to file size if we can't read as text
+                    size_info = _format_file_size(size_bytes)
+            else:
+                # Human-readable size for non-text files
+                size_info = _format_file_size(size_bytes)
+            
+            return f"File type: {result.output.ct_label} (confidence: {result.score:.2%}, is_text: {result.output.is_text}, size: {size_info})"
+        except Exception as e:
+            return f"Error detecting file type: {str(e)}"
+    
+    def _format_file_size(size_bytes: int) -> str:
+        """Format file size in human-readable format."""
+        for unit in ['B', 'KB', 'MB', 'GB', 'TB']:
+            if size_bytes < 1024.0:
+                if unit == 'B':
+                    return f"{size_bytes} {unit}"
+                else:
+                    return f"{size_bytes:.2f} {unit}"
+            size_bytes /= 1024.0
+        return f"{size_bytes:.2f} PB"
+    
+    return [list_directory_contents, read_file_content, detect_file_type_and_size]
