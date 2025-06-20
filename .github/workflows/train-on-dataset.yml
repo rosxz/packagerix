@@ -165,21 +165,30 @@ jobs:
             2>&1 | tee "${{ matrix.issue_number }}.log"
           exit_code=$?
           
-          # Check if the command succeeded
+          # Check if the command succeeded AND produced a package.nix file
           if [ $exit_code -eq 0 ]; then
-            echo "status=success" >> $GITHUB_OUTPUT
-            # Find the package name from the output directory
+            # Command didn't fail, but we need to verify it actually created a package
             if [ -d output ]; then
               package_name=$(ls output | head -n1)
-              if [ -n "$package_name" ]; then
+              if [ -n "$package_name" ] && [ -f "output/$package_name/package.nix" ]; then
+                echo "status=success" >> $GITHUB_OUTPUT
                 echo "package_name=$package_name" >> $GITHUB_OUTPUT
+              else
+                echo "status=failed" >> $GITHUB_OUTPUT
+                echo "Command succeeded but no package.nix was generated"
+                exit 1  # Fail the step
               fi
+            else
+              echo "status=failed" >> $GITHUB_OUTPUT
+              echo "Command succeeded but no output directory was created"
+              exit 1  # Fail the step
             fi
           else
             echo "status=failed" >> $GITHUB_OUTPUT
             echo "Exit code: $exit_code"
             echo "=== Combined log ==="
             head -n 50 "${{ matrix.issue_number }}.log" || echo "No log found"
+            exit $exit_code  # Propagate the original exit code
           fi
           
       - name: Upload results
@@ -196,18 +205,27 @@ jobs:
       - name: Create summary
         if: always()
         run: |
-          echo "## Issue #${{ matrix.issue_number }}" >> $GITHUB_STEP_SUMMARY
+          # Set emoji based on status
+          if [ "${{ steps.process.outputs.status }}" = "success" ]; then
+            status_emoji="✅"
+            status_text="SUCCESS"
+          else
+            status_emoji="❌"
+            status_text="FAILED"
+          fi
+          
+          echo "## ${status_emoji} Issue #${{ matrix.issue_number }}" >> $GITHUB_STEP_SUMMARY
           echo "- Repository: ${{ matrix.repo_url }}" >> $GITHUB_STEP_SUMMARY
           echo "- Provider: ${{ github.event.inputs.model_provider || 'anthropic' }}" >> $GITHUB_STEP_SUMMARY
           echo "- Model: ${{ github.event.inputs.model || 'claude-3-5-haiku-20241022' }}" >> $GITHUB_STEP_SUMMARY
-          echo "- Status: ${{ steps.process.outputs.status }}" >> $GITHUB_STEP_SUMMARY
+          echo "- Status: ${status_emoji} **${status_text}**" >> $GITHUB_STEP_SUMMARY
           if [ -n "${{ steps.process.outputs.package_name }}" ]; then
             echo "- Package name: ${{ steps.process.outputs.package_name }}" >> $GITHUB_STEP_SUMMARY
           fi
           if [ -f "${{ matrix.issue_number }}.log" ]; then
             echo "- Log size: $(wc -c < ${{ matrix.issue_number }}.log) bytes" >> $GITHUB_STEP_SUMMARY
           fi
-          if [ -d "output/${{ steps.process.outputs.package_name }}/package.nix" ]; then
+          if [ -f "output/${{ steps.process.outputs.package_name }}/package.nix" ]; then
             echo "- Generated package.nix: ✓" >> $GITHUB_STEP_SUMMARY
           fi
           if [ -f "${{ matrix.issue_number }}.log" ] && [ -s "${{ matrix.issue_number }}.log" ]; then
@@ -218,7 +236,7 @@ jobs:
           fi
           
       - name: Fail job if packaging failed
-        if: always() && steps.process.outputs.status == 'failed'
+        if: steps.process.outputs.status == 'failed'
         run: |
           echo "Packaging failed, failing the job"
           echo "Status was: ${{ steps.process.outputs.status }}"
@@ -244,54 +262,32 @@ jobs:
           success=0
           failed=0
           
-          # Debug: List available artifacts
-          echo "Available artifacts:" >> $GITHUB_STEP_SUMMARY
-          if [ -d artifacts ]; then
-            ls -la artifacts/ >> $GITHUB_STEP_SUMMARY || echo "No artifacts directory found" >> $GITHUB_STEP_SUMMARY
-          else
-            echo "No artifacts directory found" >> $GITHUB_STEP_SUMMARY
-          fi
-          echo "" >> $GITHUB_STEP_SUMMARY
-          
           # Process each artifact directory
           for dir in artifacts/packagerix-output-*; do
             if [ -d "$dir" ]; then
               issue_num=$(basename "$dir" | sed 's/packagerix-output-//')
               total=$((total + 1))
               
-              echo "Processing issue $issue_num:" >> $GITHUB_STEP_SUMMARY
-              
               # Check if there's a package.nix file in any subdirectory
               package_nix_found=$(find "$dir" -name "package.nix" -type f 2>/dev/null | head -1)
               
               if [ -n "$package_nix_found" ]; then
                 success=$((success + 1))
-                echo "  ✓ Success - Found package.nix at: $package_nix_found" >> $GITHUB_STEP_SUMMARY
               else
                 failed=$((failed + 1))
-                echo "  ✗ Failed - No package.nix found" >> $GITHUB_STEP_SUMMARY
-                # Debug: show directory contents
-                echo "  Contents of $dir:" >> $GITHUB_STEP_SUMMARY
-                find "$dir" -type f | head -10 >> $GITHUB_STEP_SUMMARY
               fi
             fi
           done
           
-          # Handle case where no artifacts were found
-          if [ $total -eq 0 ]; then
-            echo "No packagerix-output-* directories found in artifacts/" >> $GITHUB_STEP_SUMMARY
-            # Try to list what's actually there
-            if [ -d artifacts ]; then
-              echo "Available files in artifacts/:" >> $GITHUB_STEP_SUMMARY
-              find artifacts -type f | head -20 >> $GITHUB_STEP_SUMMARY
-            fi
-          fi
-          
-          echo "" >> $GITHUB_STEP_SUMMARY
           echo "## Summary:" >> $GITHUB_STEP_SUMMARY
           echo "- Total processed: $total" >> $GITHUB_STEP_SUMMARY
           echo "- Successful: $success" >> $GITHUB_STEP_SUMMARY
           echo "- Failed: $failed" >> $GITHUB_STEP_SUMMARY
+          
+          if [ $success -gt 0 ]; then
+            success_rate=$((success * 100 / total))
+            echo "- Success rate: ${success_rate}%" >> $GITHUB_STEP_SUMMARY
+          fi
           
       - name: Create combined artifact
         run: |
