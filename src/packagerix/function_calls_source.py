@@ -34,7 +34,8 @@ def create_source_function_calls(store_path: str) -> List[Callable]:
         if not path.exists():
             raise FileNotFoundError(f"File '{path}' does not exist")
         if not path.is_file():
-            raise ValueError(f"Path '{path}' is not a file")
+            # Directories are not text files, return False
+            return False
         
         magika = Magika()
         result = magika.identify_path(path)
@@ -78,27 +79,33 @@ def create_source_function_calls(store_path: str) -> List[Callable]:
             path = _validate_path(relative_path)
             if not path.exists():
                 return f"File '{relative_path}' does not exist"
-            if not path.is_file():
-                return f"Path '{relative_path}' is not a file"
             
             magika = Magika()
             result = magika.identify_path(path)
             
-            # Get file size
-            size_bytes = path.stat().st_size
-            
-            if result.output.is_text:
-                # Count lines for text files
-                try:
-                    with open(path, 'r', encoding='utf-8') as f:
-                        line_count = sum(1 for _ in f)
-                    size_info = f"{line_count} lines"
-                except Exception:
-                    # Fallback to file size if we can't read as text
+            if path.is_file():
+                # Get file size
+                size_bytes = path.stat().st_size
+                
+                if result.output.is_text:
+                    # Count lines for text files
+                    try:
+                        with open(path, 'r', encoding='utf-8') as f:
+                            line_count = sum(1 for _ in f)
+                        size_info = f"{line_count} lines"
+                    except Exception:
+                        # Fallback to file size if we can't read as text
+                        size_info = _format_file_size(size_bytes)
+                else:
+                    # Human-readable size for non-text files
                     size_info = _format_file_size(size_bytes)
             else:
-                # Human-readable size for non-text files
-                size_info = _format_file_size(size_bytes)
+                # For directories, show item count
+                try:
+                    item_count = len(list(path.iterdir()))
+                    size_info = f"{item_count} items"
+                except Exception:
+                    size_info = "directory"
             
             return f"File type: {result.output.ct_label} (confidence: {result.score:.2%}, is_text: {result.output.is_text}, size: {size_info})"
         except Exception as e:
