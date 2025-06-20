@@ -46,6 +46,8 @@
         pythonSet = (pkgs.callPackage pyproject-nix.build.packages {
           inherit python;
         }).overrideScope overlay;
+
+        cli-dependencies = with pkgs; [ripgrep fzf jq nurl];
       in
       {
         packages = {
@@ -60,7 +62,7 @@
             postBuild = ''
               wrapProgram $out/bin/packagerix \
                 --set NOOGLE_FUNCTION_NAMES "${noogleFunctionNames}" \
-                --prefix PATH : "${pkgs.lib.makeBinPath [pkgs.fzf pkgs.jq pkgs.nurl]}"
+                --prefix PATH : "${pkgs.lib.makeBinPath cli-dependencies}"
             '';
           };
           
@@ -82,13 +84,15 @@
             packages = [
               python
               (pythonSet.mkVirtualEnv "packagerix-dev-deps" workspace.deps.default)
-              pkgs.nurl
-              pkgs.jq
-              pkgs.fzf
             ];
 
             # Point to source files for development
             PYTHONPATH = "src";
+            
+            # Ensure CLI tools are on PATH
+            shellHook = ''
+              export PATH="${pkgs.lib.makeBinPath cli-dependencies}:$PATH"
+            '';
           };
 
           # Impure shell for generating uv.lock
@@ -96,7 +100,7 @@
             packages = [
               python
               pkgs.uv
-            ];
+            ] ++ cli-dependencies;
             shellHook = ''
               unset PYTHONPATH
             '';

@@ -1,6 +1,8 @@
 from typing import List, Callable, Any
 from pathlib import Path
 import subprocess
+import shlex
+import os
 from magika import Magika
 from itertools import islice
 
@@ -113,4 +115,47 @@ def create_source_function_calls(store_path: str) -> List[Callable]:
             size_bytes /= 1024.0
         return f"{size_bytes:.2f} PB"
     
-    return [list_directory_contents, read_file_content, detect_file_type_and_size]
+    def search_in_files(pattern: str, relative_path: str = ".", custom_args: str = None) -> str:
+        """Search for a pattern in files using ripgrep with sensible defaults for LLM usage.
+        
+        Args:
+            pattern: The search pattern (regex or literal string)
+            relative_path: The relative path to search in (default: current directory)
+            custom_args: Optional custom ripgrep arguments to override defaults
+        """
+        print(f"📞 Function called: search_in_files with pattern: '{pattern}', path: '{relative_path}'")
+        try:
+            path = _validate_path(relative_path)
+            
+            if custom_args:
+                # Use custom arguments provided by the user, need to parse them
+                import shlex as shlex_parse
+                args = shlex_parse.split(custom_args)
+                cmd = ["rg"] + args + ["--", pattern, relative_path]
+            else:
+                # Sensible defaults for LLM usage:
+                # -n: Show line numbers
+                # -H: Show filenames
+                # --color=never: No color codes in output
+                # -m 5: Max 5 matches per file
+                # --max-filesize=10M: Skip files larger than 10MB
+                cmd = ["rg", "-n", "-H", "--color=never", "-m", "5", "--max-filesize=10M", "--", pattern, relative_path]
+            
+            result = subprocess.run(cmd, text=True, capture_output=True, cwd=root_dir)
+            
+            if result.returncode == 0 and result.stdout.strip():
+                # Limit total output to 50 lines
+                lines = result.stdout.strip().split('\n')
+                if len(lines) > 50:
+                    return '\n'.join(lines[:50]) + f"\n... (showing first 50 of {len(lines)} matches)"
+                return result.stdout
+            elif result.returncode == 1:
+                return f"No matches found for pattern '{pattern}' in {relative_path}"
+            else:
+                error_msg = result.stderr.strip() if result.stderr else "Unknown error"
+                return f"Error searching files: {error_msg}"
+                
+        except Exception as e:
+            return f"Error in search_in_files: {str(e)}"
+    
+    return [list_directory_contents, read_file_content, detect_file_type_and_size, search_in_files]
