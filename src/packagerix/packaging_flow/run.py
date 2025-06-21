@@ -129,7 +129,7 @@ def package_project(output_dir=None, project_url=None):
 
     build_iteration = 1
     eval_iteration = 1
-    max_inner_attempts = 5
+    max_inner_attempts = 10
     candidate = best
     
     while True:
