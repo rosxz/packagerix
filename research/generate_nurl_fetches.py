@@ -45,11 +45,12 @@ def wait_for_rate_limit_reset(reset_time):
             print(f"\nRate limit exceeded. Waiting until {reset_time.strftime('%Y-%m-%d %H:%M:%S')} ({wait_seconds:.0f} seconds)...")
             time.sleep(wait_seconds + 5)  # Add 5 seconds buffer
 
-def run_nurl(url):
+def run_nurl(url, rev=None):
     """Run nurl command and return the output."""
     try:
+        cmd = ['nurl', url, rev] if rev else ['nurl', url]
         result = subprocess.run(
-            ['nurl', url],
+            cmd,
             capture_output=True,
             text=True,
             check=True
@@ -76,6 +77,7 @@ def process_csv_file(csv_path, output_dir):
         for row in reader:
             issue_number = row['issue_number']
             repo_url = row['repo_url']
+            revision = row.get('revision', None)
             
             # Skip rows without URLs
             if not repo_url:
@@ -101,14 +103,14 @@ def process_csv_file(csv_path, output_dir):
             print(f"Processing issue {issue_number}: {repo_url}")
             
             # Run nurl to generate fetch expression
-            fetch_expr = run_nurl(repo_url)
+            fetch_expr = run_nurl(repo_url, revision)
             
             if fetch_expr == "RATE_LIMITED":
                 # Check rate limit and wait
                 _, reset_time = check_github_rate_limit()
                 wait_for_rate_limit_reset(reset_time)
                 # Retry after waiting
-                fetch_expr = run_nurl(repo_url)
+                fetch_expr = run_nurl(repo_url, revision)
             
             if fetch_expr and fetch_expr != "RATE_LIMITED":
                 # Write to [issue_number].nix file

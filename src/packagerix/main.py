@@ -110,7 +110,7 @@ def mock_input (ask : str, reply: str):
     logger.info(reply + "\n")
     return reply
 
-def run_terminal_ui(output_dir=None, project_url=None):
+def run_terminal_ui(output_dir=None, project_url=None, revision=None, fetcher=None):
     """Run the terminal-based interface."""
     from packagerix.ui.logging_config import enable_console_logging
     enable_console_logging()
@@ -144,7 +144,8 @@ def run_terminal_ui(output_dir=None, project_url=None):
     
     def run_coordinator():
         try:
-            run_packaging_flow(output_dir=output_dir, project_url=project_url)
+            run_packaging_flow(output_dir=output_dir, project_url=project_url,
+                               revision=revision, fetcher=fetcher)
         except Exception as e:
             logger.error(f"Error in packaging flow: {e}")
             import traceback
@@ -170,7 +171,7 @@ def main():
         description="Packagerix - AI-powered Nix package builder",
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""Examples:
-  packagerix                                          # Run with interactive textual UI
+  packagerix                                         # Run with interactive textual UI
   packagerix --raw                                   # Run with terminal-only interface
   packagerix --raw https://github.com/user/repo      # Package a specific repo
   packagerix --raw --output-dir out https://github.com/user/repo  # Save output
@@ -195,6 +196,19 @@ def main():
         nargs="?",
         help="GitHub project URL to package (only works with --raw)"
     )
+
+    parser.add_argument(
+        "revision",
+        type=str,
+        nargs="?",
+        help="Project revision to package (e.g., commit hash, tag, release name) (optional, only works with --raw)."
+    )
+
+    parser.add_argument(
+        "--fetcher",
+        default=None,
+        help="Path to .nix file with fetcher for the project source code (only works with --raw)."
+    )
     
     parser.add_argument(
         "--version",
@@ -209,7 +223,8 @@ def main():
             logger.info("Starting packagerix in terminal mode")
             if args.output_dir and not args.project_url:
                 parser.error("--output-dir requires a project URL to be provided")
-            run_terminal_ui(output_dir=args.output_dir, project_url=args.project_url)
+            run_terminal_ui(output_dir=args.output_dir, project_url=args.project_url,
+                            revision=args.revision, fetcher=args.fetcher)
         else:
             if args.output_dir:
                 parser.error("--output-dir only works with --raw mode")

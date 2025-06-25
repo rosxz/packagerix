@@ -4,7 +4,7 @@ import subprocess
 from pydantic import BaseModel
 
 from packagerix.ui.conversation import ask_user,  coordinator_message, coordinator_error, coordinator_progress
-from packagerix.parsing import scrape_and_process, extract_updated_code, fetch_combined_project_data, fill_src_attribute
+from packagerix.parsing import scrape_and_process, extract_updated_code, fetch_combined_project_data, fill_src_attributes
 from packagerix.flake import init_flake
 from packagerix.nix import eval_progress, execute_build_and_add_to_stack
 from packagerix.packaging_flow.model_prompts import pick_template, set_up_project, summarize_github, fix_build_error, fix_hash_mismatch
@@ -49,7 +49,48 @@ def create_initial_package(template: str, project_page: str, release_data: dict 
     result = set_up_project(template, project_page, release_data, template_notes)
     return extract_updated_code(result)
 
-def package_project(output_dir=None, project_url=None):
+
+def run_nurl(url, rev=None):
+    """Run nurl command and return the output."""
+    try:
+        cmd = ['nurl', url, rev] if rev else ['nurl', url]
+        result = subprocess.run(
+            cmd,
+            capture_output=True,
+            text=True,
+            check=True
+        )
+        return result.stdout.strip()
+    except subprocess.CalledProcessError as e:
+        error_output = e.stderr.lower()
+        # Check for various rate limit indicators
+        if any(indicator in error_output for indicator in ["rate limit", "429", "403", "forbidden"]):
+            print(f"Rate limit/forbidden error for {url}")
+            return "RATE_LIMITED"
+        print(f"Error running nurl for {url}: {e.stderr}")
+        return None
+    except FileNotFoundError:
+        print("Error: nurl command not found. Please ensure nurl is installed.")
+        return None
+
+
+def read_fetcher_file(fetcher: str) -> str:
+    """Read the fetcher file content."""
+    from pathlib import Path
+    try:
+        path = Path(fetcher)
+        with open(path, 'r') as f:
+            # Ignore comments and empty lines
+            return "".join(line for line in f if line.strip() and not line.startswith("#"))
+    except FileNotFoundError:
+        coordinator_error(f"Fetcher file '{fetcher}' not found.")
+        raise
+    except Exception as e:
+        coordinator_error(f"Error reading fetcher file: {e}")
+        raise
+
+
+def package_project(output_dir=None, project_url=None, revision=None, fetcher=None):
     """Main coordinator function for packaging a project."""
     # Step 1: Get project URL (includes welcome message)
     if project_url is None:
@@ -57,7 +98,17 @@ def package_project(output_dir=None, project_url=None):
     else:
         # When URL is provided via CLI, still show welcome but skip prompt
         coordinator_message("Welcome to packagerix!")
-    
+
+    # Obtain the project fetcher
+    if fetcher: 
+        coordinator_progress(f"Using provided fetcher: {fetcher}")
+        fetcher = read_fetcher_file(fetcher)
+        if revision:
+            coordinator_error("Ignoring revision parameter in favor of provided fetcher.")
+    else:
+        coordinator_progress("Obtaining project fetcher from the provided URL")
+        fetcher = run_nurl(project_url, revision)
+
     coordinator_progress(f"Fetching project information from {project_url}")
     
     # Step 2: Scrape project page
@@ -79,11 +130,11 @@ def package_project(output_dir=None, project_url=None):
     
     # Step 3: Analyze project
     coordinator_message("I found the project information. Let me analyze it.")
-    summary = analyze_project(project_page, release_data)
+    summary = analyze_project(project_page, release_data) # TODO This is not being used
     
     # Step 4: Initialize flake
     coordinator_progress("Setting up a temporary Nix flake for packaging")
-    flake = init_flake()
+    flake = init_flake() # TODO this is not being used
     coordinator_message(f"Working on temporary flake at {config.flake_dir}")
     
     # Step 5: Load template
@@ -100,8 +151,7 @@ def package_project(output_dir=None, project_url=None):
 
     # Step 6.a: Manual src setup
     coordinator_message("Setting up the src attribute in the template...")
-    initial_code, store_path = fill_src_attribute(starting_template, project_url,
-                                                  release_data.get('tag_name'))
+    initial_code, store_path = fill_src_attributes(starting_template, fetcher)
 
     # Create functions for both the project source and nixpkgs
     project_functions = create_source_function_calls(store_path, "project_")
@@ -222,10 +272,11 @@ def save_package_output(code: str, project_url: str, output_dir: str):
     coordinator_message(f"Saved package to: {package_file}")
 
 
-def run_packaging_flow(output_dir=None, project_url=None):
+def run_packaging_flow(output_dir=None, project_url=None, revision=None, fetcher=None):
     """Run the complete packaging flow."""
     try:
-        result = package_project(output_dir=output_dir, project_url=project_url)
+        result = package_project(output_dir=output_dir, project_url=project_url,
+                                revision=revision, fetcher=fetcher)
         if result:
             coordinator_message("Packaging completed successfully!")
             coordinator_message(f"Final package code:\n```nix\n{result}\n```")

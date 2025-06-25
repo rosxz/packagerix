@@ -93,49 +93,47 @@ def fetch_github_release_data(url):
         logger.error(f"Failed to fetch release data from GitHub API: {e}")
         return None
 
-def fill_src_attribute(template, project_url, rev_string):
-    """Fill the pname, version and src attributes in the template."""
-    # Run nurl on the project URL to get src attribute
-    command = ["nurl", project_url, rev_string]
-    nurl_output = subprocess.run(command, capture_output=True, text=True)
-    src_attr = str(nurl_output.stdout)
-
-    # From the revision string, extract the version (SemVer) 
-    pattern = r"(\d+(\.\d+)*(-[0-9a-zA-Z-.]*)?)"
-    match = re.search(pattern, rev_string)
+def extract_src_attributes(src_attr, release=None):
+    """Extract version, repo and hash from a src_attr."""
+    if not (match := re.search(r'repo\s*=\s*"(.*?)";\s*rev\s*=\s*"(.*?)";\s*hash\s*=\s*"(.*?)"', src_attr)):
+        logger.error("Could not extract revision or hash from src_attr")
+        raise ValueError("Could not extract revision or hash from src_attr")
+    else:
+        repo = match.group(1)
+        rev = match.group(2)
+        hash = match.group(3)
+    if release:
+        rev = release
+    # Try to extract version from the release following semantic versioning rules
+    version = None
+    pattern = r"^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(?:-((?:0|[1-9]\d*|\d*[a-zA-Z-][0-9a-zA-Z-]*)(?:\.(?:0|[1-9]\d*|\d*[a-zA-Z-][0-9a-zA-Z-]*))*))?(?:\+([0-9a-zA-Z-]+(?:\.[0-9a-zA-Z-]+)*))?$"
+    match = re.search(pattern, rev.lstrip('v'))
     if match:
-        version, rev_string = match.group(0), rev_string.replace(match.group(0), "${version}", 1)
+        version = match.group(0)
+        # Substitute the version in the source_attr for ${version}
+        new_rev = rev.replace(version, "${version}")
+        src_attr = src_attr.replace(f'"{rev}"', f'"{new_rev}"')
     else:
-        logger.error(f"Could not extract version from revision string: {rev_string}")
-        raise ValueError(f"Could not extract version from revision string: {rev_string}")
+        # Since we can't easily extract a version, use release (if available) + hash (8 truncated)
+        version = f"{release or 'unknown'}-{hash[7:15]}"
 
-    # Replace rev = ... with ${version}
-    src_attr = re.sub(r'rev\s*=\s*".*?"', f'rev = \"{rev_string}\"', src_attr)
-    # Search for the hash in the output
-    nurl_hash = re.search(r'hash\s*=\s*"(.*?)"', src_attr)
-    if nurl_hash:
-        nurl_hash = nurl_hash.group(1)
-    else:
-        logger.error("Could not extract hash from nurl output")
-        raise ValueError("Could not extract hash from nurl output")
+    return version, repo, hash, src_attr
 
+def fill_src_attributes(template, src_attr):
+    """Fill the pname, version and src attributes in a given template."""
+    # Extract attributes from src_attr
+    version, repo, hash, src_attr = extract_src_attributes(src_attr)
+
+    # Get the store path
     store_path = subprocess.run(["nix-store", "--print-fixed-path", "sha256",
-                                 "--recursive", nurl_hash, "source"],
+                                 "--recursive", hash, "source"],
                                  capture_output=True, text=True)
     store_path = str(store_path.stdout).strip()
 
     # Indent properly
     lines = src_attr.splitlines()
-    for i in range(1, len(lines)):
-        lines[i] = "  " + lines[i]
-    src_attr = "\n".join(lines)
-    logger.debug(f"nurl output: {src_attr}")
+    src_attr = "\n".join("  " + line for line in lines)[2:]
 
-    if not (match := re.search(r'repo\s*=\s*"(.*?)"', src_attr)):
-        logger.error("Could not extract repo")
-        raise ValueError("Could not extract repo from nurl output")
-    else:
-        repo = match.group(1)
     # Fill in the "pname = ...", "version = ..." attributes in the template
     filled_template = template.replace("pname = ...", f"pname = \"{repo}\"")
     filled_template = filled_template.replace("version = ...", f"version = \"{version}\"")
@@ -143,7 +141,7 @@ def fill_src_attribute(template, project_url, rev_string):
     # Replace the src attribute in the template with the extracted src
     pattern = r"fetchFromGitHub\s*\{.*?\}"
     filled_template = re.sub(pattern, src_attr, filled_template, flags=re.DOTALL)
-    logger.debug(f"Final filled template: {filled_template}")
+    logger.info(f"Filled template: \n{filled_template}")
     
     return filled_template, store_path
 
