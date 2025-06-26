@@ -114,8 +114,9 @@ def extract_src_attributes(src_attr, release=None):
         new_rev = rev.replace(version, "${version}")
         src_attr = src_attr.replace(f'"{rev}"', f'"{new_rev}"')
     else:
-        # Since we can't easily extract a version, use release (if available) + hash (8 truncated)
-        version = f"{release or 'unknown'}-{hash[7:15]}"
+        # use the full git revision if we don't have a named version
+        # (depends on using rec { ... } in the temlate)
+        version = f"{release or 'unstable'}-${{src.rev}}"
 
     return version, repo, hash, src_attr
 
