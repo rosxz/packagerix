@@ -49,9 +49,6 @@ if "OLLAMA_HOST" in os.environ:
     logger.info(f"OLLAMA_HOST available at: {os.environ['OLLAMA_HOST']}")
     logger.info("Note: api_base will be set per-model, not globally")
 
-# Function calling is not supported by anthropic. To add it to the prompt, set
-litellm.add_function_to_prompt = True
-
 def cache_streaming_response(func):
     """Decorator that caches streaming responses.
     
