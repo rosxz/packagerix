@@ -25,7 +25,12 @@ nix develop -c python -m packagerix
 ```
 
 You will be asked to pick a model and also provide an API key if requried.
-In terms of local models right now I recommend `qwen2.5-coder:32b`, which works well as long as the input stays short enough, but needs a hair more than 24GB of VRAM to fit fully into VRAM. The 8b models I tried so far seem to struggle too much with hashes and function calling.
-All the local models I have tried struggle with inputs that are longer than `12000` characters, which some github pages exceed.
-In terms of hosted models, `claude-3-5-haiku-20241022` for example, can cope with longer prompts as well.
-It's what I am targeting as of now. So far, I don't think you need a better model than that for packaging.
+
+Currently, only Gemini models have working tool calling support in this repo right now. We recommend using `gemini/gemini-2.5-pro` as the default model.
+While `claude-3-5-haiku-20241022` can cope with longer prompts, that as of now missing tool calling support on our end prevents them from working here.
+We would like to target local models in the future, but we do not have working tool calling support for them yet either.
+All the local models we have tried so far also struggle with inputs that are longer than `12000` characters, which some of our prompts might exceed.
+Our assumption is that those modles struggle with complex tasks like this when relying on RoPE to extend their native context windows.
+
+
+When tool calling is fixed, `qwen2.5-coder:32b` might work well as long as the input stays short enough, but needs a hair more than 24GB of VRAM to fit fully into VRAM. The 8b models I tried so far seem to struggle too much with hashes and function calling.
