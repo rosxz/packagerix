@@ -359,7 +359,10 @@ def _retry_with_rate_limit(func, *args, max_retries=20, base_delay=5, **kwargs):
                     if is_429_error and hasattr(cause.response, 'headers'):
                         retry_after = cause.response.headers.get('retry-after')
             
-            if (is_rate_limit_error or is_overload_error or is_anthropic_error or is_429_error) and attempt < max_retries - 1:
+            # Check if it's a StopIteration error (can happen during stream parsing)
+            is_stop_iteration_error = isinstance(e, StopIteration)
+            
+            if (is_rate_limit_error or is_overload_error or is_anthropic_error or is_429_error or is_stop_iteration_error) and attempt < max_retries - 1:
                 # Calculate delay based on retry-after header or polynomial backoff
                 if retry_after:
                     try:
@@ -379,6 +382,8 @@ def _retry_with_rate_limit(func, *args, max_retries=20, base_delay=5, **kwargs):
                         logger.warning(f"Rate limit hit, waiting {delay:.1f} seconds before retry...")
                     elif is_anthropic_error:
                         logger.warning(f"Anthropic API error ({str(e)}), waiting {delay:.1f} seconds before retry...")
+                    elif is_stop_iteration_error:
+                        logger.warning(f"Stream parsing error (StopIteration), waiting {delay:.1f} seconds before retry...")
                     else:
                         logger.warning(f"API overloaded, waiting {delay:.1f} seconds before retry...")
                 
@@ -420,9 +425,9 @@ def handle_model_chat(chat: Chat) -> str:
                     ends_with_function_call = True
             
             if ends_with_function_call:
-                current_chat = current_chat.submit()
+                current_chat = _retry_with_rate_limit(current_chat.submit)
 
         return str(output)
     
     # Use retry wrapper for the entire chat processing
-    return _retry_with_rate_limit(_chat_processing)
+    return _chat_processing()

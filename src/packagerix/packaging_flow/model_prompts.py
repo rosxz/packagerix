@@ -5,7 +5,7 @@ This module contains all functions decorated with @ask_model that interact with 
 
 from magentic import StreamedStr
 from packagerix.template.template_types import TemplateType
-from packagerix.ui.conversation import ask_model, ask_model_enum, handle_model_chat
+from packagerix.ui.conversation import _retry_with_rate_limit, ask_model, ask_model_enum, handle_model_chat
 from packagerix.errors import NixBuildErrorDiff
 from magentic import Chat, UserMessage, StreamedResponse
 from packagerix.function_calls import search_nixpkgs_for_package, web_search, fetch_url_content, search_nix_functions
@@ -60,7 +60,9 @@ Note: Even though the provided template uses the mkDerivation function, this is 
         ))],
         functions=[search_nixpkgs_for_package, web_search, fetch_url_content, search_nix_functions],
         output_types=[StreamedResponse],
-    ).submit()
+    )
+
+    chat = _retry_with_rate_limit(chat.submit)
 
     return handle_model_chat(chat)
 
@@ -159,7 +161,9 @@ And some relevant metadata of the latest release:
         ))],
         functions=[search_nixpkgs_for_package, web_search, fetch_url_content, search_nix_functions]+additional_functions,
         output_types=[StreamedResponse],
-    ).submit()
+    )
+
+    chat = _retry_with_rate_limit(chat.submit)
 
     return handle_model_chat(chat)
 
