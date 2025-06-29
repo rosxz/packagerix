@@ -30,7 +30,7 @@ stdenv.mkDerivation rec {
   buildPhase = ''
     runHook preBuild
 
-    pnpm run build
+    pnpm run build -reporter=append-only
     find dist -type f \( -name '*.cjs' -or -name '*.cts' -or -name '*.ts' \) -delete
 
     runHook postBuild

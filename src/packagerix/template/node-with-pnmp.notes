@@ -5,3 +5,5 @@ Important notes for packaging Node.js/pnpm projects:
 3. The buildPhase cleanup removes TypeScript files from dist - adjust based on what files the project actually needs
 4. For monorepos/workspaces, you may need to add: pnpmWorkspace = "packages/specific-package";
 5. If the project uses shamefully-hoist, add to pnpm.configHook: PNPM_FLAGS="--shamefully-hoist"
+
+Use the -reporter=append-only flag to avoid filling the log with clobbered progress bar updates.
