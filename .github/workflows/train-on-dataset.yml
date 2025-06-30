@@ -62,7 +62,7 @@ jobs:
           name: vibenix
           authToken: '${{ secrets.CACHIX_TOKEN }}'
         
-      - name: Build packagerix environment
+      - name: Build vibenix environment
         run: |
           nix develop .# --command echo "Development environment ready"
         
@@ -135,10 +135,10 @@ jobs:
           oauth-secret: ${{ secrets.TS_OAUTH_SECRET }}
           tags: tag:oauth-client-gh-action-hydralisk-ollama
           
-      - name: Create packagerix config
+      - name: Create vibenix config
         run: |
-          mkdir -p ~/.packagerix
-          cat > ~/.packagerix/config.json << EOF
+          mkdir -p ~/.vibenix
+          cat > ~/.vibenix/config.json << EOF
           {
             "provider": "${{ github.event.inputs.model_provider || 'gemini' }}",
             "model": "${{ github.event.inputs.model || 'gemini/gemini-2.5-pro' }}",
@@ -167,9 +167,9 @@ jobs:
           # Create output directory for this run
           mkdir -p output
           
-          # Run packagerix with raw output and save results
+          # Run vibenix with raw output and save results
           set -o pipefail
-          nix develop .# -c python -m packagerix \
+          nix develop .# -c python -m vibenix \
             --raw \
             --output-dir output \
             "${{ matrix.repo_url }}" \
@@ -206,11 +206,11 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: packagerix-output-${{ matrix.issue_number }}
+          name: vibenix-output-${{ matrix.issue_number }}
           path: |
             ${{ matrix.issue_number }}.log
             output/
-            ~/.packagerix/config.json
+            ~/.vibenix/config.json
           retention-days: 1
           
       - name: Create summary
@@ -262,7 +262,7 @@ jobs:
         uses: actions/download-artifact@v4
         with:
           path: artifacts
-          pattern: packagerix-output-*
+          pattern: vibenix-output-*
           
       - name: Aggregate results
         run: |
@@ -274,9 +274,9 @@ jobs:
           failed=0
           
           # Process each artifact directory
-          for dir in artifacts/packagerix-output-*; do
+          for dir in artifacts/vibenix-output-*; do
             if [ -d "$dir" ]; then
-              issue_num=$(basename "$dir" | sed 's/packagerix-output-//')
+              issue_num=$(basename "$dir" | sed 's/vibenix-output-//')
               total=$((total + 1))
               
               # Check if there's a package.nix file in any subdirectory
