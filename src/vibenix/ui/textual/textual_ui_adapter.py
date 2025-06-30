@@ -3,7 +3,7 @@
 import asyncio
 from typing import Callable, Any, Optional
 from datetime import datetime
-from packagerix.ui.conversation import UIAdapter, Message, Actor
+from vibenix.ui.conversation import UIAdapter, Message, Actor
 from textual.app import App
 from textual.widgets import RichLog
 

@@ -8,7 +8,7 @@ from urllib.parse import urlparse
 import subprocess
 
 from diskcache import Cache
-from packagerix.ui.logging_config import logger
+from vibenix.ui.logging_config import logger
 
 cache = Cache("cachedir")
 

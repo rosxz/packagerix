@@ -1,5 +1,5 @@
 [project]
-name = "packagerix"
+name = "vibenix"
 version = "0.1.0"
 description = "LLM-assisted packaging with Nix"
 authors = [{name = "Martin Schwaighofer", email = "martin.schwaighofer@ins.jku.at"}]
@@ -27,13 +27,13 @@ dependencies = [
 ]
 
 [project.scripts]
-packagerix = "packagerix.main:main"
+vibenix = "vibenix.main:main"
 
 [tool.setuptools.packages.find]
 where = ["src"]
 
 [tool.setuptools.package-data]
-packagerix = ["template/*"]
+vibenix = ["template/*"]
 
 [project.optional-dependencies]
 test = [

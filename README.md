@@ -1,4 +1,4 @@
-# Packagerix - AI assistant for nix packaging
+# Vibenix - AI assistant for nix packaging
 
 The elevator pitch for this project is that you give it the URL of a GitHub project,
 and it starts from a template and iteratively improves on that until it finally succeeds (or fails) to build the package.
@@ -21,7 +21,7 @@ I could also imagine providing this functionality as a hosted service to custome
 
 To run the textual UI use:
 ```
-nix develop -c python -m packagerix
+nix develop -c python -m vibenix
 ```
 
 You will be asked to pick a model and also provide an API key if requried.

@@ -2,7 +2,7 @@
 
 import pytest
 from magentic import prompt_chain
-from packagerix.function_calls import search_nixpkgs_for_package, web_search, fetch_url_content, search_nix_functions
+from vibenix.function_calls import search_nixpkgs_for_package, web_search, fetch_url_content, search_nix_functions
 
 
 def print_model_response(response: str, request) -> str:

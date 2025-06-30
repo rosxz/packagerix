@@ -1,17 +1,17 @@
-"""Business logic for packagerix using the coordinator pattern."""
+"""Business logic for vibenix using the coordinator pattern."""
 
 import subprocess
 from pydantic import BaseModel
 
-from packagerix.ui.conversation import ask_user,  coordinator_message, coordinator_error, coordinator_progress
-from packagerix.parsing import scrape_and_process, extract_updated_code, fetch_combined_project_data, fill_src_attributes
-from packagerix.flake import init_flake
-from packagerix.nix import eval_progress, execute_build_and_add_to_stack
-from packagerix.packaging_flow.model_prompts import pick_template, set_up_project, summarize_github, fix_build_error, fix_hash_mismatch
-from packagerix.packaging_flow.user_prompts import get_project_url
-from packagerix import config
-from packagerix.errors import NixBuildErrorDiff, NixErrorKind, NixBuildResult
-from packagerix.function_calls_source import create_source_function_calls
+from vibenix.ui.conversation import ask_user,  coordinator_message, coordinator_error, coordinator_progress
+from vibenix.parsing import scrape_and_process, extract_updated_code, fetch_combined_project_data, fill_src_attributes
+from vibenix.flake import init_flake
+from vibenix.nix import eval_progress, execute_build_and_add_to_stack
+from vibenix.packaging_flow.model_prompts import pick_template, set_up_project, summarize_github, fix_build_error, fix_hash_mismatch
+from vibenix.packaging_flow.user_prompts import get_project_url
+from vibenix import config
+from vibenix.errors import NixBuildErrorDiff, NixErrorKind, NixBuildResult
+from vibenix.function_calls_source import create_source_function_calls
 
 
 class Solution(BaseModel):
@@ -97,7 +97,7 @@ def package_project(output_dir=None, project_url=None, revision=None, fetcher=No
         project_url = get_project_url()
     else:
         # When URL is provided via CLI, still show welcome but skip prompt
-        coordinator_message("Welcome to packagerix!")
+        coordinator_message("Welcome to vibenix!")
 
     # Obtain the project fetcher
     if fetcher: 
@@ -121,7 +121,7 @@ def package_project(output_dir=None, project_url=None, revision=None, fetcher=No
     # Step 2b: Fetch release data from GitHub API
     release_data = None
     try:
-        from packagerix.parsing import fetch_github_release_data
+        from vibenix.parsing import fetch_github_release_data
         release_data = fetch_github_release_data(project_url)
         if release_data:
             coordinator_message("Found GitHub release information via API")

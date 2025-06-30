@@ -1,12 +1,12 @@
-"""All user prompts for packagerix.
+"""All user prompts for vibenix.
 
 This module contains all functions decorated with @ask_user that interact with the user.
 """
 
-from packagerix.ui.conversation import ask_user, coordinator_error
+from vibenix.ui.conversation import ask_user, coordinator_error
 
 
-@ask_user("""@user Welcome to Packagerix! 🚀
+@ask_user("""@user Welcome to Vibenix! 🚀
 
 I'm your friendly Nix packaging assistant. I can help you:
 • Package projects from GitHub
@@ -27,7 +27,7 @@ def get_project_url(user_input: str) -> str:
 
 def evaluate_build_progress(prev_error: str, new_error: str) -> str:
     """Get user evaluation of build progress."""
-    from packagerix.ui.conversation import get_ui_adapter
+    from vibenix.ui.conversation import get_ui_adapter
     
     # Create the formatted prompt with actual error content
     prompt = f"""@user Please evaluate the build progress by comparing the errors:

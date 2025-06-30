@@ -4,8 +4,8 @@ import pytest
 import os
 import json
 from unittest.mock import patch, MagicMock
-from packagerix.function_calls import search_nixpkgs_for_package, web_search, fetch_url_content, search_nix_functions
-from packagerix.source_function_calls import create_source_function_calls
+from vibenix.function_calls import search_nixpkgs_for_package, web_search, fetch_url_content, search_nix_functions
+from vibenix.source_function_calls import create_source_function_calls
 
 
 class TestSearchNixpkgsForPackage:

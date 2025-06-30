@@ -6,7 +6,7 @@ from collections import deque
 from typing import List, TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from packagerix.errors import NixBuildResult
+    from vibenix.errors import NixBuildResult
 
 error_stack: List['NixBuildResult']
 

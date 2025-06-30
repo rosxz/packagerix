@@ -1,14 +1,14 @@
-"""All model prompts for packagerix.
+"""All model prompts for vibenix.
 
 This module contains all functions decorated with @ask_model that interact with the AI model.
 """
 
 from magentic import StreamedStr
-from packagerix.template.template_types import TemplateType
-from packagerix.ui.conversation import _retry_with_rate_limit, ask_model, ask_model_enum, handle_model_chat
-from packagerix.errors import NixBuildErrorDiff
+from vibenix.template.template_types import TemplateType
+from vibenix.ui.conversation import _retry_with_rate_limit, ask_model, ask_model_enum, handle_model_chat
+from vibenix.errors import NixBuildErrorDiff
 from magentic import Chat, UserMessage, StreamedResponse
-from packagerix.function_calls import search_nixpkgs_for_package, web_search, fetch_url_content, search_nix_functions
+from vibenix.function_calls import search_nixpkgs_for_package, web_search, fetch_url_content, search_nix_functions
 
 
 def set_up_project(code_template: str, project_page: str, release_data: dict = None, template_notes: str = None) -> StreamedStr:

@@ -1,15 +1,15 @@
 import subprocess
 
-from packagerix import config
-from packagerix.packaging_flow.model_prompts import evaluate_progress
-from packagerix.errors import NixBuildResult, NixError, NixErrorKind, NixBuildErrorDiff
+from vibenix import config
+from vibenix.packaging_flow.model_prompts import evaluate_progress
+from vibenix.errors import NixBuildResult, NixError, NixErrorKind, NixBuildErrorDiff
 
 import git
 
 from typing import Optional
 
-from packagerix.flake import update_flake
-from packagerix.ui.logging_config import logger
+from vibenix.flake import update_flake
+from vibenix.ui.logging_config import logger
 
 
 def invoke_build(is_src_attr_only: bool) -> NixBuildResult:

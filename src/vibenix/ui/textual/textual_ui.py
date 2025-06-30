@@ -12,18 +12,18 @@ from rich.markdown import Markdown
 import asyncio
 from datetime import datetime
 
-# Import existing packagerix functionality
-from packagerix import config
-from packagerix.packaging_flow.model_prompts import (
+# Import existing vibenix functionality
+from vibenix import config
+from vibenix.packaging_flow.model_prompts import (
     set_up_project,
     summarize_github
 )
-from packagerix.parsing import scrape_and_process, extract_updated_code
-from packagerix.flake import init_flake
-from packagerix.nix import get_tail_of_log, invoke_build
-from packagerix import config
-from packagerix.errors import NixError
-from packagerix.ui.logging_config import logger, log_capture
+from vibenix.parsing import scrape_and_process, extract_updated_code
+from vibenix.flake import init_flake
+from vibenix.nix import get_tail_of_log, invoke_build
+from vibenix import config
+from vibenix.errors import NixError
+from vibenix.ui.logging_config import logger, log_capture
 import os
 
 
@@ -66,9 +66,9 @@ class ChatMessage(Static):
             self.panel_static = Static(Panel(message_text, border_style="green", padding=(0, 1)))
             yield self.panel_static
         else:
-            # Legacy packagerix messages (for backwards compatibility)
+            # Legacy vibenix messages (for backwards compatibility)
             message_text = Text()
-            message_text.append(f"🤖 packagerix ", style="bold blue")
+            message_text.append(f"🤖 vibenix ", style="bold blue")
             message_text.append(f"({time_str})", style="dim")
             message_text.append(f"\n{self.content}", style="blue")
             self.panel_static = Static(Panel(message_text, border_style="blue", padding=(0, 1)))
@@ -97,8 +97,8 @@ class ChatMessage(Static):
                 message_text.append(f"\n{self.content}", style="green")
                 self.panel_static.update(Panel(message_text, border_style="green", padding=(0, 1)))
             else:
-                # Legacy packagerix messages
-                message_text.append(f"🤖 packagerix ", style="bold blue")
+                # Legacy vibenix messages
+                message_text.append(f"🤖 vibenix ", style="bold blue")
                 message_text.append(f"({time_str})", style="dim")
                 message_text.append(f"\n{self.content}", style="blue")
                 self.panel_static.update(Panel(message_text, border_style="blue", padding=(0, 1)))
@@ -339,8 +339,8 @@ class LogWindow(Vertical):
         self.last_update_index = 0
 
 
-class PackagerixChatApp(App):
-    """Main chat application with integrated packagerix functionality."""
+class VibenixChatApp(App):
+    """Main chat application with integrated vibenix functionality."""
     
     CSS = """
     Screen {
@@ -434,7 +434,7 @@ class PackagerixChatApp(App):
         
         with Vertical(id="input-container"):
             yield Static("Type your message and press Enter:")
-            yield ChatInput(placeholder="Ask packagerix about packaging your project...", id="chat-input")
+            yield ChatInput(placeholder="Ask vibenix about packaging your project...", id="chat-input")
         
         self.log_window = LogWindow()
         yield self.log_window
@@ -443,15 +443,15 @@ class PackagerixChatApp(App):
     
     def on_mount(self) -> None:
         """Initialize the chat with a welcome message."""
-        # Initialize packagerix config
+        # Initialize vibenix config
         config.init()
         
         # Set UI mode
-        from packagerix.main import set_ui_mode
+        from vibenix.main import set_ui_mode
         set_ui_mode(True)
         
         # Log startup
-        logger.info("Packagerix Chat UI started")
+        logger.info("Vibenix Chat UI started")
         
         chat_history = self.query_one("#chat-history", ChatHistory)
         
@@ -466,7 +466,7 @@ class PackagerixChatApp(App):
     def check_model_configuration(self):
         """Show model configuration dialog on every launch."""
         # Always show dialog on launch
-        from packagerix.ui.textual.model_config_dialog import ModelConfigDialog
+        from vibenix.ui.textual.model_config_dialog import ModelConfigDialog
         self.push_screen(ModelConfigDialog(), self.handle_model_config_result)
     
     def handle_model_config_result(self, result):
@@ -474,7 +474,7 @@ class PackagerixChatApp(App):
         chat_history = self.query_one("#chat-history", ChatHistory)
         chat_history.add_message(
             f"✅ AI model configured: {result['model']} from {result['provider']}",
-            "packagerix"
+            "vibenix"
         )
         
         # Start the packaging flow after model is configured
@@ -484,7 +484,7 @@ class PackagerixChatApp(App):
     def handle_user_message(self, event: ChatInput.MessageSent) -> None:
         """Handle a new user message."""
         # Check if the coordinator is waiting for user input
-        from packagerix.ui.conversation import get_ui_adapter
+        from vibenix.ui.conversation import get_ui_adapter
         adapter = get_ui_adapter()
         
         # Resolve the future with the user's input
@@ -497,7 +497,7 @@ class PackagerixChatApp(App):
     def handle_progress_choice(self, event: ProgressPoll.ProgressChoice) -> None:
         """Handle progress evaluation choice."""
         # Check if we have a UI adapter waiting for progress response
-        from packagerix.ui.conversation import get_ui_adapter
+        from vibenix.ui.conversation import get_ui_adapter
         adapter = get_ui_adapter()
         
         if hasattr(adapter, 'progress_response_event') and adapter.progress_response_event:
@@ -523,9 +523,9 @@ class PackagerixChatApp(App):
     def start_packaging_flow(self) -> None:
         """Start the packaging flow with the coordinator."""
         # Set up the textual UI adapter
-        from packagerix.ui.conversation import set_ui_adapter
-        from packagerix.ui.textual.textual_ui_adapter import TextualUIAdapter
-        from packagerix.packaging_flow.run import run_packaging_flow
+        from vibenix.ui.conversation import set_ui_adapter
+        from vibenix.ui.textual.textual_ui_adapter import TextualUIAdapter
+        from vibenix.packaging_flow.run import run_packaging_flow
         
         chat_history = self.query_one("#chat-history", ChatHistory)
         adapter = TextualUIAdapter(self.app, chat_history)
@@ -535,7 +535,7 @@ class PackagerixChatApp(App):
         try:
             run_packaging_flow()
         except Exception as e:
-            self.call_from_thread(chat_history.add_message, f"❌ Error: {str(e)}", "packagerix")
+            self.call_from_thread(chat_history.add_message, f"❌ Error: {str(e)}", "vibenix")
     
     @work(exclusive=False, thread=True)
     def process_user_input(self, user_input: str) -> None:
@@ -566,7 +566,7 @@ class PackagerixChatApp(App):
         """Handle the result from the API key dialog."""
         if key_value:
             # Save the key
-            from packagerix.secure_keys import set_api_key
+            from vibenix.secure_keys import set_api_key
             set_api_key(key_name, key_value)
             os.environ[key_name] = key_value
             logger.info(f"API key {key_name} saved and set in environment")
@@ -576,13 +576,13 @@ class PackagerixChatApp(App):
         else:
             chat_history.add_message(
                 f"❌ API key required but not provided. Please provide your {key_name} to continue.",
-                "packagerix"
+                "vibenix"
             )
 
 
 def main():
     """Main entry point for the chat UI."""
-    app = PackagerixChatApp()
+    app = VibenixChatApp()
     app.run()
 
 

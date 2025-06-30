@@ -1,4 +1,4 @@
-"""Pytest configuration for packagerix tests."""
+"""Pytest configuration for vibenix tests."""
 
 import pytest
 import sys
@@ -12,11 +12,11 @@ sys.path.insert(0, str(src_path))
 @pytest.fixture(scope="session")
 def model_config():
     """Set up model configuration using the app's initialization logic."""
-    from packagerix.ui.model_config import load_saved_configuration
+    from vibenix.ui.model_config import load_saved_configuration
     
     config = load_saved_configuration()
     if not config:
-        raise RuntimeError("No model configuration found. Run 'packagerix' to configure a model first.")
+        raise RuntimeError("No model configuration found. Run 'vibenix' to configure a model first.")
     
     provider_name, model, ollama_host = config
     return {

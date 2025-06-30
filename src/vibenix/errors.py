@@ -1,4 +1,4 @@
-"""Error types for the packagerix build system."""
+"""Error types for the vibenix build system."""
 
 from enum import Enum
 from pydantic import BaseModel

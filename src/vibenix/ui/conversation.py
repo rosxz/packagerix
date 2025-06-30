@@ -1,4 +1,4 @@
-"""Coordinator pattern for packagerix - separates business logic from UI."""
+"""Coordinator pattern for vibenix - separates business logic from UI."""
 
 from abc import ABC, abstractmethod
 from typing import Callable, Optional, TypeVar
@@ -13,7 +13,7 @@ T = TypeVar('T')
 
 
 class Actor(Enum):
-    """The three actors in the packagerix conversation."""
+    """The three actors in the vibenix conversation."""
     COORDINATOR = "coordinator"
     MODEL = "model"
     USER = "user"
@@ -78,7 +78,7 @@ class TerminalUIAdapter(UIAdapter):
     
     def handle_model_streaming(self, streamed_result) -> str:
         """Handle streaming from a model response."""
-        from packagerix.ui.logging_config import logger
+        from vibenix.ui.logging_config import logger
         from magentic import StreamedStr
         
         if not isinstance(streamed_result, StreamedStr):
@@ -96,7 +96,7 @@ class TerminalUIAdapter(UIAdapter):
     
     def show_message(self, message: Message):
         """Display a message in terminal."""
-        from packagerix.ui.logging_config import logger
+        from vibenix.ui.logging_config import logger
         
         actor_symbol = {
             Actor.COORDINATOR: "🎯",
@@ -109,12 +109,12 @@ class TerminalUIAdapter(UIAdapter):
     
     def show_error(self, error: str):
         """Display error in terminal."""
-        from packagerix.ui.logging_config import logger
+        from vibenix.ui.logging_config import logger
         logger.error(f"❌ Error: {error}")
     
     def show_progress(self, message: str):
         """Show progress in terminal."""
-        from packagerix.ui.logging_config import logger
+        from vibenix.ui.logging_config import logger
         logger.info(f"⏳ {message}")
 
 
@@ -210,7 +210,7 @@ def ask_model(prompt_text: str):
                 import traceback
                 tb = traceback.format_exc()
                 error_msg = f"Error in model function {func.__name__}: {str(e)}\n{tb}"
-                from packagerix.ui.logging_config import logger
+                from vibenix.ui.logging_config import logger
                 logger.error(error_msg)
                 raise
         
@@ -281,7 +281,7 @@ def ask_model_enum(prompt_text: str):
                 import traceback
                 tb = traceback.format_exc()
                 error_msg = f"Error in model function {func.__name__}: {str(e)}\n{tb}"
-                from packagerix.ui.logging_config import logger
+                from vibenix.ui.logging_config import logger
                 logger.error(error_msg)
                 raise
         
@@ -325,7 +325,7 @@ def _retry_with_rate_limit(func, *args, max_retries=20, base_delay=5, **kwargs):
     """
     import time
     import traceback
-    from packagerix.ui.logging_config import logger
+    from vibenix.ui.logging_config import logger
     
     for attempt in range(max_retries):
         try:

@@ -1,4 +1,4 @@
-"""Functions and code snippets for potential future additions to packagerix."""
+"""Functions and code snippets for potential future additions to vibenix."""
 
 from pydantic import BaseModel
 

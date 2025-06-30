@@ -8,8 +8,8 @@ from typing import Optional, List
 import os
 import asyncio
 import litellm
-from packagerix.ui.model_config import PROVIDERS, Provider, get_available_models, save_configuration
-from packagerix.ui.logging_config import logger
+from vibenix.ui.model_config import PROVIDERS, Provider, get_available_models, save_configuration
+from vibenix.ui.logging_config import logger
 
 
 def check_api_key_valid(provider: Provider) -> bool:
@@ -22,7 +22,7 @@ def check_api_key_valid(provider: Provider) -> bool:
     
     # If not in environment, check secure storage
     if not api_key:
-        from packagerix.secure_keys import get_api_key
+        from vibenix.secure_keys import get_api_key
         api_key = get_api_key(provider.env_var)
         if api_key:
             # Set in environment for this session
@@ -123,7 +123,7 @@ class ModelConfigDialog(ModalScreen):
         self.selected_model = None
         
         # Load saved configuration if available
-        from packagerix.ui.model_config import load_saved_configuration
+        from vibenix.ui.model_config import load_saved_configuration
         saved_config = load_saved_configuration()
         if saved_config:
             if len(saved_config) == 3:  # New format with ollama_host
@@ -216,7 +216,7 @@ class ModelConfigDialog(ModalScreen):
             api_key_label.update(f"API Key ({self.selected_provider.setup_url}):")
             
             # Check if we have a saved API key
-            from packagerix.secure_keys import get_api_key
+            from vibenix.secure_keys import get_api_key
             saved_api_key = get_api_key(self.selected_provider.env_var)
             if saved_api_key:
                 # Update the placeholder to show key is configured
@@ -308,7 +308,7 @@ class ModelConfigDialog(ModalScreen):
             
             # If not in input or environment, check secure storage
             if not api_key:
-                from packagerix.secure_keys import get_api_key
+                from vibenix.secure_keys import get_api_key
                 api_key = get_api_key(self.selected_provider.env_var)
             
             if not api_key:
@@ -407,7 +407,7 @@ class ModelConfigDialog(ModalScreen):
         if self.selected_provider and self.selected_provider.requires_api_key:
             api_key_input = self.query_one("#api-key-input", Input)
             # Check if we have a key in the input OR in secure storage
-            from packagerix.secure_keys import get_api_key
+            from vibenix.secure_keys import get_api_key
             saved_key = get_api_key(self.selected_provider.env_var)
             has_api_key = bool(api_key_input.value) or bool(saved_key)
         
@@ -432,7 +432,7 @@ class ModelConfigDialog(ModalScreen):
             api_key_input = self.query_one("#api-key-input", Input)
             if api_key_input.value:
                 # Save to secure storage
-                from packagerix.secure_keys import set_api_key
+                from vibenix.secure_keys import set_api_key
                 set_api_key(self.selected_provider.env_var, api_key_input.value)
                 
                 # Set in environment for current session

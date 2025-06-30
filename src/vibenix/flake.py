@@ -2,8 +2,8 @@ import shutil
 import os
 import git
 
-from packagerix import config
-from packagerix.ui.logging_config import logger
+from vibenix import config
+from vibenix.ui.logging_config import logger
 
 
 def init_flake():

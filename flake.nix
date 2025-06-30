@@ -52,15 +52,15 @@
       {
         packages = {
           # Create a virtual environment with all dependencies
-          default = pythonSet.mkVirtualEnv "packagerix-env" workspace.deps.default;
+          default = pythonSet.mkVirtualEnv "vibenix-env" workspace.deps.default;
 
-          # The packagerix application itself with runtime dependencies
-          packagerix = pkgs.symlinkJoin {
-            name = "packagerix-wrapped";
-            paths = [ pythonSet.packagerix ];
+          # The vibenix application itself with runtime dependencies
+          vibenix = pkgs.symlinkJoin {
+            name = "vibenix-wrapped";
+            paths = [ pythonSet.vibenix ];
             buildInputs = [ pkgs.makeWrapper ];
             postBuild = ''
-              wrapProgram $out/bin/packagerix \
+              wrapProgram $out/bin/vibenix \
                 --set NOOGLE_FUNCTION_NAMES "${noogleFunctionNames}" \
                 --prefix PATH : "${pkgs.lib.makeBinPath cli-dependencies}"
             '';
@@ -83,7 +83,7 @@
             # Use only dependencies environment, not the built package
             packages = [
               python
-              (pythonSet.mkVirtualEnv "packagerix-dev-deps" workspace.deps.default)
+              (pythonSet.mkVirtualEnv "vibenix-dev-deps" workspace.deps.default)
             ];
 
             # Point to source files for development
