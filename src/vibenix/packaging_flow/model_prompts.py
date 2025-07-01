@@ -202,7 +202,7 @@ And some relevant metadata of the latest release:
             project_info_section=project_info_section,
             template_notes_section=template_notes_section
         ))],
-        functions=[search_nixpkgs_for_package, web_search, fetch_url_content, search_nix_functions],
+        functions=[search_nixpkgs_for_package, web_search, fetch_url_content, search_nix_functions]+additional_functions,
         output_types=[StreamedResponse],
     )
     chat = _retry_with_rate_limit(chat.submit)
