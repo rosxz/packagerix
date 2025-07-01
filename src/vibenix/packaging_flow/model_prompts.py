@@ -10,6 +10,51 @@ from vibenix.errors import NixBuildErrorDiff
 from magentic import Chat, UserMessage, StreamedResponse
 from vibenix.function_calls import search_nixpkgs_for_package, web_search, fetch_url_content, search_nix_functions
 
+from litellm.integrations.custom_logger import CustomLogger
+from litellm.files.main import ModelResponse
+import litellm
+
+# Step 1: Define the custom logger class, inheriting from CustomLogger
+class EndStreamLogger(CustomLogger):
+    """
+    A custom callback handler to log usage and cost at the end of a successful call.
+    This follows the official litellm documentation.
+    """
+    def __init__(self):
+        # It's good practice to call the parent's constructor
+        super().__init__()
+        
+    def log_success_event(self, kwargs, response_obj: ModelResponse, start_time, end_time):
+        """
+        This method is called by litellm after a successful API call.
+        For streams, it's called once at the very end with the aggregated response.
+        """
+        print("\n--- STREAM COMPLETE (Callback Triggered) ---")
+        try:
+            # response_obj is the final, aggregated response.
+            # For streaming, the usage is available in the final chunk's response_obj.
+            if response_obj and hasattr(response_obj, 'usage'):
+                usage = response_obj.usage
+                print(f"Final Prompt Tokens: {usage.prompt_tokens}")
+                print(f"Final Completion Tokens: {usage.completion_tokens}")
+                print(f"Final Total Tokens: {usage.total_tokens}")
+
+                # Calculate cost from the final aggregated response
+                cost = litellm.completion_cost(completion_response=response_obj)
+                print(f"Total Stream Cost: ${cost:.6f}")
+            else:
+                # The documentation also shows cost can be in kwargs
+                if kwargs.get("response_cost") is not None:
+                     print(f"Total Stream Cost (from kwargs): ${kwargs['response_cost']:.6f}")
+
+        except Exception as e:
+            print(f"Error in success_callback: {e}")
+        finally:
+            print("------------------------------------------\n")
+
+end_stream_logger = EndStreamLogger()
+litellm.callbacks = [end_stream_logger]
+
 
 def set_up_project(code_template: str, project_page: str, release_data: dict = None, template_notes: str = None) -> StreamedStr:
     """Initial setup of a Nix package from a GitHub project."""
@@ -50,7 +95,7 @@ Note: Even though the provided template uses the mkDerivation function, this is 
 {template_notes}
 ```
 """
-    
+
     chat = Chat(
         messages=[UserMessage(prompt.format(
             code_template=code_template, 
@@ -61,11 +106,9 @@ Note: Even though the provided template uses the mkDerivation function, this is 
         functions=[search_nixpkgs_for_package, web_search, fetch_url_content, search_nix_functions],
         output_types=[StreamedResponse],
     )
-
     chat = _retry_with_rate_limit(chat.submit)
 
     return handle_model_chat(chat)
-
 
 @ask_model("""@model You are software packaging expert who can build any project using the Nix programming language.
 
@@ -159,10 +202,9 @@ And some relevant metadata of the latest release:
             project_info_section=project_info_section,
             template_notes_section=template_notes_section
         ))],
-        functions=[search_nixpkgs_for_package, web_search, fetch_url_content, search_nix_functions]+additional_functions,
+        functions=[search_nixpkgs_for_package, web_search, fetch_url_content, search_nix_functions],
         output_types=[StreamedResponse],
     )
-
     chat = _retry_with_rate_limit(chat.submit)
 
     return handle_model_chat(chat)
