@@ -29,6 +29,10 @@ python3Packages.buildPythonApplication rec {
     # List runtime dependencies here
   ];
 
+  pythonImportsCheck = [
+    ... # add correct package name here
+  ];
+
   # Optional: test dependencies
   # nativeCheckInputs = with python3Packages; [
   #   pytestCheckHook
