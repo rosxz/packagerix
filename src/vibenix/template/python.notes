@@ -14,3 +14,5 @@ Important notes for packaging Python projects:
    - Disable all tests: doCheck = false;
 8. For projects using poetry: add poetry-core to build-system
 9. For projects using hatch: add hatchling to build-system
+
+Note: You have to use pythonImportsCheck to make sure you did not miss any mandatory dependencies.

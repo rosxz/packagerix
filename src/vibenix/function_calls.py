@@ -2,12 +2,13 @@ import subprocess
 import requests
 import json
 import os
-from parsing import scrape_and_process
+from vibenix.ccl_log import get_logger
 
 def search_nixpkgs_for_package(query: str) -> str:
     """Search the nixpkgs repository of Nix code for the given package"""
 
     print("📞 Function called: search_nixpkgs_for_package with query: ", query)
+    get_logger().log_function_call("search_nixpkgs_for_package", query=query)
     
     # Run nix search first, explicitly separate stdout and stderr
     nix_result = subprocess.run(
@@ -42,6 +43,7 @@ def search_nix_functions(query: str) -> str:
     """Search for Nix builtin and library functions by name"""
     
     print("📞 Function called: search_nix_functions with query: ", query)
+    get_logger().log_function_call("search_nix_functions", query=query)
     
     try:
         # Get the path from environment variable
