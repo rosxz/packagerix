@@ -185,7 +185,6 @@ Your task is to identify if there exist concrete improvements to the packaging c
 
 Among the tools at your disposal for the task, you can: 
 - compare your approach with similar packages in nixpkgs;
-- search the web or fetch content if required;
 - look at relevant files in the project directory in the Nix store;
 - search for nixpkgs package names or functions in Noogle.
 
@@ -256,7 +255,7 @@ And some relevant metadata of the latest release:
             project_info_section=project_info_section,
             template_notes_section=template_notes_section
         ))],
-        functions=[search_nixpkgs_for_package, web_search, fetch_url_content, search_nix_functions]+additional_functions,
+        functions=[search_nixpkgs_for_package, search_nix_functions]+additional_functions,
         output_types=[StreamedResponse],
     )
     chat = _retry_with_rate_limit(chat.submit)
@@ -290,7 +289,6 @@ Only make the necessary changes to implement the feedback. Do not make any other
 
 Among the tools at your disposal for the task, you can:
     - compare your approach with similar packages in nixpkgs;
-    - search the web or fetch content if required;
     - look at relevant files in the project directory in the Nix store;
     - search for nixpkgs packages names or functions in Noogle.
 
@@ -331,7 +329,7 @@ And some relevant metadata of the latest release:
             project_info_section=project_info_section,
             template_notes_section=template_notes_section
         ))],
-        functions=[search_nixpkgs_for_package, web_search, fetch_url_content, search_nix_functions]+additional_functions,
+        functions=[search_nixpkgs_for_package, search_nix_functions]+additional_functions,
         output_types=[StreamedResponse],
     )
 
@@ -360,7 +358,6 @@ Error:
 
 If the error message does not give you enough information to make progress, and to verify your actions, look at relevant files in the proejct directory,
 and try to compare your approach with similar packages in nixpkgs.
-You can also search the web or fetch content if required.
 
 Notes:
 - Nothing in the meta attribute of a derivation has any impact on its build output, so do not provide a meta attribute.
@@ -404,7 +401,7 @@ And some relevant metadata of the latest release:
             project_info_section=project_info_section,
             template_notes_section=template_notes_section
         ))],
-        functions=[search_nixpkgs_for_package, web_search, fetch_url_content, search_nix_functions]+additional_functions,
+        functions=[search_nixpkgs_for_package, search_nix_functions]+additional_functions,
         output_types=[StreamedResponse],
     )
     chat = _retry_with_rate_limit(chat.submit)
