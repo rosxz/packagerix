@@ -99,7 +99,7 @@ def refine_package(curr: Solution, project_page: str):
     for iteration in range(max_iterations):
         # Get feedback
         # TODO BUILD LOG IS NOT BEING PASSED!
-        feedback = get_feedback(curr.code, "", project_url)
+        feedback = get_feedback(curr.code, "", project_page)
         coordinator_message(f"Refining package (iteration {iteration}/{max_iterations})...")
         coordinator_message(f"Received feedback: {feedback}")
 
