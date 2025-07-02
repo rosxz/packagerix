@@ -13,22 +13,15 @@ from vibenix.function_calls import search_nixpkgs_for_package, web_search, fetch
 from litellm.integrations.custom_logger import CustomLogger
 from litellm.files.main import ModelResponse
 import litellm
+from enum import Enum
 
-# Step 1: Define the custom logger class, inheriting from CustomLogger
+
 class EndStreamLogger(CustomLogger):
-    """
-    A custom callback handler to log usage and cost at the end of a successful call.
-    This follows the official litellm documentation.
-    """
+    """A custom callback handler to log usage and cost at the end of a successful call."""
     def __init__(self):
-        # It's good practice to call the parent's constructor
         super().__init__()
         
     def log_success_event(self, kwargs, response_obj: ModelResponse, start_time, end_time):
-        """
-        This method is called by litellm after a successful API call.
-        For streams, it's called once at the very end with the aggregated response.
-        """
         print("\n--- STREAM COMPLETE (Callback Triggered) ---")
         try:
             # response_obj is the final, aggregated response.
@@ -43,7 +36,6 @@ class EndStreamLogger(CustomLogger):
                 cost = litellm.completion_cost(completion_response=response_obj)
                 print(f"Total Stream Cost: ${cost:.6f}")
             else:
-                # The documentation also shows cost can be in kwargs
                 if kwargs.get("response_cost") is not None:
                      print(f"Total Stream Cost (from kwargs): ${kwargs['response_cost']:.6f}")
 
@@ -110,6 +102,7 @@ Note: Even though the provided template uses the mkDerivation function, this is 
 
     return handle_model_chat(chat)
 
+
 @ask_model("""@model You are software packaging expert who can build any project using the Nix programming language.
 
 Read the contents of the project's GitHub page and summarize it.
@@ -142,33 +135,94 @@ def pick_template(project_page: str) -> TemplateType:
     ...
 
 
-def fix_build_error(code: str, error: str, project_page: str = None, release_data: dict = None, template_notes: str = None, additional_functions: list = []) -> StreamedStr:
-    """Fix a build error in Nix code."""
-    prompt = """You are software packaging expert who can build any project using the Nix programming language.
+class RefinementExit(Enum):
+    """Enum to represent exit conditions for refinement/evaluation."""
+    ERROR = "error"
+    INCOMPLETE = "incomplete"
+    COMPLETE = "complete"
 
-Please fix the following error in the following Nix code.      
+@ask_model_enum("""@model You are software packaging expert who can build any project using the Nix programming language.
 
+The following Nix code successfuly builds the respective project.
+
+Your task is to evaluate whether or not the feedback a professional evaluator provided regarding the packaging has been successfully implemented, and the packaging completed.
+Return: 
+    - ERROR if there has been a regression in the packaging code, and should revert to the previous code;
+    - INCOMPLETE if the feedback has not yet been mostly implemented, meaning the packaging improvement is not yet complete;
+    - COMPLETE if the packaging is largely complete, that is, the improvements have been mostly implemented.
+
+Here is the current Nix code for you to evaluate:
 ```nix
 {code}
 ```
 
-Error:
+Here is the feedback provided by the evaluator:
+```text
+{feedback}
 ```
-{error}
+
+Here is the previous Nix code:
+```nix
+{previous_code}
+```
+""")
+def evaluate_code(code: str, previous_code: str, feedback: str = None) -> RefinementExit:
+    ...
+
+def get_feedback(code: str, log: str, project_page: str = None, release_data: dict = None, template_notes: str = None, additional_functions: list = []) -> StreamedStr:
+    """Refine a nix package to remove unnecessary snippets, add missing code, and improve style."""
+    prompt = """You are software packaging expert who can build any project using the Nix programming language.
+
+The following Nix code successfuly builds the respective project.
+
+Your task is to identify if there exist concrete improvements to the packaging code, namely:
+    1. Ensure a reasonable coding style, removing unnecessary comments and unused code, such as dangling template snippets;
+    2. Identify unused dependencies. These can be further verified to be unnecessary by checking against build instructions in the project page, local files, etc.;
+    3. Identify missing dependencies, mentioned in the project page, local files, etc.;
+    4. Ensure the Nix builder function has the "doInstallCheck" set to true and includes the "installCheckPhase" attribute.
+    This attribute should be set to, at least, programatically verify basic execution of the program, and that the expected
+    binaries and libraries are, respectively, executable and present.
+
+Among the tools at your disposal for the task, you can: 
+- compare your approach with similar packages in nixpkgs;
+- search the web or fetch content if required;
+- look at relevant files in the project directory in the Nix store;
+- search for nixpkgs package names or functions in Noogle.
+
+Above improving the package, prioritize not breaking the build.
+Make extensive use of the available tools to verify your feedback before making assumptions.
+
+You should look at the build output in the Nix store to verify its validity.
+
+Here is the Nix code for you to evaluate:
+```nix
+{code}
+```
+
+Here is the last build output:
+```
+{log}
 ```
 
 {project_info_section}
 
 {template_notes_section}
 
-If the error message does not give you enough information to make progress, and to verify your actions, look at relevant files in the proejct directory,
-and try to compare your approach with similar packages in nixpkgs.
-You can also search the web or fetch content if required.
-Note: Nothing in the meta attribute of a derivation has any impact on its build output, so do not provide a meta attribute.
-Note: Do not change any other arguments of fetchFromGitHub or another fetcher if it has an actual hash already.
-Note: Your reply should contain exactly one code block with the updated Nix code.
-Note: If you need to introduce a new hash, use lib.fakeHash as a placeholder, and automated process will replace this with the actual hash.
-Note: Never replace existing hashes with `lib.fakeHash` or otherwise modify existing hashes."""
+Notes:
+- The meta attribute is irrelevant, do not include it.
+- Do not attempt to generate the full updated packaging code, only provide feedback on the existing code.
+- Do not access the project's online git repository, such as GitHub, and instead browse the local files in the Nix store.
+- Only test the execution of GUI programs under a virtual display environment when necessary, that is, when a CLI-only iteraction is not possible.
+- Your feedback needs to be concise, concrete to the specific project source, and follow the given format:
+```text
+# <1. improvement title>
+<1st improvement description>
+
+# <2. improvement title>
+<2nd improvement description>
+(...)
+```
+"""
 
     # Include project information if available
     project_info_section = ""
@@ -198,6 +252,154 @@ And some relevant metadata of the latest release:
     chat = Chat(
         messages=[UserMessage(prompt.format(
             code=code, 
+            log=log,
+            project_info_section=project_info_section,
+            template_notes_section=template_notes_section
+        ))],
+        functions=[search_nixpkgs_for_package, web_search, fetch_url_content, search_nix_functions]+additional_functions,
+        output_types=[StreamedResponse],
+    )
+    chat = _retry_with_rate_limit(chat.submit)
+
+    return handle_model_chat(chat)
+
+
+def refine_code(code: str, feedback: str, project_page: str = None, release_data: dict = None, template_notes: str = None, additional_functions: list = []) -> StreamedStr:
+    """Refine a nix package to remove unnecessary snippets, add missing code, and improve style."""
+    prompt = """You are software packaging expert who can build any project using the Nix programming language.
+
+The following Nix code has built the respective project, but an expert evaluator identifed possible improvements.
+
+Your task is to improve the Nix package code, following the feedback provided.
+
+Here is the Nix code:
+```nix
+{code}
+```
+
+Here is the evaluator's feedback:
+```
+{feedback}
+```
+
+Only make the necessary changes to implement the feedback. Do not make any other other unrelated or unnecessary modifications or additions.
+
+{project_info_section}
+
+{template_notes_section}
+
+Among the tools at your disposal for the task, you can:
+    - compare your approach with similar packages in nixpkgs;
+    - search the web or fetch content if required;
+    - look at relevant files in the project directory in the Nix store;
+    - search for nixpkgs packages names or functions in Noogle.
+
+Note: The meta attribute is irrelevant, do not include it.
+Note: Do not change any other arguments of fetchFromGitHub or another fetcher if it has an actual hash already.
+Note: Your reply should contain exactly one code block with the updated Nix code.
+Note: If you need to introduce a new hash, use lib.fakeHash as a placeholder, and automated process will replace this with the actual hash."""
+
+    # Include project information if available
+    project_info_section = ""
+    if project_page:
+        project_info_section = f"""Here is the information from the project's GitHub page:
+```text
+{project_page}
+```
+"""
+    if release_data:
+        project_info_section += f"""
+And some relevant metadata of the latest release:
+```
+{release_data}
+```
+"""
+
+    # Include template notes if available
+    template_notes_section = ""
+    if template_notes:
+        template_notes_section = f"""Here are some notes about this template to help you package this type of project:
+```
+{template_notes}
+```
+"""
+
+    chat = Chat(
+        messages=[UserMessage(prompt.format(
+            code=code,
+            feedback=feedback,
+            project_info_section=project_info_section,
+            template_notes_section=template_notes_section
+        ))],
+        functions=[search_nixpkgs_for_package, web_search, fetch_url_content, search_nix_functions]+additional_functions,
+        output_types=[StreamedResponse],
+    )
+
+    chat = _retry_with_rate_limit(chat.submit)
+    return handle_model_chat(chat)
+
+
+def fix_build_error(code: str, error: str, project_page: str = None, release_data: dict = None, template_notes: str = None, additional_functions: list = []) -> StreamedStr:
+    """Fix a build error in Nix code."""
+    prompt = """You are software packaging expert who can build any project using the Nix programming language.
+
+Your task is to fix the following error in the following Nix code, making only the necessary changes, avoiding other modifications or additions.
+
+```nix
+{code}
+```
+
+Error:
+```
+{error}
+```
+
+{project_info_section}
+
+{template_notes_section}
+
+If the error message does not give you enough information to make progress, and to verify your actions, look at relevant files in the proejct directory,
+and try to compare your approach with similar packages in nixpkgs.
+You can also search the web or fetch content if required.
+
+Notes:
+- Nothing in the meta attribute of a derivation has any impact on its build output, so do not provide a meta attribute.
+- Do not access the project's online git repository, such as GitHub, and instead browse the local files in the Nix store.
+- Do not change any other arguments of fetchFromGitHub or another fetcher if it has an actual hash already.
+- Your reply should contain exactly one code block with the updated Nix code.
+- If you need to introduce a new hash, use lib.fakeHash as a placeholder, and automated process will replace this with the actual hash.
+- Never replace existing hashes with `lib.fakeHash` or otherwise modify existing hashes.
+- 'lib.customisation.callPackageWith: Function called without required argument... usually means you've misjudged the package's name, or the package does not exist.
+- If you search for a package using your tools, and you don't have a match, try again with another query or try a different tool."""
+
+    # Include project information if available
+    project_info_section = ""
+    if project_page:
+        project_info_section = f"""Here is the information from the project's GitHub page:
+```text
+{project_page}
+```
+"""
+        if release_data:
+            project_info_section += f"""
+And some relevant metadata of the latest release:
+```
+{release_data}
+```
+"""
+
+    # Include template notes if available
+    template_notes_section = ""
+    if template_notes:
+        template_notes_section = f"""Here are some notes about this template to help you package this type of project:
+```
+{template_notes}
+```
+"""
+
+    chat = Chat(
+        messages=[UserMessage(prompt.format(
+            code=code,
             error=error,
             project_info_section=project_info_section,
             template_notes_section=template_notes_section

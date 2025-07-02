@@ -21,6 +21,16 @@ def scrape_and_process(url):
     # Parse the HTML content
     soup = BeautifulSoup(html, 'html.parser')
 
+    # Remove all <script> and <style> elements
+    for script_or_style in soup(['script', 'style']):
+        script_or_style.decompose()
+    
+    # Remove elements that are often irrelevant like headers, footers, and navs
+    tags_to_remove = ['header', 'nav', 'footer', 'aside']
+    for tag in tags_to_remove:
+        for element in soup.find_all(tag):
+            element.decompose()
+
     # Extract text from the webpage
     # You might need to adjust the selection to your specific needs
     text = ' '.join(soup.stripped_strings)

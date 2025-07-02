@@ -7,11 +7,12 @@ from vibenix.ui.conversation import ask_user,  coordinator_message, coordinator_
 from vibenix.parsing import scrape_and_process, extract_updated_code, fetch_combined_project_data, fill_src_attributes
 from vibenix.flake import init_flake
 from vibenix.nix import eval_progress, execute_build_and_add_to_stack
-from vibenix.packaging_flow.model_prompts import pick_template, set_up_project, summarize_github, fix_build_error, fix_hash_mismatch
+from vibenix.packaging_flow.model_prompts import pick_template, set_up_project, summarize_github, fix_build_error, fix_hash_mismatch, evaluate_code, refine_code, get_feedback, RefinementExit
 from vibenix.packaging_flow.user_prompts import get_project_url
 from vibenix import config
 from vibenix.errors import NixBuildErrorDiff, NixErrorKind, NixBuildResult
 from vibenix.function_calls_source import create_source_function_calls
+from enum import Enum
 
 
 class Solution(BaseModel):
@@ -90,6 +91,46 @@ def read_fetcher_file(fetcher: str) -> str:
         raise
 
 
+def refine_package(curr: Solution, project_url: str):
+    """Refinement cycle to improve the packaging."""
+    prev = curr
+    max_iterations = 3
+
+    for iteration in range(max_iterations):
+        # Get feedback
+        # TODO BUILD LOG IS NOT BEING PASSED!
+        feedback = get_feedback(curr.code, "", project_url)
+        coordinator_message(f"Refining package (iteration {iteration}/{max_iterations})...")
+        coordinator_message(f"Received feedback: {feedback}")
+
+        # Pass the feedback to the generator (refine_code)
+        response = refine_code(curr.code, feedback, project_url)
+        updated_code = extract_updated_code(response)
+        updated_res = execute_build_and_add_to_stack(updated_code)
+        attempt = Solution(code=updated_code, result=updated_res)
+        
+        # Verify the updated code still builds
+        if not attempt.result.success:
+            coordinator_message(f"Refinement caused a regression: {attempt.result.error.type}")
+            return attempt, RefinementExit.ERROR
+        else:
+            coordinator_message("Refined packaging code successfuly builds...")
+            prev = curr
+            curr = attempt
+
+        # Verify if the state of the refinement process
+        evaluation = evaluate_code(curr.code, prev.code, feedback)
+        if evaluation == RefinementExit.COMPLETE:
+            coordinator_message("Evaluator deems the improvements complete.")
+            return curr, RefinementExit.COMPLETE
+        elif evaluation == RefinementExit.INCOMPLETE:
+            coordinator_message("Evaluator suggests further improvements are needed.")
+        else:
+            coordinator_message("Evaluator deems there has been a regression in the packaging code. Reverting to previous state.")
+            curr = prev
+    return curr, RefinementExit.INCOMPLETE
+
+
 def package_project(output_dir=None, project_url=None, revision=None, fetcher=None):
     """Main coordinator function for packaging a project."""
     # Step 1: Get project URL (includes welcome message)
@@ -138,7 +179,7 @@ def package_project(output_dir=None, project_url=None, revision=None, fetcher=No
     coordinator_message(f"Working on temporary flake at {config.flake_dir}")
     
     # Step 5: Load template
-    template_type = pick_template(project_page)
+    template_type = pick_template(summary)
     coordinator_message(f"Selected template: {template_type.value}")
     template_filename = f"{template_type.value}.nix"
     template_path = config.template_dir / template_filename
@@ -158,9 +199,6 @@ def package_project(output_dir=None, project_url=None, revision=None, fetcher=No
     nixpkgs_path = get_nixpkgs_source_path()
     nixpkgs_functions = create_source_function_calls(nixpkgs_path, "nixpkgs_")
     additional_functions = project_functions + nixpkgs_functions
-    # Step 6.b: Create initial package (with LLM assisted src setup)
-    #coordinator_message("Creating initial package configuration...")
-    #initial_code = create_initial_package(starting_template, project_page, release_data, template_notes)
     
     # Step 7: Nested build and fix loop
     # Outer loop: Build iterations (unlimited, driven by progress)
@@ -173,9 +211,15 @@ def package_project(output_dir=None, project_url=None, revision=None, fetcher=No
     # Check if initial build succeeded
     if best.result.success:
         coordinator_message("✅ Build succeeded on first try!")
-        if output_dir:
-            save_package_output(best.code, project_url, output_dir)
-        return best.code
+        best, completed = refine_package(best, project_url)
+        if completed == RefinementExit.ERROR:
+            coordinator_error("Refinement encountered an error. Returning to packaging loop.")
+        else:
+            if completed == RefinementExit.INCOMPLETE:
+                coordinator_message("Refinement process reached max iterations.")
+            if output_dir:
+                save_package_output(best.code, project_url, output_dir)
+            return best.code
 
     build_iteration = 1
     eval_iteration = 1
@@ -198,7 +242,7 @@ def package_project(output_dir=None, project_url=None, revision=None, fetcher=No
                 coordinator_message("Other error detected, fixing...")
                 coordinator_message(f"code:\n{candidate.code}\n")
                 coordinator_message(f"error:\n{candidate.result.error.error_message}\n")
-                fixed_response = fix_build_error(candidate.code, candidate.result.error.error_message, project_page, release_data, template_notes, additional_functions)
+                fixed_response = fix_build_error(candidate.code, candidate.result.error.error_message, summary, release_data, template_notes, additional_functions)
             
             updated_code = extract_updated_code(fixed_response)
             
@@ -210,9 +254,7 @@ def package_project(output_dir=None, project_url=None, revision=None, fetcher=No
             
             if candidate.result.success:
                 coordinator_message(f"✅ Build succeeded after {build_iteration} iterations!")
-                if output_dir:
-                    save_package_output(candidate.code, project_url, output_dir)
-                return candidate.code
+                break
             coordinator_message(f"Nix build result: {candidate.result.error.type}")
             
             # Build still failed - check if we made progress or hit eval error
@@ -238,8 +280,22 @@ def package_project(output_dir=None, project_url=None, revision=None, fetcher=No
             best = candidate
             build_iteration += 1
             eval_iteration = 1
+
+            if candidate.result.success:
+                coordinator_message("Refining package based on successful build...")
+                candidate, completed = refine_package(best, project_url)
+                best = candidate
+                if completed == RefinementExit.ERROR:
+                    coordinator_error("Refinement encountered an error, re-entering packaging loop.")
+                    # Ideally the generator does not make changes so bad that we would reset to a pre-refinement checkpoint
+                else:
+                    if completed == RefinementExit.INCOMPLETE:
+                        coordinator_message("Refinement process reached max iterations.")
+                    if output_dir:
+                        save_package_output(candidate.code, project_url, output_dir)
+                    return best.code
         else:
-            coordinator_message(f"Build iteration {build_iteration} did NOT made progress...")
+            coordinator_message(f"Build iteration {build_iteration} did NOT make progress...")
             candidate = best
 
         if build_iteration > 15:

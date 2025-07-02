@@ -2,6 +2,7 @@ import subprocess
 import requests
 import json
 import os
+from parsing import scrape_and_process
 
 def search_nixpkgs_for_package(query: str) -> str:
     """Search the nixpkgs repository of Nix code for the given package"""
@@ -59,9 +60,8 @@ def fetch_url_content(url: str) -> str:
     
     print("📞 Function called: fetch_url_content with url: ", url)
     try:
-        response = requests.get(url, timeout=30)
-        response.raise_for_status()
-        return response.text
+        response = scrape_and_process(url)
+        return response
     except requests.RequestException as e:
         return f"Error fetching URL: {str(e)}"
 
