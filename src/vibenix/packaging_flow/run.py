@@ -275,8 +275,6 @@ def package_project(output_dir=None, project_url=None, revision=None, fetcher=No
             
             if candidate.result.success:
                 coordinator_message(f"✅ Build succeeded after {iteration} iterations!")
-                ccl_logger.log_session_end(True, iteration)
-                close_logger()
                 if output_dir:
                     save_package_output(candidate.code, project_url, output_dir)
                 break
@@ -319,6 +317,8 @@ def package_project(output_dir=None, project_url=None, revision=None, fetcher=No
                 else:
                     if completed == RefinementExit.INCOMPLETE:
                         coordinator_message("Refinement process reached max iterations.")
+                    ccl_logger.log_session_end(True, iteration)
+                    close_logger()
                     if output_dir:
                         save_package_output(candidate.code, project_url, output_dir)
                     return best.code
