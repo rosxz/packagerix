@@ -1,9 +1,8 @@
 """Business logic for vibenix using the coordinator pattern."""
 
 import subprocess
-import time
-from pydantic import BaseModel
 from pathlib import Path
+from pydantic import BaseModel
 
 from vibenix.ui.conversation import ask_user,  coordinator_message, coordinator_error, coordinator_progress
 from vibenix.parsing import scrape_and_process, extract_updated_code, fetch_combined_project_data, fill_src_attributes
@@ -178,11 +177,11 @@ def package_project(output_dir=None, project_url=None, revision=None, fetcher=No
     # Inner loop: Evaluation error fixes (max 5 attempts)
     
     coordinator_progress("Testing the initial build...")
-    ccl_logger.log_build_iteration(0)
-    ccl_logger.log_build_attempt(0, 1, initial_code)
     initial_result = execute_build_and_add_to_stack(initial_code)
-    ccl_logger.log_build_result(0, 1, initial_result)
     best = Solution(code=initial_code, result=initial_result)
+    
+    # Log initial build result
+    ccl_logger.log_initial_build(initial_result)
     
     # Check if initial build succeeded
     if best.result.success:
@@ -193,6 +192,9 @@ def package_project(output_dir=None, project_url=None, revision=None, fetcher=No
             save_package_output(best.code, project_url, output_dir)
         return best.code
 
+    # Log that we're starting iterations
+    ccl_logger.log_before_iterations()
+    
     build_iteration = 1
     eval_iteration = 1
     max_inner_attempts = 10
@@ -201,11 +203,10 @@ def package_project(output_dir=None, project_url=None, revision=None, fetcher=No
     while True:
         coordinator_message(f"Build iteration {build_iteration} - attempting to fix error:")
         coordinator_message(f"```\n{candidate.result.error.error_message}\n```")
-        ccl_logger.log_build_iteration(build_iteration)
         
         # Inner loop: Fix evaluation errors with limited attempts
         while True:
-            ccl_logger.log_eval_iteration(build_iteration, eval_iteration)
+            ccl_logger.log_iteration_start(eval_iteration)
             
             # Fix the error based on type
             if candidate.result.error.type == NixErrorKind.HASH_MISMATCH:
@@ -224,14 +225,13 @@ def package_project(output_dir=None, project_url=None, revision=None, fetcher=No
             # Test the fix
             coordinator_progress(f"Iteration {build_iteration}: Testing fix attempt {eval_iteration}/{max_inner_attempts}...")
             prev_candidate_error_type = candidate.result.error.type
-            ccl_logger.log_build_attempt(build_iteration, eval_iteration, updated_code)
             new_result = execute_build_and_add_to_stack(updated_code)
-            ccl_logger.log_build_result(build_iteration, eval_iteration, new_result)
+            ccl_logger.log_iteration_end(eval_iteration, new_result)
             candidate = Solution(code=updated_code, result=new_result)
             
             if candidate.result.success:
                 coordinator_message(f"✅ Build succeeded after {build_iteration} iterations!")
-                ccl_logger.log_session_end(True, build_iteration + 1)
+                ccl_logger.log_session_end(True, eval_iteration)
                 close_logger()
                 if output_dir:
                     save_package_output(candidate.code, project_url, output_dir)
@@ -251,13 +251,14 @@ def package_project(output_dir=None, project_url=None, revision=None, fetcher=No
                 break
             if eval_iteration > max_inner_attempts:
                 coordinator_error(f"Failed to make progress within {max_inner_attempts} attempts.")
-                ccl_logger.log_session_end(False, build_iteration)
+                ccl_logger.log_session_end(False, eval_iteration)
                 close_logger()
                 return None
     
         # TODO: Check progress using NixBuildErrorDiff and decide whether to continue
 
         eval_result = eval_progress(best.result, candidate.result, build_iteration)
+        ccl_logger.log_progress_eval(build_iteration, eval_result)
         if eval_result == NixBuildErrorDiff.PROGRESS:
             coordinator_message(f"Build iteration {build_iteration} made progress...")
             best = candidate
@@ -269,7 +270,7 @@ def package_project(output_dir=None, project_url=None, revision=None, fetcher=No
 
         if build_iteration > 15:
             coordinator_error("Reached temporary build iteration limit.")
-            ccl_logger.log_session_end(False, build_iteration)
+            ccl_logger.log_session_end(False, eval_iteration)
             close_logger()
             return None
 
