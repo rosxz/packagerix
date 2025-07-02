@@ -38,33 +38,6 @@ def search_nixpkgs_for_package(query: str) -> str:
     elif jq_result.returncode != 0:
         raise ValueError(f"jq failed with return code {jq_result.returncode}, stderr: {jq_result.stderr}")
 
-
-def web_search(query: str) -> str:
-    """Perform a web search with a query"""
-    
-    print("📞 Function called: web_search with query: ", query)
-    try:
-        result = subprocess.run(["ddgr", "--json", query], text=True, capture_output=True, timeout=30)
-        if result.returncode == 0 and result.stdout.strip():
-            return result.stdout
-        else:
-            return f"no search results found for query '{query}'"
-    except subprocess.TimeoutExpired:
-        return "search timed out"
-    except FileNotFoundError:
-        return "search tool not found, please install ddgr"
-    
-
-def fetch_url_content(url: str) -> str:
-    """Fetch HTML content from a URL"""
-    
-    print("📞 Function called: fetch_url_content with url: ", url)
-    try:
-        response = scrape_and_process(url)
-        return response
-    except requests.RequestException as e:
-        return f"Error fetching URL: {str(e)}"
-
 def search_nix_functions(query: str) -> str:
     """Search for Nix builtin and library functions by name"""
     
