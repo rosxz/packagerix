@@ -91,7 +91,7 @@ def read_fetcher_file(fetcher: str) -> str:
         raise
 
 
-def refine_package(curr: Solution, project_url: str):
+def refine_package(curr: Solution, project_page: str):
     """Refinement cycle to improve the packaging."""
     prev = curr
     max_iterations = 3
@@ -104,7 +104,7 @@ def refine_package(curr: Solution, project_url: str):
         coordinator_message(f"Received feedback: {feedback}")
 
         # Pass the feedback to the generator (refine_code)
-        response = refine_code(curr.code, feedback, project_url)
+        response = refine_code(curr.code, feedback, project_page)
         updated_code = extract_updated_code(response)
         updated_res = execute_build_and_add_to_stack(updated_code)
         attempt = Solution(code=updated_code, result=updated_res)
@@ -215,23 +215,26 @@ def package_project(output_dir=None, project_url=None, revision=None, fetcher=No
     coordinator_progress("Testing the initial build...")
     initial_result = execute_build_and_add_to_stack(initial_code)
     best = Solution(code=initial_code, result=initial_result)
+    last_successful = None
     
     # Log initial build result
     ccl_logger.log_initial_build(initial_result)
     
     # Check if initial build succeeded
     if best.result.success:
+        last_successful = best
         coordinator_message("✅ Build succeeded on first try!")
-        best, completed = refine_package(best, project_url)
+        best, completed = refine_package(best, summary)
         ccl_logger.log_session_end(True, 1)
         close_logger()
         if completed == RefinementExit.ERROR:
             coordinator_error("Refinement encountered an error. Returning to packaging loop.")
         else:
             if completed == RefinementExit.INCOMPLETE:
+                last_successful = best
                 coordinator_message("Refinement process reached max iterations.")
             if output_dir:
-                save_package_output(best.code, project_url, output_dir)
+                save_package_output(best.code, project_page, output_dir)
             return best.code
 
     # Log that we're starting iterations
@@ -275,8 +278,6 @@ def package_project(output_dir=None, project_url=None, revision=None, fetcher=No
             
             if candidate.result.success:
                 coordinator_message(f"✅ Build succeeded after {iteration} iterations!")
-                if output_dir:
-                    save_package_output(candidate.code, project_url, output_dir)
                 break
             coordinator_message(f"Nix build result: {candidate.result.error.type}")
             
@@ -308,9 +309,10 @@ def package_project(output_dir=None, project_url=None, revision=None, fetcher=No
             best = candidate
 
             if candidate.result.success:
+                last_successful = candidate
+
                 coordinator_message("Refining package based on successful build...")
-                candidate, completed = refine_package(best, project_url)
-                best = candidate
+                candidate, completed = refine_package(best, summary)
                 if completed == RefinementExit.ERROR:
                     coordinator_error("Refinement encountered an error, re-entering packaging loop.")
                     # Ideally the generator does not make changes so bad that we would reset to a pre-refinement checkpoint
@@ -330,6 +332,9 @@ def package_project(output_dir=None, project_url=None, revision=None, fetcher=No
             
             if consecutive_rebuilds_without_progress >= max_consecutive_rebuilds_without_progress:
                 coordinator_error(f"Aborted: {consecutive_rebuilds_without_progress} consecutive rebuilds without progress.")
+                if last_successful:
+                    coordinator_message("Returning last successful build.")
+                    return last_successful.code
                 ccl_logger.log_session_end(False, iteration)
                 close_logger()
                 return None
@@ -337,6 +342,9 @@ def package_project(output_dir=None, project_url=None, revision=None, fetcher=No
 
         if iteration > 30:
             coordinator_error("Reached temporary build iteration limit.")
+            if last_successful:
+                coordinator_message("Returning last successful build.")
+                return last_successful.code
             ccl_logger.log_session_end(False, iteration)
             close_logger()
             return None
