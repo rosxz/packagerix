@@ -134,7 +134,7 @@ def refine_package(curr: Solution, project_url: str):
 def package_project(output_dir=None, project_url=None, revision=None, fetcher=None):
     """Main coordinator function for packaging a project."""
     # Initialize CCL logger
-    log_file = Path(output_dir) / "vibenix.ccl" if output_dir else Path("vibenix.ccl")
+    log_file = Path(output_dir) / "run.ccl" if output_dir else Path("run.ccl")
     ccl_logger = init_logger(log_file)
     
     # Step 1: Get project URL (includes welcome message)
