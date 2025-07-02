@@ -20,6 +20,7 @@ class EndStreamLogger(CustomLogger):
     """A custom callback handler to log usage and cost at the end of a successful call."""
     def __init__(self):
         super().__init__()
+        self.total_cost = 0.0
         
     def log_success_event(self, kwargs, response_obj: ModelResponse, start_time, end_time):
         print("\n--- STREAM COMPLETE (Callback Triggered) ---")
@@ -35,9 +36,12 @@ class EndStreamLogger(CustomLogger):
                 # Calculate cost from the final aggregated response
                 cost = litellm.completion_cost(completion_response=response_obj)
                 print(f"Total Stream Cost: ${cost:.6f}")
+                self.total_cost += cost
             else:
                 if kwargs.get("response_cost") is not None:
-                     print(f"Total Stream Cost (from kwargs): ${kwargs['response_cost']:.6f}")
+                     cost = kwargs['response_cost']
+                     print(f"Total Stream Cost (from kwargs): ${cost:.6f}")
+                     self.total_cost += cost
 
         except Exception as e:
             print(f"Error in success_callback: {e}")

@@ -77,12 +77,14 @@ class CCLLogger:
             self._write("elapsed = " + self._elapsed_time())
             self._write("project_url = " + project_url)
     
-    def log_session_end(self, success: bool, total_iterations: int):
+    def log_session_end(self, success: bool, total_iterations: int, total_cost: float = None):
         """Log the end of a packaging session."""
         with self._section_begin("session-end =", 0):
             self._write("elapsed = " + self._elapsed_time())
             self._write("success = " + ("true" if success else "false"))
             self._write("total_iterations = " + str(total_iterations))
+            if total_cost is not None:
+                self._write(f"total_cost = {total_cost:.6f}")
     
     def log_template_selected(self, template: str):
         """Log template selection."""

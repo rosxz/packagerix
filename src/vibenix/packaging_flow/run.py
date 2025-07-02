@@ -225,7 +225,8 @@ def package_project(output_dir=None, project_url=None, revision=None, fetcher=No
         last_successful = best
         coordinator_message("✅ Build succeeded on first try!")
         best, completed = refine_package(best, summary)
-        ccl_logger.log_session_end(True, 1)
+        from vibenix.packaging_flow.model_prompts import end_stream_logger
+        ccl_logger.log_session_end(True, 1, end_stream_logger.total_cost)
         close_logger()
         if completed == RefinementExit.ERROR:
             coordinator_error("Refinement encountered an error. Returning to packaging loop.")
@@ -296,7 +297,8 @@ def package_project(output_dir=None, project_url=None, revision=None, fetcher=No
                 break
             if consecutive_eval_errors >= max_eval_without_success:
                 coordinator_error(f"Failed to make progress within {max_eval_without_success} attempts.")
-                ccl_logger.log_session_end(False, iteration)
+                from vibenix.packaging_flow.model_prompts import end_stream_logger
+                ccl_logger.log_session_end(False, iteration, end_stream_logger.total_cost)
                 close_logger()
                 return None
     
@@ -319,7 +321,8 @@ def package_project(output_dir=None, project_url=None, revision=None, fetcher=No
                 else:
                     if completed == RefinementExit.INCOMPLETE:
                         coordinator_message("Refinement process reached max iterations.")
-                    ccl_logger.log_session_end(True, iteration)
+                    from vibenix.packaging_flow.model_prompts import end_stream_logger
+                    ccl_logger.log_session_end(True, iteration, end_stream_logger.total_cost)
                     close_logger()
                     if output_dir:
                         save_package_output(candidate.code, project_url, output_dir)
@@ -332,20 +335,26 @@ def package_project(output_dir=None, project_url=None, revision=None, fetcher=No
             
             if consecutive_rebuilds_without_progress >= max_consecutive_rebuilds_without_progress:
                 coordinator_error(f"Aborted: {consecutive_rebuilds_without_progress} consecutive rebuilds without progress.")
+                from vibenix.packaging_flow.model_prompts import end_stream_logger
                 if last_successful:
                     coordinator_message("Returning last successful build.")
+                    ccl_logger.log_session_end(False, iteration, end_stream_logger.total_cost)
+                    close_logger()
                     return last_successful.code
-                ccl_logger.log_session_end(False, iteration)
+                ccl_logger.log_session_end(False, iteration, end_stream_logger.total_cost)
                 close_logger()
                 return None
 
 
         if iteration > 30:
             coordinator_error("Reached temporary build iteration limit.")
+            from vibenix.packaging_flow.model_prompts import end_stream_logger
             if last_successful:
                 coordinator_message("Returning last successful build.")
+                ccl_logger.log_session_end(False, iteration, end_stream_logger.total_cost)
+                close_logger()
                 return last_successful.code
-            ccl_logger.log_session_end(False, iteration)
+            ccl_logger.log_session_end(False, iteration, end_stream_logger.total_cost)
             close_logger()
             return None
 
@@ -383,8 +392,16 @@ def run_packaging_flow(output_dir=None, project_url=None, revision=None, fetcher
         if result:
             coordinator_message("Packaging completed successfully!")
             coordinator_message(f"Final package code:\n```nix\n{result}\n```")
+            # Print total API cost
+            from vibenix.packaging_flow.model_prompts import end_stream_logger
+            if end_stream_logger.total_cost > 0:
+                coordinator_message(f"\n💰 Total API cost: ${end_stream_logger.total_cost:.6f}")
         else:
             coordinator_message("Packaging failed. Please check the errors above.")
+            # Print total API cost even on failure
+            from vibenix.packaging_flow.model_prompts import end_stream_logger
+            if end_stream_logger.total_cost > 0:
+                coordinator_message(f"\n💰 Total API cost: ${end_stream_logger.total_cost:.6f}")
     except Exception as e:
         coordinator_error(f"Unexpected error: {e}")
         raise
