@@ -195,18 +195,20 @@ def package_project(output_dir=None, project_url=None, revision=None, fetcher=No
     # Log that we're starting iterations
     ccl_logger.log_before_iterations()
     
-    build_iteration = 1
-    eval_iteration = 1
-    max_inner_attempts = 10
+    iteration = 1
+    max_eval_without_success = 3
+    consecutive_eval_errors = 0
+    max_build_regressions_without_progress = 3
+    consecutive_rebuilds_without_progress = 0
+    max_consecutive_rebuilds_without_progress = 3
     candidate = best
     
     while True:
-        coordinator_message(f"Build iteration {build_iteration} - attempting to fix error:")
-        coordinator_message(f"```\n{candidate.result.error.error_message}\n```")
-        
         # Inner loop: Fix evaluation errors with limited attempts
         while True:
-            ccl_logger.log_iteration_start(eval_iteration)
+            coordinator_message(f"Iteration {iteration} - attempting to fix error:")
+            coordinator_message(f"```\n{candidate.result.error.error_message}\n```")
+            ccl_logger.log_iteration_start(iteration)
             
             # Fix the error based on type
             if candidate.result.error.type == NixErrorKind.HASH_MISMATCH:
@@ -223,54 +225,63 @@ def package_project(output_dir=None, project_url=None, revision=None, fetcher=No
             updated_code = extract_updated_code(fixed_response)
             
             # Test the fix
-            coordinator_progress(f"Iteration {build_iteration}: Testing fix attempt {eval_iteration}/{max_inner_attempts}...")
+            coordinator_progress(f"Iteration {iteration}: Testing fix attempt ...")
             prev_candidate_error_type = candidate.result.error.type
             new_result = execute_build_and_add_to_stack(updated_code)
-            ccl_logger.log_iteration_end(eval_iteration, new_result)
+            ccl_logger.log_iteration_end(iteration, new_result)
             candidate = Solution(code=updated_code, result=new_result)
             
             if candidate.result.success:
-                coordinator_message(f"✅ Build succeeded after {build_iteration} iterations!")
-                ccl_logger.log_session_end(True, eval_iteration)
+                coordinator_message(f"✅ Build succeeded after {iteration} iterations!")
+                ccl_logger.log_session_end(True, iteration)
                 close_logger()
                 if output_dir:
                     save_package_output(candidate.code, project_url, output_dir)
                 return candidate.code
             coordinator_message(f"Nix build result: {candidate.result.error.type}")
             
+            iteration += 1
             # Build still failed - check if we made progress or hit eval error
             if candidate.result.error.type == NixErrorKind.EVAL_ERROR:
                 # Evaluation error - continue inner loop
-                coordinator_message(f"{candidate.result.error.type} (attempt {eval_iteration}/{max_inner_attempts}), retrying...")
-                eval_iteration += 1
+                consecutive_eval_errors += 1
+                coordinator_message(f"{candidate.result.error.type} ({max_eval_without_success - consecutive_eval_errors} attempts left, retrying...")
             elif candidate.result.error.type == NixErrorKind.HASH_MISMATCH:
                 # Evaluation error - continue inner loop
-                coordinator_message(f"{candidate.result.error.type} (attempt {eval_iteration}/{max_inner_attempts}), retrying...")
-                eval_iteration += 1
+                consecutive_eval_errors += 1
+                coordinator_message(f"{candidate.result.error.type} ({max_eval_without_success - consecutive_eval_errors} attempts left, retrying...")
             elif candidate.result.error.type == NixErrorKind.BUILD_ERROR:
+                consecutive_eval_errors = 0
                 break
-            if eval_iteration > max_inner_attempts:
-                coordinator_error(f"Failed to make progress within {max_inner_attempts} attempts.")
-                ccl_logger.log_session_end(False, eval_iteration)
+            if consecutive_eval_errors >= max_eval_without_success:
+                coordinator_error(f"Failed to make progress within {max_eval_without_success} attempts.")
+                ccl_logger.log_session_end(False, iteration)
                 close_logger()
                 return None
     
         # TODO: Check progress using NixBuildErrorDiff and decide whether to continue
 
-        eval_result = eval_progress(best.result, candidate.result, build_iteration)
-        ccl_logger.log_progress_eval(build_iteration, eval_result)
+        eval_result = eval_progress(best.result, candidate.result, iteration)
+        ccl_logger.log_progress_eval(iteration, eval_result)
         if eval_result == NixBuildErrorDiff.PROGRESS:
-            coordinator_message(f"Build iteration {build_iteration} made progress...")
+            coordinator_message(f"Iteration {iteration} made progress...")
             best = candidate
-            build_iteration += 1
-            eval_iteration = 1
+            consecutive_rebuilds_without_progress = 0
         else:
-            coordinator_message(f"Build iteration {build_iteration} did NOT made progress...")
+            coordinator_message(f"Iteration {iteration} did NOT made progress...")
             candidate = best
+            consecutive_rebuilds_without_progress += 1
+            
+            if consecutive_rebuilds_without_progress >= max_consecutive_rebuilds_without_progress:
+                coordinator_error(f"Aborted: {consecutive_rebuilds_without_progress} consecutive rebuilds without progress.")
+                ccl_logger.log_session_end(False, iteration)
+                close_logger()
+                return None
 
-        if build_iteration > 15:
+
+        if iteration > 30:
             coordinator_error("Reached temporary build iteration limit.")
-            ccl_logger.log_session_end(False, eval_iteration)
+            ccl_logger.log_session_end(False, iteration)
             close_logger()
             return None
 
