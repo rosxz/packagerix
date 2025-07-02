@@ -239,6 +239,14 @@ jobs:
           if [ -f "output/${{ steps.process.outputs.package_name }}/package.nix" ]; then
             echo "- Generated package.nix: ✓" >> $GITHUB_STEP_SUMMARY
           fi
+          if [ -f "output/run.ccl" ]; then
+            echo "- Generated run.ccl: ✓" >> $GITHUB_STEP_SUMMARY
+            # Extract total cost from run.ccl if present
+            total_cost=$(grep "total_cost =" "output/run.ccl" | tail -1 | cut -d'=' -f2 | tr -d ' ')
+            if [ -n "$total_cost" ]; then
+              echo "- Total API cost: \$$total_cost" >> $GITHUB_STEP_SUMMARY
+            fi
+          fi
           if [ -f "${{ matrix.issue_number }}.log" ] && [ -s "${{ matrix.issue_number }}.log" ]; then
             echo "### Log excerpt:" >> $GITHUB_STEP_SUMMARY
             echo '<pre>' >> $GITHUB_STEP_SUMMARY
@@ -272,6 +280,7 @@ jobs:
           total=0
           success=0
           failed=0
+          total_cost=0
           
           # Process each artifact directory
           for dir in artifacts/vibenix-output-*; do
@@ -287,6 +296,15 @@ jobs:
               else
                 failed=$((failed + 1))
               fi
+              
+              # Extract cost from run.ccl if it exists
+              if [ -f "$dir/output/run.ccl" ]; then
+                cost=$(grep "total_cost =" "$dir/output/run.ccl" | tail -1 | cut -d'=' -f2 | tr -d ' ')
+                if [ -n "$cost" ]; then
+                  # Add to total using bc for floating point arithmetic
+                  total_cost=$(echo "$total_cost + $cost" | bc)
+                fi
+              fi
             fi
           done
           
@@ -300,11 +318,36 @@ jobs:
             echo "- Success rate: ${success_rate}%" >> $GITHUB_STEP_SUMMARY
           fi
           
+          # Show total cost if any
+          if [ $(echo "$total_cost > 0" | bc) -eq 1 ]; then
+            echo "- Total API cost: \$$total_cost" >> $GITHUB_STEP_SUMMARY
+          fi
+          
       - name: Create combined artifact
         run: |
           mkdir -p combined-results
           if [ -d artifacts ] && [ "$(ls -A artifacts)" ]; then
             cp -r artifacts/* combined-results/
+            
+            # Create a cost summary file
+            echo "# API Cost Summary" > combined-results/cost_summary.txt
+            echo "" >> combined-results/cost_summary.txt
+            total_cost=0
+            
+            # Process each artifact to create cost report
+            for dir in artifacts/vibenix-output-*; do
+              if [ -d "$dir" ] && [ -f "$dir/output/run.ccl" ]; then
+                issue_num=$(basename "$dir" | sed 's/vibenix-output-//')
+                cost=$(grep "total_cost =" "$dir/output/run.ccl" | tail -1 | cut -d'=' -f2 | tr -d ' ')
+                if [ -n "$cost" ]; then
+                  echo "Issue #$issue_num: \$$cost" >> combined-results/cost_summary.txt
+                  total_cost=$(echo "$total_cost + $cost" | bc)
+                fi
+              fi
+            done
+            
+            echo "" >> combined-results/cost_summary.txt
+            echo "Total: \$$total_cost" >> combined-results/cost_summary.txt
           else
             echo "No artifacts found to combine"
             echo "No successful packages were built" > combined-results/README.txt
