@@ -242,11 +242,10 @@ def package_project(output_dir=None, project_url=None, revision=None, fetcher=No
     ccl_logger.log_before_iterations()
     
     iteration = 1
-    max_eval_without_success = 3
+    max_eval_without_success = 7
     consecutive_eval_errors = 0
-    max_build_regressions_without_progress = 3
     consecutive_rebuilds_without_progress = 0
-    max_consecutive_rebuilds_without_progress = 3
+    max_consecutive_rebuilds_without_progress = 5
     candidate = best
     
     while True:
