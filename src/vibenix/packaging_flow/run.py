@@ -301,31 +301,32 @@ def package_project(output_dir=None, project_url=None, revision=None, fetcher=No
                 close_logger()
                 return None
     
-        # TODO: Check progress using NixBuildErrorDiff and decide whether to continue
+        if candidate.result.success:
+            last_successful = candidate
+            coordinator_message("Build succeeded! Refining package...")
+            refined_candidate, completed = refine_package(candidate, summary)
+            
+            if completed == RefinementExit.ERROR:
+                coordinator_error("Refinement encountered an error. Returning pre-refinement solution.")
+            elif completed == RefinementExit.INCOMPLETE:
+                coordinator_message("Refinement process reached max iterations.")
+            
+            # Always log success and return, regardless of refinement outcome
+            from vibenix.packaging_flow.model_prompts import end_stream_logger
+            ccl_logger.log_session_end(True, iteration, end_stream_logger.total_cost)
+            close_logger()
+            if output_dir:
+                # Use refined version if no error, otherwise use pre-refinement version
+                final_code = refined_candidate.code if completed != RefinementExit.ERROR else candidate.code
+                save_package_output(final_code, project_url, output_dir)
+            return refined_candidate.code if completed != RefinementExit.ERROR else candidate.code
 
         eval_result = eval_progress(best.result, candidate.result, iteration)
         ccl_logger.log_progress_eval(iteration, eval_result)
+        
         if eval_result == NixBuildErrorDiff.PROGRESS:
             coordinator_message(f"Iteration {iteration} made progress...")
             best = candidate
-
-            if candidate.result.success:
-                last_successful = candidate
-
-                coordinator_message("Refining package based on successful build...")
-                candidate, completed = refine_package(best, summary)
-                if completed == RefinementExit.ERROR:
-                    coordinator_error("Refinement encountered an error, re-entering packaging loop.")
-                    # Ideally the generator does not make changes so bad that we would reset to a pre-refinement checkpoint
-                else:
-                    if completed == RefinementExit.INCOMPLETE:
-                        coordinator_message("Refinement process reached max iterations.")
-                    from vibenix.packaging_flow.model_prompts import end_stream_logger
-                    ccl_logger.log_session_end(True, iteration, end_stream_logger.total_cost)
-                    close_logger()
-                    if output_dir:
-                        save_package_output(candidate.code, project_url, output_dir)
-                    return best.code
             consecutive_rebuilds_without_progress = 0
         else:
             coordinator_message(f"Iteration {iteration} did NOT made progress...")
