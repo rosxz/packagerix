@@ -364,8 +364,10 @@ If the error message does not give you enough information to make progress, and 
 and try to compare your approach with similar packages in nixpkgs.
 
 Known errors:
-- `lib.customisation.callPackageWith: Function called without required argument` this error pointing to the argument at the top of the file means that the name with which you specified the dependency in question was not found in nixpkgs. Use the package search tool to find out what the dependency is named in nix. Do not search for the full name, leave out the parts that could be written in very different ways or search for various potential names.
-
+- `error: evaluation aborted with the following error message: 'lib.customisation.callPackageWith: Function called without required argument "package_name" at /nix/store/[...]`:
+   This error indicates that one of the function arguments you specified at the top of the file was not found and is incorrect.
+   The package in question might now be available nixpkgs, might be avilable under a different name, or might be part of a package set only.
+   Use tools to find the package or other code that depends on the same package.
 Notes:
 - Nothing in the meta attribute of a derivation has any impact on its build output, so do not provide a meta attribute.
 - Do not access the project's online git repository, such as GitHub, and instead browse the local files in the Nix store.
@@ -377,7 +379,7 @@ Notes:
 - If you search for a package using your tools, and you don't have a match, try again with another query or try a different tool.
 - Many build functions, like `mkDerivation` provide a C compiler and a matching libc. If you're missing libc anyways, the GNU libc package is called `glibc` in nixpkgs.
 - Do not produce a flatpak, or docker container and do not use tools related to theres technologies to produce your output. Use tools to find other more direct ways to build the project.
-- If you need packages from a package set like `python3Packages`, only add the package set at the top of the file and use `python3Packages.package_name` or `with python3Packages; [ package_name ]` to access the package in the function body."""
+- If you need packages from a package set like `python3Packages` or `qt6`, only add the package set at the top of the file and use `python3Packages.package_name` or `with python3Packages; [ package_name ]` to add the package."""
     # Include project information if available
     project_info_section = ""
     if project_page:

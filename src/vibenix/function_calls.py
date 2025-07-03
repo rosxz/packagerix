@@ -40,7 +40,11 @@ def search_nixpkgs_for_package(query: str) -> str:
         raise ValueError(f"jq failed with return code {jq_result.returncode}, stderr: {jq_result.stderr}")
 
 def search_nix_functions(query: str) -> str:
-    """Search for Nix builtin and library functions by name"""
+    """
+    Search for Nix builtin and library functions by name.
+    Can be used to search for package sets or packages by their full name, or a part of their name.
+    Invoke multiple times to find different spellings, because search is not fuzzy.
+    """
     
     print("📞 Function called: search_nix_functions with query: ", query)
     get_logger().log_function_call("search_nix_functions", query=query)
