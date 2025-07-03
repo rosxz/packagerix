@@ -178,11 +178,11 @@ def package_project(output_dir=None, project_url=None, revision=None, fetcher=No
     
     # Step 3: Analyze project
     coordinator_message("I found the project information. Let me analyze it.")
-    summary = analyze_project(project_page, release_data) # TODO This is not being used
-    
+    summary = analyze_project(project_page, release_data)
+
     # Step 4: Initialize flake
     coordinator_progress("Setting up a temporary Nix flake for packaging")
-    flake = init_flake() # TODO this is not being used
+    init_flake()
     coordinator_message(f"Working on temporary flake at {config.flake_dir}")
     
     # Step 5: Load template
