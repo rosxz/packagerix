@@ -7,7 +7,7 @@ from magika import Magika
 from itertools import islice
 from vibenix.ccl_log import get_logger
 
-MAX_LINES_TO_READ = 500
+MAX_LINES_TO_READ = 200
 
 def create_source_function_calls(store_path: str, prefix: str = "") -> List[Callable]:
     """
