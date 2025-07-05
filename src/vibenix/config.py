@@ -9,6 +9,7 @@ if TYPE_CHECKING:
     from vibenix.errors import NixBuildResult
 
 error_stack: List['NixBuildResult']
+build_timeout: str
 
 def init():
     global error_stack
@@ -26,4 +27,7 @@ def init():
     #atexit.register(flake_dir_obj.cleanup)
 
     flake_dir = Path(flake_dir_obj.name)
+    # time out build after 7 minutes
+    global build_timeout
+    build_timeout = str(7*60)
    

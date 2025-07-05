@@ -43,7 +43,7 @@ def invoke_build(is_src_attr_only: bool) -> NixBuildResult:
 
     # Build the derivation outputs (not just the derivation file)
     build_result = subprocess.run(
-        ["nix", "build", f"{derivation_path}^*", "--no-link"],
+        ["nix", "build", "--timeout", config.build_timeout, f"{derivation_path}^*", "--no-link"],
         text=True,
         capture_output=True
     )
