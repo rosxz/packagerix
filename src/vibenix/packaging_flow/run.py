@@ -227,7 +227,7 @@ def package_project(output_dir=None, project_url=None, revision=None, fetcher=No
     
     while iteration < MAX_ITERATIONS and consecutive_rebuilds_without_progress < MAX_CONSECUTIVE_REBUILDS_WITHOUT_PROGRESS:
         coordinator_message(f"Iteration {iteration + 1}:")
-        coordinator_message(f"```\n{candidate.result.error.error_message}\n```")
+        coordinator_message(f"```\n{candidate.result.error.truncated()}\n```")
         ccl_logger.log_iteration_start(iteration)
         
         # Fix the error based on type
@@ -252,13 +252,13 @@ def package_project(output_dir=None, project_url=None, revision=None, fetcher=No
         elif candidate.result.error.type == NixErrorKind.HASH_MISMATCH:
             coordinator_message("Hash mismatch detected, fixing...")
             coordinator_message(f"code:\n{candidate.code}\n")
-            coordinator_message(f"error:\n{candidate.result.error.error_message}\n")
-            fixed_response = fix_hash_mismatch(candidate.code, candidate.result.error.error_message)
+            coordinator_message(f"error:\n{candidate.result.error.truncated()}\n")
+            fixed_response = fix_hash_mismatch(candidate.code, candidate.result.error.truncated())
         else:
             coordinator_message("Other error detected, fixing...")
             coordinator_message(f"code:\n{candidate.code}\n")
-            coordinator_message(f"error:\n{candidate.result.error.error_message}\n")
-            fixed_response = fix_build_error(candidate.code, candidate.result.error.error_message, summary, release_data, template_notes, additional_functions)
+            coordinator_message(f"error:\n{candidate.result.error.truncated()}\n")
+            fixed_response = fix_build_error(candidate.code, candidate.result.error.truncated(), summary, release_data, template_notes, additional_functions)
         
         updated_code = extract_updated_code(fixed_response)
             

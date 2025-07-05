@@ -79,12 +79,7 @@ def invoke_build(is_src_attr_only: bool) -> NixBuildResult:
     )
 
 
-def get_tail_of_log(s : str) -> str:
-    lines = s.split('\n')
-    return '\n'.join(lines[-50:])
-
-
-def prepare_logs_for_comparison(initial_error: str, attempted_improvement: str, max_lines: int = 1000) -> dict:
+def prepare_logs_for_comparison(initial_error: str, attempted_improvement: str, max_lines: int = 260) -> dict:
     """Prepare logs for comparison by finding divergence point using sophisticated matching that handles reordered lines."""
     initial_lines_list = initial_error.splitlines()
     improvement_lines_list = attempted_improvement.splitlines()
@@ -160,11 +155,9 @@ def eval_progress(previous_result: NixBuildResult, current_result: NixBuildResul
     if build_iteration == 1 or current_result.success:
         return NixBuildErrorDiff.PROGRESS
     
-    error_message_trunc = f"\n```\n{get_tail_of_log(current_result.error.error_message)}\n```\n"
-    prev_error_message_trunc = f"\n```\n{get_tail_of_log(previous_result.error.error_message)}\n```\n"
-    logger.info(f"previous error: {prev_error_message_trunc}")
-
-    logger.info(f"new error: {error_message_trunc}")
+    # Log truncated versions for debugging
+    logger.info(f"previous error (last 50 lines): \n```\n{previous_result.error.truncated(50)}\n```\n")
+    logger.info(f"new error (last 50 lines): \n```\n{current_result.error.truncated(50)}\n```\n")
 
     repo = git.Repo(config.flake_dir.as_posix())
     logger.info(repo.commit().diff())
@@ -174,10 +167,11 @@ def eval_progress(previous_result: NixBuildResult, current_result: NixBuildResul
     if current_result.is_src_attr_only:
         return NixBuildErrorDiff.REGRESS
 
-    # Prepare the full logs for comparison
+    # Prepare the logs for comparison with limited lines to avoid token limits
     log_comparison = prepare_logs_for_comparison(
         previous_result.error.error_message,
-        current_result.error.error_message
+        current_result.error.error_message,
+        max_lines=260
     )
     
     # Log the comparison details

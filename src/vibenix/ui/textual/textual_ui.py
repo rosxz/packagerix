@@ -20,7 +20,7 @@ from vibenix.packaging_flow.model_prompts import (
 )
 from vibenix.parsing import scrape_and_process, extract_updated_code
 from vibenix.flake import init_flake
-from vibenix.nix import get_tail_of_log, invoke_build
+from vibenix.nix import invoke_build
 from vibenix import config
 from vibenix.errors import NixError
 from vibenix.ui.logging_config import logger, log_capture

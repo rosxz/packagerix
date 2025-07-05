@@ -17,6 +17,26 @@ class NixErrorKind(Enum):
 class NixError(BaseModel):
     type: NixErrorKind
     error_message: str
+    
+    def truncated(self, max_lines: int = 256) -> str:
+        """Return truncated version of error message, keeping the tail end.
+        
+        Args:
+            max_lines: Maximum number of lines to include from the end
+            
+        Returns:
+            Truncated error message showing the last N lines
+        """
+        lines = self.error_message.split('\n')
+        
+        if len(lines) <= max_lines:
+            return self.error_message
+        
+        truncated_lines = lines[-max_lines:]
+        truncated = f"... ({len(lines) - max_lines} lines omitted) ...\n\n"
+        truncated += '\n'.join(truncated_lines)
+        
+        return truncated
 
 
 class NixBuildResult(BaseModel):
