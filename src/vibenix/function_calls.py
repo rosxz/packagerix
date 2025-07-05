@@ -5,7 +5,11 @@ import os
 from vibenix.ccl_log import get_logger
 
 def search_nixpkgs_for_package(query: str) -> str:
-    """Search the nixpkgs repository of Nix code for the given package"""
+    """Search the nixpkgs repository of Nix code for the given package.
+    
+    Returns a concise summary of matching packages, distinguishing between
+    matches in package set names vs package names within sets.
+    """
 
     print("📞 Function called: search_nixpkgs_for_package with query: ", query)
     get_logger().log_function_call("search_nixpkgs_for_package", query=query)
@@ -33,7 +37,99 @@ def search_nixpkgs_for_package(query: str) -> str:
     )
     
     if jq_result.returncode == 0 and jq_result.stdout.strip():
-        return jq_result.stdout
+        try:
+            # Parse the JSON results
+            results = json.loads(jq_result.stdout)
+            total_count = len(results)
+            query_lower = query.lower()
+            
+            # Categorize results
+            package_sets_with_matches = {}  # package_set -> list of matching packages
+            package_set_name_matches = {}  # package_set -> total count (when set name matches)
+            individual_packages = {}  # package_name -> package_info
+            
+            for pkg_name, pkg_info in results.items():
+                if '.' in pkg_name:
+                    parts = pkg_name.split('.', 1)
+                    package_set = parts[0]
+                    package_in_set = parts[1] if len(parts) > 1 else ""
+                    
+                    # Check if the match is in the package set name or the package name
+                    if query_lower in package_set.lower():
+                        # Match is in the package set name
+                        if package_set not in package_set_name_matches:
+                            package_set_name_matches[package_set] = 0
+                        package_set_name_matches[package_set] += 1
+                    else:
+                        # Match must be in the package name within the set
+                        if package_set not in package_sets_with_matches:
+                            package_sets_with_matches[package_set] = []
+                        package_sets_with_matches[package_set].append({
+                            "name": pkg_name,
+                            "version": pkg_info.get("version", ""),
+                            "description": pkg_info.get("description", "")
+                        })
+                else:
+                    individual_packages[pkg_name] = pkg_info
+            
+            # Build the result
+            result_lines = [f"Found {total_count} packages matching '{query}'\n"]
+            
+            # Package sets where the SET NAME matches the query
+            if package_set_name_matches:
+                sorted_set_matches = sorted(package_set_name_matches.items(), 
+                                          key=lambda x: x[1], reverse=True)[:10]
+                result_lines.append("## Package sets matching by name:")
+                for set_name, count in sorted_set_matches:
+                    result_lines.append(f"  - {set_name}: {count} packages total")
+                if len(package_set_name_matches) > 10:
+                    result_lines.append(f"  ... and {len(package_set_name_matches) - 10} more sets")
+                result_lines.append("")
+            
+            # Package sets where PACKAGES within match the query
+            if package_sets_with_matches:
+                result_lines.append("## Packages within sets:")
+                sorted_sets = sorted(package_sets_with_matches.items(), 
+                                   key=lambda x: len(x[1]), reverse=True)[:10]
+                
+                for set_name, packages in sorted_sets:
+                    count = len(packages)
+                    if count <= 3:
+                        # Show all packages if 3 or fewer
+                        result_lines.append(f"  {set_name}:")
+                        for pkg in packages:
+                            result_lines.append(f"    - {pkg['name']}: {pkg['description'][:60]}...")
+                    else:
+                        # Show first 3 as sample
+                        result_lines.append(f"  {set_name}: ({count} matches)")
+                        for pkg in packages[:3]:
+                            result_lines.append(f"    - {pkg['name']}: {pkg['description'][:60]}...")
+                        result_lines.append(f"    ... and {count - 3} more")
+                    result_lines.append("")
+            
+            # Individual packages (max 5)
+            if individual_packages:
+                result_lines.append("## Individual packages:")
+                for i, (pkg_name, pkg_info) in enumerate(list(individual_packages.items())[:5]):
+                    desc = pkg_info.get("description", "")[:60]
+                    version = pkg_info.get("version", "")
+                    result_lines.append(f"  - {pkg_name} ({version}): {desc}...")
+                
+                if len(individual_packages) > 5:
+                    result_lines.append(f"  ... and {len(individual_packages) - 5} more")
+                result_lines.append("")
+            
+            # Add usage hints
+            result_lines.append("## Tips:")
+            result_lines.append("- Use partial matching: 'python3Packages.req' finds 'requests'")
+            result_lines.append("- Be more specific: 'python3Packages.django' instead of just 'django'")
+            result_lines.append("- Try variations: 'qt5', 'qt6', 'libsForQt5' for Qt packages")
+            
+            return "\n".join(result_lines)
+            
+        except json.JSONDecodeError:
+            # If JSON parsing fails, return the original output
+            return jq_result.stdout
     elif not jq_result.stdout.strip():
         return f"nixpkgs search returned no results for {query}"
     elif jq_result.returncode != 0:
