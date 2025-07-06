@@ -44,3 +44,23 @@ class NixBuildResult(BaseModel):
     success: bool
     is_src_attr_only: bool
     error: Optional[NixError] = None
+
+
+class FullLogDiff(BaseModel):
+    """Log comparison showing full logs (when both are under 100 lines)."""
+    initial_error_full: str
+    attempted_improvement_full: str
+    initial_lines: int
+    improvement_lines: int
+
+
+class ProcessedLogDiff(BaseModel):
+    """Log comparison showing truncated logs with divergence analysis."""
+    initial_error_truncated: str
+    attempted_improvement_truncated: str
+    initial_lines: int
+    improvement_lines: int
+    divergence_line: int
+
+
+LogDiff = FullLogDiff | ProcessedLogDiff

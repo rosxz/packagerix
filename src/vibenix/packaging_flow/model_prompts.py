@@ -6,7 +6,7 @@ This module contains all functions decorated with @ask_model that interact with 
 from magentic import StreamedStr
 from vibenix.template.template_types import TemplateType
 from vibenix.ui.conversation import _retry_with_rate_limit, ask_model, ask_model_enum, handle_model_chat
-from vibenix.errors import NixBuildErrorDiff
+from vibenix.errors import NixBuildErrorDiff, LogDiff, FullLogDiff, ProcessedLogDiff
 from magentic import Chat, UserMessage, StreamedResponse, FunctionCall
 from vibenix.function_calls import search_nixpkgs_for_package_semantic, search_nixpkgs_for_package_literal, search_nix_functions
 
@@ -465,29 +465,61 @@ And some relevant metadata of the latest release:
     return handle_model_chat(chat)
 
 
-@ask_model_enum("""@model You are software packaging expert who can build any project using the Nix programming language.
+def evaluate_progress(log_diff: LogDiff) -> NixBuildErrorDiff:
+    """Evaluate if the build made progress by comparing logs."""
+    
+    if isinstance(log_diff, FullLogDiff):
+        # Create a dynamic function with the full log prompt
+        @ask_model_enum("""@model You are software packaging expert who can build any project using the Nix programming language.
 
-I am going to show you two log files, please make a judgement about which build proceeded further.
+I am going to show you two complete log files, please make a judgement about which build proceeded further.
 
-Initial build (total lines: {initial_lines}):
+Initial build (total lines: {log_diff.initial_lines}):
 ```nix
-{initial_error_truncated}
+{log_diff.initial_error_full}
 ```
 
-Attempted improvement (total lines: {improvement_lines}):
+Attempted improvement (total lines: {log_diff.improvement_lines}):
 ```
-{attempted_improvement_truncated}
+{log_diff.attempted_improvement_full}
 ```
 
-The logs diverge at line {divergence_line}. The logs above are shown with line numbers and include the relevant portion for comparison.
+These are the complete logs with line numbers. 
 
 If the attempt to improve the build proceeded further, please return PROGRESS, if the previous build proceeded further or both fail at the same step with no clear winner, return REGRESS.
 
 Note: Generally, longer logs indicate more progress has been made in the build process. Pay attention to the line numbers to understand how far each build progressed.
 """)
-def evaluate_progress(initial_error_truncated: str, attempted_improvement_truncated: str, 
-                     initial_lines: int, improvement_lines: int, divergence_line: int) -> NixBuildErrorDiff:
-    ...
+        def _evaluate_full_logs(log_diff: FullLogDiff) -> NixBuildErrorDiff:
+            ...
+        
+        return _evaluate_full_logs(log_diff)
+    else:  # ProcessedLogDiff
+        # Create a dynamic function with the truncated log prompt
+        @ask_model_enum("""@model You are software packaging expert who can build any project using the Nix programming language.
+
+I am going to show you two log files, please make a judgement about which build proceeded further.
+
+Initial build (total lines: {log_diff.initial_lines}):
+```nix
+{log_diff.initial_error_truncated}
+```
+
+Attempted improvement (total lines: {log_diff.improvement_lines}):
+```
+{log_diff.attempted_improvement_truncated}
+```
+
+The logs diverge at line {log_diff.divergence_line}. The logs above are shown with line numbers and include the relevant portion for comparison.
+
+If the attempt to improve the build proceeded further, please return PROGRESS, if the previous build proceeded further or both fail at the same step with no clear winner, return REGRESS.
+
+Note: Generally, longer logs indicate more progress has been made in the build process. Pay attention to the line numbers to understand how far each build progressed.
+""")
+        def _evaluate_truncated_logs(log_diff: ProcessedLogDiff) -> NixBuildErrorDiff:
+            ...
+        
+        return _evaluate_truncated_logs(log_diff)
 
 @ask_model("""@model You are software packaging expert who can build any project using the Nix programming language.
 

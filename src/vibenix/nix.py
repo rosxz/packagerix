@@ -2,7 +2,7 @@ import subprocess
 
 from vibenix import config
 from vibenix.packaging_flow.model_prompts import evaluate_progress
-from vibenix.errors import NixBuildResult, NixError, NixErrorKind, NixBuildErrorDiff
+from vibenix.errors import NixBuildResult, NixError, NixErrorKind, NixBuildErrorDiff, FullLogDiff, ProcessedLogDiff, LogDiff
 
 import git
 
@@ -79,7 +79,7 @@ def invoke_build(is_src_attr_only: bool) -> NixBuildResult:
     )
 
 
-def prepare_logs_for_comparison(initial_error: str, attempted_improvement: str, max_lines: int = 260) -> dict:
+def prepare_logs_for_comparison(initial_error: str, attempted_improvement: str, max_lines: int = 260) -> LogDiff:
     """Prepare logs for comparison by finding divergence point using sophisticated matching that handles reordered lines."""
     initial_lines_list = initial_error.splitlines()
     improvement_lines_list = attempted_improvement.splitlines()
@@ -87,6 +87,28 @@ def prepare_logs_for_comparison(initial_error: str, attempted_improvement: str, 
     initial_lines = len(initial_lines_list)
     improvement_lines = len(improvement_lines_list)
     
+    # If both logs are under 100 lines, show them in full
+    if initial_lines < 100 and improvement_lines < 100:
+        # Add line numbers to the full logs
+        initial_numbered_lines = []
+        for i, line in enumerate(initial_lines_list, start=1):
+            initial_numbered_lines.append(f"{i:4d}: {line}")
+        
+        improvement_numbered_lines = []
+        for i, line in enumerate(improvement_lines_list, start=1):
+            improvement_numbered_lines.append(f"{i:4d}: {line}")
+        
+        initial_error_full = '\n'.join(initial_numbered_lines)
+        attempted_improvement_full = '\n'.join(improvement_numbered_lines)
+        
+        return FullLogDiff(
+            initial_error_full=initial_error_full,
+            attempted_improvement_full=attempted_improvement_full,
+            initial_lines=initial_lines,
+            improvement_lines=improvement_lines
+        )
+    
+    # Otherwise, use the existing truncation logic
     # Create one set for O(1) lookup
     improvement_set = set(improvement_lines_list)
     
@@ -120,15 +142,13 @@ def prepare_logs_for_comparison(initial_error: str, attempted_improvement: str, 
     initial_error_truncated = '\n'.join(initial_truncated_lines)
     attempted_improvement_truncated = '\n'.join(improvement_truncated_lines)
     
-    return {
-        'initial_lines': initial_lines,
-        'improvement_lines': improvement_lines,
-        'divergence_line': divergence_line,
-        'initial_error_truncated': initial_error_truncated,
-        'attempted_improvement_truncated': attempted_improvement_truncated,
-        '_initial_start_line': initial_start_line + 1,  # For logging only
-        '_improvement_start_line': improvement_start_line + 1  # For logging only
-    }
+    return ProcessedLogDiff(
+        initial_error_truncated=initial_error_truncated,
+        attempted_improvement_truncated=attempted_improvement_truncated,
+        initial_lines=initial_lines,
+        improvement_lines=improvement_lines,
+        divergence_line=divergence_line
+    )
 
 
 # read build log of previous step and this step
@@ -176,15 +196,15 @@ def eval_progress(previous_result: NixBuildResult, current_result: NixBuildResul
     
     # Log the comparison details
     logger.info(f"Log comparison details:")
-    logger.info(f"  Initial build: {log_comparison['initial_lines']} total lines")
-    logger.info(f"  Attempted improvement: {log_comparison['improvement_lines']} total lines")
-    logger.info(f"  Logs diverge at line: {log_comparison['divergence_line']}")
-    logger.info(f"  Sending to model - Initial: lines {log_comparison['_initial_start_line']}-{log_comparison['initial_lines']}")
-    logger.info(f"  Sending to model - Improvement: lines {log_comparison['_improvement_start_line']}-{log_comparison['improvement_lines']}")
+    logger.info(f"  Initial build: {log_comparison.initial_lines} total lines")
+    logger.info(f"  Attempted improvement: {log_comparison.improvement_lines} total lines")
+    if isinstance(log_comparison, FullLogDiff):
+        logger.info(f"  Showing full logs (both under 100 lines)")
+    else:
+        logger.info(f"  Logs diverge at line: {log_comparison.divergence_line}")
+        logger.info(f"  Sending to model - truncated logs showing divergence")
     
-    # Remove logging-only keys before passing to model
-    model_args = {k: v for k, v in log_comparison.items() if not k.startswith('_')}
-    return evaluate_progress(**model_args)
+    return evaluate_progress(log_comparison)
 
 def execute_build_and_add_to_stack(updated_code: str) -> NixBuildResult:
     """Update flake with new code, build it, and add result to error stack."""
