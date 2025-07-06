@@ -9,15 +9,18 @@ from sklearn.metrics.pairwise import cosine_similarity
 import pickle
 from pathlib import Path
 
-def search_nixpkgs_for_package_literal(query: str) -> str:
+def search_nixpkgs_for_package_literal(query: str, package_set: str = None) -> str:
     """Search the nixpkgs repository of Nix code for the given package using fuzzy search.
     
-    Returns a concise summary of matching packages, using fzf for fuzzy matching
-    and distinguishing between matches in package set names vs package names within sets.
+    Args:
+        query: The search term
+        package_set: Optional package set to search within (e.g. "python3Packages", "haskellPackages")
+    
+    Returns a Nix expression with matching packages grouped by package set.
     """
 
-    print("📞 Function called: search_nixpkgs_for_package_literal with query: ", query)
-    get_logger().log_function_call("search_nixpkgs_for_package_literal", query=query)
+    print(f"📞 Function called: search_nixpkgs_for_package_literal with query: {query}, package_set: {package_set}")
+    get_logger().log_function_call("search_nixpkgs_for_package_literal", query=query, package_set=package_set)
     
     # Get all packages (using ^ to match everything)
     nix_result = subprocess.run(
@@ -124,67 +127,77 @@ def search_nixpkgs_for_package_literal(query: str) -> str:
         else:
             individual_packages.append(match)
     
-    # Build result as list to maintain order
-    result_items = []
+    # Filter by package set if specified
+    if package_set:
+        package_sets = {k: v for k, v in package_sets.items() if k == package_set}
+        package_set_order = [s for s in package_set_order if s == package_set]
+    
+    # Determine limits based on whether package_set is specified
+    set_limit = 20 if package_set else 10
+    pkg_per_set_limit = 20 if package_set else 3
+    individual_limit = 20 if package_set else 5
+    
+    # Build Nix expression
+    nix_lines = ["{"]    
     
     # Add package sets (preserving fzf ranking order)
-    for set_name in package_set_order[:10]:  # Show first 10 package sets by order of appearance
+    for set_idx, set_name in enumerate(package_set_order[:set_limit]):
         packages = package_sets[set_name]
         count = len(packages)
         
-        if count <= 3:
-            # Show all packages if 3 or fewer
-            for pkg in packages:
-                result_items.append((pkg['name'], {
-                    "description": pkg['description'],
-                    "pname": pkg['name'].split('.')[-1],
-                    "version": pkg['version']
-                }))
-        else:
-            # Show first 3 as sample
-            for pkg in packages[:3]:
-                result_items.append((pkg['name'], {
-                    "description": pkg['description'],
-                    "pname": pkg['name'].split('.')[-1],
-                    "version": pkg['version']
-                }))
-            # Add comment about more packages
-            result_items.append((f"_comment_{set_name}", f"... and {count - 3} more packages in {set_name}"))
+        nix_lines.append(f"  {set_name} = {{")
+        
+        # Show more packages if searching within specific set
+        show_limit = min(count, pkg_per_set_limit)
+        for pkg in packages[:show_limit]:
+            pkg_attr = pkg['name'].split('.')[-1]
+            nix_lines.append(f"    {pkg_attr} = {{")
+            nix_lines.append(f'      pname = "{pkg_attr}";')
+            nix_lines.append(f'      version = "{pkg["version"]}";')
+            # Escape quotes in description
+            desc = pkg['description'].replace('"', '\\"')
+            nix_lines.append(f'      description = "{desc}";')
+            nix_lines.append("    };")
+        
+        if count > show_limit:
+            nix_lines.append(f"    # ... and {count - show_limit} more packages")
+        
+        nix_lines.append("  };")
+        if set_idx < len(package_set_order[:set_limit]) - 1 or individual_packages:
+            nix_lines.append("")
     
-    # Add individual packages (max 5)
-    for pkg in individual_packages[:5]:
-        result_items.append((pkg['name'], {
-            "description": pkg['description'],
-            "pname": pkg['name'],
-            "version": pkg['version']
-        }))
+    # Add individual packages
+    if individual_packages and not package_set:
+        if package_sets:
+            nix_lines.append("")
+        nix_lines.append("  # Individual packages")
+        for i, pkg in enumerate(individual_packages[:individual_limit]):
+            nix_lines.append(f"  {pkg['name']} = {{")
+            nix_lines.append(f'    pname = "{pkg["name"]}";')
+            nix_lines.append(f'    version = "{pkg["version"]}";')
+            desc = pkg['description'].replace('"', '\\"')
+            nix_lines.append(f'    description = "{desc}";')
+            nix_lines.append("  };")
+        
+        if len(individual_packages) > individual_limit:
+            nix_lines.append(f"  # ... and {len(individual_packages) - individual_limit} more individual packages")
     
-    if len(individual_packages) > 5:
-        result_items.append(("_comment_individual", f"... and {len(individual_packages) - 5} more individual packages"))
+    nix_lines.append("}")
     
-    # Manually build JSON with comments
-    json_lines = ["{"]    
-    for i, (key, value) in enumerate(result_items):
-        if key.startswith("_comment_"):
-            json_lines.append(f"  // {value}")
-        else:
-            json_str = json.dumps({key: value}, indent=2)[1:-1].strip()
-            # Add comma if not last real item
-            has_more = any(not k.startswith("_comment_") for k, _ in result_items[i+1:])
-            if has_more:
-                json_str += ","
-            json_lines.append("  " + json_str)
-    json_lines.append("}")
-    
-    return "\n".join(json_lines)
+    return "\n".join(nix_lines)
 
-def search_nixpkgs_for_package_semantic(query: str) -> str:
+def search_nixpkgs_for_package_semantic(query: str, package_set: str = None) -> str:
     """Search the nixpkgs repository using semantic similarity with embeddings.
     
+    Args:
+        query: The search term
+        package_set: Optional package set to search within (e.g. "python3Packages", "haskellPackages")
+    
     Uses sentence transformers to find semantically similar package names and descriptions.
+    Returns a Nix expression with matching packages grouped by package set.
     """
-    print("📞 Function called: search_nixpkgs_for_package_semantic (embeddings) with query: ", query)
-    get_logger().log_function_call("search_nixpkgs_for_package_semantic", query=query)
+    print(f"📞 Function called: search_nixpkgs_for_package_semantic (embeddings) with query: {query}, package_set: {package_set}")
+    get_logger().log_function_call("search_nixpkgs_for_package_semantic", query=query, package_set=package_set)
     
     # Get path to pre-computed embeddings from environment
     embeddings_path = os.environ.get('NIXPKGS_EMBEDDINGS')
@@ -250,57 +263,84 @@ def search_nixpkgs_for_package_semantic(query: str) -> str:
         else:
             individual_packages.append(match)
     
-    # Build result as list to maintain order
-    result_items = []
+    # Filter by package set if specified
+    if package_set:
+        # Filter matches to only include specified package set
+        filtered_matches = []
+        for match in matches:
+            if '.' in match['name'] and match['name'].split('.', 1)[0] == package_set:
+                filtered_matches.append(match)
+        matches = filtered_matches
+        
+        # Re-categorize with filtered matches
+        package_sets = {}
+        individual_packages = []
+        package_set_order = []
+        
+        for match in matches:
+            pkg_name = match['name']
+            if '.' in pkg_name:
+                package_set_name = pkg_name.split('.', 1)[0]
+                if package_set_name not in package_sets:
+                    package_sets[package_set_name] = []
+                    package_set_order.append(package_set_name)
+                package_sets[package_set_name].append(match)
+            else:
+                individual_packages.append(match)
+    
+    # Determine limits based on whether package_set is specified
+    set_limit = 20 if package_set else 10
+    pkg_per_set_limit = 20 if package_set else 3
+    individual_limit = 20 if package_set else 5
+    
+    # Build Nix expression
+    nix_lines = ["{"]    
     
     # Add package sets
-    for set_name in package_set_order[:10]:
+    for set_idx, set_name in enumerate(package_set_order[:set_limit]):
         packages = package_sets[set_name]
         count = len(packages)
         
-        if count <= 3:
-            for pkg in packages:
-                result_items.append((pkg['name'], {
-                    "description": pkg['description'],
-                    "pname": pkg['name'].split('.')[-1],
-                    "version": pkg['version']
-                }))
-        else:
-            for pkg in packages[:3]:
-                result_items.append((pkg['name'], {
-                    "description": pkg['description'],
-                    "pname": pkg['name'].split('.')[-1],
-                    "version": pkg['version']
-                }))
-            # Add comment about more packages
-            result_items.append((f"_comment_{set_name}", f"... and {count - 3} more packages in {set_name}"))
+        nix_lines.append(f"  {set_name} = {{")
+        
+        # Show more packages if searching within specific set
+        show_limit = min(count, pkg_per_set_limit)
+        for pkg in packages[:show_limit]:
+            pkg_attr = pkg['name'].split('.')[-1]
+            nix_lines.append(f"    {pkg_attr} = {{")
+            nix_lines.append(f'      pname = "{pkg_attr}";')
+            nix_lines.append(f'      version = "{pkg["version"]}";')
+            # Escape quotes in description
+            desc = pkg['description'].replace('"', '\\"')
+            nix_lines.append(f'      description = "{desc}";')
+            nix_lines.append("    };")
+        
+        if count > show_limit:
+            nix_lines.append(f"    # ... and {count - show_limit} more packages")
+        
+        nix_lines.append("  };")
+        if set_idx < len(package_set_order[:set_limit]) - 1 or individual_packages:
+            nix_lines.append("")
     
     # Add individual packages
-    for pkg in individual_packages[:5]:
-        result_items.append((pkg['name'], {
-            "description": pkg['description'],
-            "pname": pkg['name'],
-            "version": pkg['version']
-        }))
+    if individual_packages and not package_set:
+        if package_sets:
+            nix_lines.append("")
+        nix_lines.append("  # Individual packages")
+        for i, pkg in enumerate(individual_packages[:individual_limit]):
+            nix_lines.append(f"  {pkg['name']} = {{")
+            nix_lines.append(f'    pname = "{pkg["name"]}";')
+            nix_lines.append(f'    version = "{pkg["version"]}";')
+            desc = pkg['description'].replace('"', '\\"')
+            nix_lines.append(f'    description = "{desc}";')
+            nix_lines.append("  };")
+        
+        if len(individual_packages) > individual_limit:
+            nix_lines.append(f"  # ... and {len(individual_packages) - individual_limit} more individual packages")
     
-    if len(individual_packages) > 5:
-        result_items.append(("_comment_individual", f"... and {len(individual_packages) - 5} more individual packages"))
-    
-    # Manually build JSON with comments
-    json_lines = ["{"]    
-    for i, (key, value) in enumerate(result_items):
-        if key.startswith("_comment_"):
-            json_lines.append(f"  // {value}")
-        else:
-            json_str = json.dumps({key: value}, indent=2)[1:-1].strip()
-            # Add comma if not last real item
-            has_more = any(not k.startswith("_comment_") for k, _ in result_items[i+1:])
-            if has_more:
-                json_str += ","
-            json_lines.append("  " + json_str)
-    json_lines.append("}")
+    nix_lines.append("}")
 
-    return "\n".join(json_lines)
+    return "\n".join(nix_lines)
 
 def search_nix_functions(query: str) -> str:
     """
