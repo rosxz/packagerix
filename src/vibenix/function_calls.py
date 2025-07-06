@@ -3,137 +3,292 @@ import requests
 import json
 import os
 from vibenix.ccl_log import get_logger
+from sentence_transformers import SentenceTransformer
+import numpy as np
+from sklearn.metrics.pairwise import cosine_similarity
+import pickle
+from pathlib import Path
 
-def search_nixpkgs_for_package(query: str) -> str:
-    """Search the nixpkgs repository of Nix code for the given package.
+def search_nixpkgs_for_package_fuzzy(query: str) -> str:
+    """Search the nixpkgs repository of Nix code for the given package using fuzzy search.
     
-    Returns a concise summary of matching packages, distinguishing between
-    matches in package set names vs package names within sets.
+    Returns a concise summary of matching packages, using fzf for fuzzy matching
+    and distinguishing between matches in package set names vs package names within sets.
     """
 
-    print("📞 Function called: search_nixpkgs_for_package with query: ", query)
-    get_logger().log_function_call("search_nixpkgs_for_package", query=query)
+    print("📞 Function called: search_nixpkgs_for_package_fuzzy with query: ", query)
+    get_logger().log_function_call("search_nixpkgs_for_package_fuzzy", query=query)
     
-    # Run nix search first, explicitly separate stdout and stderr
+    # Get all packages (using ^ to match everything)
     nix_result = subprocess.run(
-        ["nix", "search", "--json", "nixpkgs", query],
+        ["nix", "search", "--json", "nixpkgs", "^"],
         stdout=subprocess.PIPE,
         stderr=subprocess.PIPE,
         text=True
     )
     
     if nix_result.returncode != 0 or not nix_result.stdout.strip():
-        return f"no results found for query '{query}'"
+        return f"Failed to fetch package list from nixpkgs"
     
-    # Pipe to jq to remove the platform-specific prefix
-    # TODO: fix platform dependence here for mac support
-    jq_filter = r'with_entries(.key |= sub("legacyPackages\\.x86_64-linux\\."; ""))'
+    # Convert JSON to lines with format: package_name|json_entry
+    # This makes it easier to parse after fzf
+    jq_filter = r'''
+    to_entries 
+    | map(
+        (.key |= sub("legacyPackages\\.x86_64-linux\\."; ""))
+        | "\(.key)|\(.value | @json)"
+      )
+    | .[]
+    '''
+    
     jq_result = subprocess.run(
-        ["jq", jq_filter],
+        ["jq", "-r", jq_filter],
         input=nix_result.stdout,
         stdout=subprocess.PIPE,
         stderr=subprocess.PIPE,
         text=True
     )
     
-    if jq_result.returncode == 0 and jq_result.stdout.strip():
-        try:
-            # Parse the JSON results
-            results = json.loads(jq_result.stdout)
-            total_count = len(results)
-            query_lower = query.lower()
-            
-            # Categorize results
-            package_sets_with_matches = {}  # package_set -> list of matching packages
-            package_set_name_matches = {}  # package_set -> total count (when set name matches)
-            individual_packages = {}  # package_name -> package_info
-            
-            for pkg_name, pkg_info in results.items():
-                if '.' in pkg_name:
-                    parts = pkg_name.split('.', 1)
-                    package_set = parts[0]
-                    package_in_set = parts[1] if len(parts) > 1 else ""
-                    
-                    # Check if the match is in the package set name or the package name
-                    if query_lower in package_set.lower():
-                        # Match is in the package set name
-                        if package_set not in package_set_name_matches:
-                            package_set_name_matches[package_set] = 0
-                        package_set_name_matches[package_set] += 1
-                    else:
-                        # Match must be in the package name within the set
-                        if package_set not in package_sets_with_matches:
-                            package_sets_with_matches[package_set] = []
-                        package_sets_with_matches[package_set].append({
-                            "name": pkg_name,
-                            "version": pkg_info.get("version", ""),
-                            "description": pkg_info.get("description", "")
+    if jq_result.returncode != 0:
+        return f"Failed to process package list: {jq_result.stderr}"
+    
+    # Use fzf for fuzzy search
+    # --with-nth=1 tells fzf to only search on the first field (package name)
+    fzf_result = subprocess.run(
+        ["fzf", f"--filter={query}", "-i", "--delimiter=|", "--with-nth=1"],
+        input=jq_result.stdout,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        text=True
+    )
+    
+    # Parse fzf results
+    fuzzy_matches = []
+    if fzf_result.returncode == 0 and fzf_result.stdout.strip():
+        for line in fzf_result.stdout.strip().split('\n')[:200]:  # Limit to top 200 matches
+            if not line or '|' not in line:
+                continue
+            try:
+                pkg_name, json_str = line.split('|', 1)
+                pkg_info = json.loads(json_str)
+                fuzzy_matches.append({
+                    'name': pkg_name,
+                    'version': pkg_info.get('version', ''),
+                    'description': pkg_info.get('description', ''),
+                })
+            except (json.JSONDecodeError, ValueError):
+                continue
+    
+    # If fuzzy search returns few results, also do substring matching
+    substring_matches = []
+    if len(fuzzy_matches) < 20:
+        query_lower = query.lower()
+        for line in jq_result.stdout.strip().split('\n'):
+            if not line or '|' not in line:
+                continue
+            try:
+                pkg_name, json_str = line.split('|', 1)
+                if query_lower in pkg_name.lower():
+                    # Check if already in fuzzy matches
+                    if not any(m['name'] == pkg_name for m in fuzzy_matches):
+                        pkg_info = json.loads(json_str)
+                        substring_matches.append({
+                            'name': pkg_name,
+                            'version': pkg_info.get('version', ''),
+                            'description': pkg_info.get('description', ''),
                         })
-                else:
-                    individual_packages[pkg_name] = pkg_info
+                        if len(substring_matches) >= 50:  # Limit substring matches
+                            break
+            except (json.JSONDecodeError, ValueError):
+                continue
+    
+    # Combine matches: fuzzy matches first, then substring matches
+    matches = fuzzy_matches + substring_matches
+    
+    if not matches:
+        return f"No packages found matching '{query}'"
+    
+    # Categorize results while preserving fzf's ranking
+    package_sets = {}  # package_set -> list of packages
+    individual_packages = []
+    package_set_order = []  # Track order of first appearance
+    
+    for match in matches:
+        pkg_name = match['name']
+        if '.' in pkg_name:
+            package_set = pkg_name.split('.', 1)[0]
+            if package_set not in package_sets:
+                package_sets[package_set] = []
+                package_set_order.append(package_set)
+            package_sets[package_set].append(match)
+        else:
+            individual_packages.append(match)
+    
+    # Build result
+    result_lines = [f"Found packages matching '{query}' (fuzzy search)\n"]
+    
+    # Show package sets (preserving fzf ranking order)
+    if package_sets:
+        result_lines.append("## Package sets with matches:")
+        
+        shown_sets = 0
+        for set_name in package_set_order[:10]:  # Show first 10 package sets by order of appearance
+            packages = package_sets[set_name]
+            count = len(packages)
             
-            # Build the result
-            result_lines = [f"Found {total_count} packages matching '{query}'\n"]
+            if count <= 3:
+                # Show all packages if 3 or fewer
+                result_lines.append(f"  {set_name}:")
+                for pkg in packages:
+                    desc = pkg['description'][:60] + "..." if len(pkg['description']) > 60 else pkg['description']
+                    result_lines.append(f"    - {pkg['name']}: {desc}")
+            else:
+                # Show first 3 as sample
+                result_lines.append(f"  {set_name}: ({count} matches)")
+                for pkg in packages[:3]:
+                    desc = pkg['description'][:60] + "..." if len(pkg['description']) > 60 else pkg['description']
+                    result_lines.append(f"    - {pkg['name']}: {desc}")
+                result_lines.append(f"    ... and {count - 3} more")
             
-            # Package sets where the SET NAME matches the query
-            if package_set_name_matches:
-                sorted_set_matches = sorted(package_set_name_matches.items(), 
-                                          key=lambda x: x[1], reverse=True)[:10]
-                result_lines.append("## Package sets matching by name:")
-                for set_name, count in sorted_set_matches:
-                    result_lines.append(f"  - {set_name}: {count} packages total")
-                if len(package_set_name_matches) > 10:
-                    result_lines.append(f"  ... and {len(package_set_name_matches) - 10} more sets")
-                result_lines.append("")
+            shown_sets += 1
             
-            # Package sets where PACKAGES within match the query
-            if package_sets_with_matches:
-                result_lines.append("## Packages within sets:")
-                sorted_sets = sorted(package_sets_with_matches.items(), 
-                                   key=lambda x: len(x[1]), reverse=True)[:10]
-                
-                for set_name, packages in sorted_sets:
-                    count = len(packages)
-                    if count <= 3:
-                        # Show all packages if 3 or fewer
-                        result_lines.append(f"  {set_name}:")
-                        for pkg in packages:
-                            result_lines.append(f"    - {pkg['name']}: {pkg['description'][:60]}...")
-                    else:
-                        # Show first 3 as sample
-                        result_lines.append(f"  {set_name}: ({count} matches)")
-                        for pkg in packages[:3]:
-                            result_lines.append(f"    - {pkg['name']}: {pkg['description'][:60]}...")
-                        result_lines.append(f"    ... and {count - 3} more")
-                    result_lines.append("")
+        if len(package_set_order) > 10:
+            result_lines.append(f"  ... and {len(package_set_order) - 10} more sets")
+        result_lines.append("")
+    
+    # Show individual packages (max 5)
+    if individual_packages:
+        result_lines.append("## Individual packages:")
+        for pkg in individual_packages[:5]:
+            desc = pkg['description'][:60] + "..." if len(pkg['description']) > 60 else pkg['description']
+            version = f" ({pkg['version']})" if pkg['version'] else ""
+            result_lines.append(f"  - {pkg['name']}{version}: {desc}")
+        
+        if len(individual_packages) > 5:
+            result_lines.append(f"  ... and {len(individual_packages) - 5} more")
+        result_lines.append("")
+    
+    return "\n".join(result_lines)
+
+def search_nixpkgs_for_package_semantic(query: str) -> str:
+    """Search the nixpkgs repository using semantic similarity with embeddings.
+    
+    Uses sentence transformers to find semantically similar package names and descriptions.
+    """
+    print("📞 Function called: search_nixpkgs_for_package_semantic (embeddings) with query: ", query)
+    get_logger().log_function_call("search_nixpkgs_for_package_semantic", query=query)
+    
+    # Get path to pre-computed embeddings from environment
+    embeddings_path = os.environ.get('NIXPKGS_EMBEDDINGS')
+    if not embeddings_path:
+        return "Error: NIXPKGS_EMBEDDINGS environment variable not set. Please run from nix develop shell."
+    
+    if not os.path.exists(embeddings_path):
+        return f"Error: Pre-computed embeddings not found at {embeddings_path}"
+    
+    # Load pre-computed embeddings
+    try:
+        with open(embeddings_path, 'rb') as f:
+            data = pickle.load(f)
+            embeddings = data['embeddings']
+            package_names = data['names']
+            packages = data['packages']
+    except Exception as e:
+        return f"Error loading pre-computed embeddings: {str(e)}"
+    
+    # Load model for encoding the query
+    model = SentenceTransformer('all-MiniLM-L6-v2')
+    
+    # Encode query and find similar packages
+    query_embedding = model.encode([query])
+    similarities = cosine_similarity(query_embedding, embeddings)[0]
+    
+    # Get top 200 results
+    top_indices = np.argsort(similarities)[::-1][:200]
+    
+    # Build matches list
+    matches = []
+    # Create package dict from pre-computed data
+    package_dict = {entry['key']: entry['value'] for entry in packages}
+    
+    for idx in top_indices:
+        if similarities[idx] < 0.2:  # Skip very low similarity scores
+            break
+        pkg_name = package_names[idx]
+        pkg_info = package_dict.get(pkg_name, {})
+        matches.append({
+            'name': pkg_name,
+            'version': pkg_info.get('version', ''),
+            'description': pkg_info.get('description', ''),
+            'score': similarities[idx]
+        })
+    
+    if not matches:
+        return f"No packages found matching '{query}'"
+    
+    # Categorize results
+    package_sets = {}
+    individual_packages = []
+    package_set_order = []
+    
+    for match in matches:
+        pkg_name = match['name']
+        if '.' in pkg_name:
+            package_set = pkg_name.split('.', 1)[0]
+            if package_set not in package_sets:
+                package_sets[package_set] = []
+                package_set_order.append(package_set)
+            package_sets[package_set].append(match)
+        else:
+            individual_packages.append(match)
+    
+    # Build result
+    result_lines = [f"Found packages matching '{query}' (semantic search)\n"]
+    
+    # Show best match score
+    if matches:
+        result_lines.append(f"Best match score: {matches[0]['score']:.3f}\n")
+    
+    # Show package sets
+    if package_sets:
+        result_lines.append("## Package sets with matches:")
+        
+        shown_sets = 0
+        for set_name in package_set_order[:10]:
+            packages = package_sets[set_name]
+            count = len(packages)
             
-            # Individual packages (max 5)
-            if individual_packages:
-                result_lines.append("## Individual packages:")
-                for i, (pkg_name, pkg_info) in enumerate(list(individual_packages.items())[:5]):
-                    desc = pkg_info.get("description", "")[:60]
-                    version = pkg_info.get("version", "")
-                    result_lines.append(f"  - {pkg_name} ({version}): {desc}...")
-                
-                if len(individual_packages) > 5:
-                    result_lines.append(f"  ... and {len(individual_packages) - 5} more")
-                result_lines.append("")
+            if count <= 3:
+                result_lines.append(f"  {set_name}:")
+                for pkg in packages:
+                    desc = pkg['description'][:60] + "..." if len(pkg['description']) > 60 else pkg['description']
+                    result_lines.append(f"    - {pkg['name']} ({pkg['score']:.3f}): {desc}")
+            else:
+                result_lines.append(f"  {set_name}: ({count} matches)")
+                for pkg in packages[:3]:
+                    desc = pkg['description'][:60] + "..." if len(pkg['description']) > 60 else pkg['description']
+                    result_lines.append(f"    - {pkg['name']} ({pkg['score']:.3f}): {desc}")
+                result_lines.append(f"    ... and {count - 3} more")
             
-            # Add usage hints
-            result_lines.append("## Tips:")
-            result_lines.append("- Use partial matching: 'python3Packages.req' finds 'requests'")
-            result_lines.append("- Be more specific: 'python3Packages.django' instead of just 'django'")
-            result_lines.append("- Try variations: 'qt5', 'qt6', 'libsForQt5' for Qt packages")
+            shown_sets += 1
             
-            return "\n".join(result_lines)
-            
-        except json.JSONDecodeError:
-            # If JSON parsing fails, return the original output
-            return jq_result.stdout
-    elif not jq_result.stdout.strip():
-        return f"nixpkgs search returned no results for {query}"
-    elif jq_result.returncode != 0:
-        raise ValueError(f"jq failed with return code {jq_result.returncode}, stderr: {jq_result.stderr}")
+        if len(package_set_order) > 10:
+            result_lines.append(f"  ... and {len(package_set_order) - 10} more sets")
+        result_lines.append("")
+    
+    # Show individual packages
+    if individual_packages:
+        result_lines.append("## Individual packages:")
+        for pkg in individual_packages[:5]:
+            desc = pkg['description'][:60] + "..." if len(pkg['description']) > 60 else pkg['description']
+            version = f" ({pkg['version']})" if pkg['version'] else ""
+            result_lines.append(f"  - {pkg['name']}{version} ({pkg['score']:.3f}): {desc}")
+        
+        if len(individual_packages) > 5:
+            result_lines.append(f"  ... and {len(individual_packages) - 5} more")
+        result_lines.append("")
+
+    return "\n".join(result_lines)
 
 def search_nix_functions(query: str) -> str:
     """
