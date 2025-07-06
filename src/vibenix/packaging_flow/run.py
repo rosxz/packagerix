@@ -8,7 +8,7 @@ from vibenix.ui.conversation import ask_user,  coordinator_message, coordinator_
 from vibenix.parsing import scrape_and_process, extract_updated_code, fetch_combined_project_data, fill_src_attributes
 from vibenix.flake import init_flake
 from vibenix.nix import eval_progress, execute_build_and_add_to_stack
-from vibenix.packaging_flow.model_prompts import pick_template, set_up_project, summarize_github, fix_build_error, fix_hash_mismatch, evaluate_code, refine_code, get_feedback, RefinementExit
+from vibenix.packaging_flow.model_prompts import pick_template, set_up_project, summarize_github, fix_build_error, fix_hash_mismatch, evaluate_code, refine_code, get_feedback, RefinementExit, analyze_package_failure, classify_packaging_failure, PackagingFailure
 from vibenix.packaging_flow.user_prompts import get_project_url
 from vibenix import config
 from vibenix.errors import NixBuildErrorDiff, NixErrorKind, NixBuildResult
@@ -218,7 +218,7 @@ def package_project(output_dir=None, project_url=None, revision=None, fetcher=No
     ccl_logger.log_before_iterations()
     
     iteration = 0
-    MAX_ITERATIONS = 40
+    MAX_ITERATIONS = 10
     candidate = best
     MAX_CONSECUTIVE_REBUILDS_WITHOUT_PROGRESS = 10
     consecutive_rebuilds_without_progress = 0
@@ -312,6 +312,10 @@ def package_project(output_dir=None, project_url=None, revision=None, fetcher=No
         else:
             coordinator_error(f"Reached MAX_ITERATIONS build iteration limit of {MAX_ITERATIONS}.")
     
+    details = analyze_package_failure(best.code, best.result.error.truncated(), summary, release_data, template_notes, additional_functions)
+    packaging_failure = classify_packaging_failure(details)
+    if isinstance(packaging_failure, PackagingFailure):
+        coordinator_message(f"Packaging failure type: {packaging_failure}\nDetails:\n{details}\n")
     from vibenix.packaging_flow.model_prompts import end_stream_logger
     ccl_logger.log_session_end(False, iteration, end_stream_logger.total_cost)
     close_logger()

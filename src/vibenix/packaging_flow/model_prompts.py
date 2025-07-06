@@ -7,15 +7,16 @@ from magentic import StreamedStr
 from vibenix.template.template_types import TemplateType
 from vibenix.ui.conversation import _retry_with_rate_limit, ask_model, ask_model_enum, handle_model_chat
 from vibenix.errors import NixBuildErrorDiff
-from magentic import Chat, UserMessage, StreamedResponse
+from magentic import Chat, UserMessage, StreamedResponse, FunctionCall
 from vibenix.function_calls import search_nixpkgs_for_package_semantic, search_nixpkgs_for_package_literal, search_nix_functions
 
 from litellm.integrations.custom_logger import CustomLogger
-from litellm.files.main import ModelResponse
+from litellm.files.main import ModelResponse, BaseModel
 import litellm
 from enum import Enum
 import os
 import sys
+from typing import Literal, Iterable
 
 
 class EndStreamLogger(CustomLogger):
@@ -219,6 +220,7 @@ Here is the previous Nix code:
 def evaluate_code(code: str, previous_code: str, feedback: str = None) -> RefinementExit:
     ...
 
+# 2. Identify unused dependencies. These can be further verified to be unnecessary by checking against build instructions in the project page, local files, etc.;
 def get_feedback(code: str, log: str, project_page: str = None, release_data: dict = None, template_notes: str = None, additional_functions: list = []) -> StreamedStr:
     """Refine a nix package to remove unnecessary snippets, add missing code, and improve style."""
     prompt = """You are software packaging expert who can build any project using the Nix programming language.
@@ -227,9 +229,8 @@ The following Nix code successfuly builds the respective project.
 
 Your task is to identify if there exist concrete improvements to the packaging code, namely:
     1. Ensure a reasonable coding style, removing unnecessary comments and unused code, such as dangling template snippets;
-    2. Identify unused dependencies. These can be further verified to be unnecessary by checking against build instructions in the project page, local files, etc.;
-    3. Identify missing dependencies, mentioned in the project page, local files, etc.;
-    4. Ensure the Nix builder function has the "doInstallCheck" set to true and includes the "installCheckPhase" attribute.
+    2. Identify missing dependencies, mentioned in the project page, local files, etc.;
+    3. Ensure the Nix builder function has the "doInstallCheck" set to true and includes the "installCheckPhase" attribute.
     This attribute should be set to, at least, programatically verify basic execution of the program, and that the expected
     binaries and libraries are, respectively, executable and present.
 
@@ -516,3 +517,109 @@ Note: You can assume that we do not need to specify the same hash twice,
 """)
 def fix_hash_mismatch(code: str, error: str) -> StreamedStr:
     ...
+
+
+class PackagingFailure(Enum):
+    """Represents a packaging failure with specific details."""
+    BUILD_TOOL_NOT_IN_NIXPKGS = "BUILD_TOOL_NOT_IN_NIXPKGS"
+    BUILD_TOOL_VERSION_NOT_IN_NIXPKGS = "BUILD_TOOL_VERSION_NOT_IN_NIXPKGS"
+    DEPENDENCY_NOT_IN_NIXPKGS = "DEPENDENCY_NOT_IN_NIXPKGS"
+    PACKAGING_REQUIRES_PATCHING_OF_SOURCE = "PACKAGING_REQUIRES_PATCHING_OF_SOURCE"
+    BUILD_DOWNLOADS_FROM_NETWORK = "BUILD_DOWNLOADS_FROM_NETWORK"
+    REQUIRES_SPECIAL_HARDWARE = "REQUIRES_SPECIAL_HARDWARE"
+    REQUIRES_PORT_OR_DOES_NOT_TARGET_LINUX = "REQUIRES_PORT_OR_DOES_NOT_TARGET_LINUX"
+    OTHER = "OTHER"
+
+@ask_model_enum("""@model You are software packaging expert who can build any project using the Nix programming language.
+
+Your task is to analyze the given details regarding a packaging failure, along with the respective code and respective error, and select the appropriate type of failure.
+It is most important that you choose the most appropriate failure type, only selecting OTHER if none of the other failure types apply.
+
+Here is the details:
+```text
+{details}
+```
+""")
+def classify_packaging_failure(details: str) -> PackagingFailure:
+    """Classify a packaging failure based on the provided details."""
+    ...
+
+def analyze_package_failure(code: str, error: str, project_page: str = None, release_data: dict = None, template_notes: str = None, additional_functions: list = []) -> StreamedStr:
+    """Analyze a package failure to determine the type of failure and describe it."""
+    prompt = """You are software packaging expert who can build any project using the Nix programming language.
+
+Another expert Nix agent failed to produce a Nix package for a given software project within a reasonable amount of attempts.
+
+Your task is to analyze the provided Nix code, the last error message obtained, and the project source code in the Nix store to describe the problem.
+You should not solely focus on the error message, as it may not show the true problem the agent had with packaging.
+
+This task will help
+    - the developer of the software in making their software easier to package, or
+    - help allocate resources towards packaging missing dependencies, or
+    - make it easier to understand in terms of supply chain security.
+
+
+Here is the Nix code:
+```nix
+{code}
+```
+
+Error:
+```
+{error}
+```
+
+{project_info_section}
+
+{template_notes_section}
+
+Known errors:
+- `error: evaluation aborted with the following error message: 'lib.customisation.callPackageWith: Function called without required argument "package_name" at /nix/store/[...]`:
+   This error indicates that one of the function arguments you specified at the top of the file was not found and is incorrect.
+   The package in question might now be available nixpkgs, might be avilable under a different name, or might be part of a package set only.
+   Use tools to find the package or other code that depends on the same package.
+Notes:
+- Nothing in the meta attribute of a derivation has any impact on its build output.
+- Do not access the project's online git repository, such as GitHub, and instead browse the local files in the Nix store.
+- If you search for a package using your tools, and you don't have a match, try again with another query or try a different tool.
+- Many build functions, like `mkDerivation` provide a C compiler and a matching libc. If you're missing libc anyways, the GNU libc package is called `glibc` in nixpkgs.
+- Do not produce a flatpak, or docker container and do not use tools related to theres technologies to produce your output. Use tools to find other more direct ways to build the project.
+- If you need packages from a package set like `python3Packages` or `qt6`, only add the package set at the top of the file and use `python3Packages.package_name` or `with python3Packages; [ package_name ]` to add the package."""
+    # Include project information if available
+    project_info_section = ""
+    if project_page:
+        project_info_section = f"""Here is the information from the project's GitHub page:
+```text
+{project_page}
+```
+"""
+        if release_data:
+            project_info_section += f"""
+And some relevant metadata of the latest release:
+```
+{release_data}
+```
+"""
+
+    # Include template notes if available
+    template_notes_section = ""
+    if template_notes:
+        template_notes_section = f"""Here are some notes about this template to help you package this type of project:
+```
+{template_notes}
+```
+"""
+
+    chat = Chat(
+        messages=[UserMessage(prompt.format(
+            code=code,
+            error=error,
+            project_info_section=project_info_section,
+            template_notes_section=template_notes_section
+        ))],
+        functions=[search_nixpkgs_for_package_semantic, search_nixpkgs_for_package_literal, search_nix_functions]+additional_functions,
+        output_types=[StreamedResponse],
+    )
+    chat = _retry_with_rate_limit(chat.submit)
+
+    return handle_model_chat(chat)
