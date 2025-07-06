@@ -9,15 +9,15 @@ from sklearn.metrics.pairwise import cosine_similarity
 import pickle
 from pathlib import Path
 
-def search_nixpkgs_for_package_fuzzy(query: str) -> str:
+def search_nixpkgs_for_package_literal(query: str) -> str:
     """Search the nixpkgs repository of Nix code for the given package using fuzzy search.
     
     Returns a concise summary of matching packages, using fzf for fuzzy matching
     and distinguishing between matches in package set names vs package names within sets.
     """
 
-    print("📞 Function called: search_nixpkgs_for_package_fuzzy with query: ", query)
-    get_logger().log_function_call("search_nixpkgs_for_package_fuzzy", query=query)
+    print("📞 Function called: search_nixpkgs_for_package_literal with query: ", query)
+    get_logger().log_function_call("search_nixpkgs_for_package_literal", query=query)
     
     # Get all packages (using ^ to match everything)
     nix_result = subprocess.run(
@@ -124,51 +124,59 @@ def search_nixpkgs_for_package_fuzzy(query: str) -> str:
         else:
             individual_packages.append(match)
     
-    # Build result
-    result_lines = [f"Found packages matching '{query}' (fuzzy search)\n"]
+    # Build result as list to maintain order
+    result_items = []
     
-    # Show package sets (preserving fzf ranking order)
-    if package_sets:
-        result_lines.append("## Package sets with matches:")
+    # Add package sets (preserving fzf ranking order)
+    for set_name in package_set_order[:10]:  # Show first 10 package sets by order of appearance
+        packages = package_sets[set_name]
+        count = len(packages)
         
-        shown_sets = 0
-        for set_name in package_set_order[:10]:  # Show first 10 package sets by order of appearance
-            packages = package_sets[set_name]
-            count = len(packages)
-            
-            if count <= 3:
-                # Show all packages if 3 or fewer
-                result_lines.append(f"  {set_name}:")
-                for pkg in packages:
-                    desc = pkg['description'][:60] + "..." if len(pkg['description']) > 60 else pkg['description']
-                    result_lines.append(f"    - {pkg['name']}: {desc}")
-            else:
-                # Show first 3 as sample
-                result_lines.append(f"  {set_name}: ({count} matches)")
-                for pkg in packages[:3]:
-                    desc = pkg['description'][:60] + "..." if len(pkg['description']) > 60 else pkg['description']
-                    result_lines.append(f"    - {pkg['name']}: {desc}")
-                result_lines.append(f"    ... and {count - 3} more")
-            
-            shown_sets += 1
-            
-        if len(package_set_order) > 10:
-            result_lines.append(f"  ... and {len(package_set_order) - 10} more sets")
-        result_lines.append("")
+        if count <= 3:
+            # Show all packages if 3 or fewer
+            for pkg in packages:
+                result_items.append((pkg['name'], {
+                    "description": pkg['description'],
+                    "pname": pkg['name'].split('.')[-1],
+                    "version": pkg['version']
+                }))
+        else:
+            # Show first 3 as sample
+            for pkg in packages[:3]:
+                result_items.append((pkg['name'], {
+                    "description": pkg['description'],
+                    "pname": pkg['name'].split('.')[-1],
+                    "version": pkg['version']
+                }))
+            # Add comment about more packages
+            result_items.append((f"_comment_{set_name}", f"... and {count - 3} more packages in {set_name}"))
     
-    # Show individual packages (max 5)
-    if individual_packages:
-        result_lines.append("## Individual packages:")
-        for pkg in individual_packages[:5]:
-            desc = pkg['description'][:60] + "..." if len(pkg['description']) > 60 else pkg['description']
-            version = f" ({pkg['version']})" if pkg['version'] else ""
-            result_lines.append(f"  - {pkg['name']}{version}: {desc}")
-        
-        if len(individual_packages) > 5:
-            result_lines.append(f"  ... and {len(individual_packages) - 5} more")
-        result_lines.append("")
+    # Add individual packages (max 5)
+    for pkg in individual_packages[:5]:
+        result_items.append((pkg['name'], {
+            "description": pkg['description'],
+            "pname": pkg['name'],
+            "version": pkg['version']
+        }))
     
-    return "\n".join(result_lines)
+    if len(individual_packages) > 5:
+        result_items.append(("_comment_individual", f"... and {len(individual_packages) - 5} more individual packages"))
+    
+    # Manually build JSON with comments
+    json_lines = ["{"]    
+    for i, (key, value) in enumerate(result_items):
+        if key.startswith("_comment_"):
+            json_lines.append(f"  // {value}")
+        else:
+            json_str = json.dumps({key: value}, indent=2)[1:-1].strip()
+            # Add comma if not last real item
+            has_more = any(not k.startswith("_comment_") for k, _ in result_items[i+1:])
+            if has_more:
+                json_str += ","
+            json_lines.append("  " + json_str)
+    json_lines.append("}")
+    
+    return "\n".join(json_lines)
 
 def search_nixpkgs_for_package_semantic(query: str) -> str:
     """Search the nixpkgs repository using semantic similarity with embeddings.
@@ -242,53 +250,57 @@ def search_nixpkgs_for_package_semantic(query: str) -> str:
         else:
             individual_packages.append(match)
     
-    # Build result
-    result_lines = [f"Found packages matching '{query}' (semantic search)\n"]
+    # Build result as list to maintain order
+    result_items = []
     
-    # Show best match score
-    if matches:
-        result_lines.append(f"Best match score: {matches[0]['score']:.3f}\n")
-    
-    # Show package sets
-    if package_sets:
-        result_lines.append("## Package sets with matches:")
+    # Add package sets
+    for set_name in package_set_order[:10]:
+        packages = package_sets[set_name]
+        count = len(packages)
         
-        shown_sets = 0
-        for set_name in package_set_order[:10]:
-            packages = package_sets[set_name]
-            count = len(packages)
-            
-            if count <= 3:
-                result_lines.append(f"  {set_name}:")
-                for pkg in packages:
-                    desc = pkg['description'][:60] + "..." if len(pkg['description']) > 60 else pkg['description']
-                    result_lines.append(f"    - {pkg['name']} ({pkg['score']:.3f}): {desc}")
-            else:
-                result_lines.append(f"  {set_name}: ({count} matches)")
-                for pkg in packages[:3]:
-                    desc = pkg['description'][:60] + "..." if len(pkg['description']) > 60 else pkg['description']
-                    result_lines.append(f"    - {pkg['name']} ({pkg['score']:.3f}): {desc}")
-                result_lines.append(f"    ... and {count - 3} more")
-            
-            shown_sets += 1
-            
-        if len(package_set_order) > 10:
-            result_lines.append(f"  ... and {len(package_set_order) - 10} more sets")
-        result_lines.append("")
+        if count <= 3:
+            for pkg in packages:
+                result_items.append((pkg['name'], {
+                    "description": pkg['description'],
+                    "pname": pkg['name'].split('.')[-1],
+                    "version": pkg['version']
+                }))
+        else:
+            for pkg in packages[:3]:
+                result_items.append((pkg['name'], {
+                    "description": pkg['description'],
+                    "pname": pkg['name'].split('.')[-1],
+                    "version": pkg['version']
+                }))
+            # Add comment about more packages
+            result_items.append((f"_comment_{set_name}", f"... and {count - 3} more packages in {set_name}"))
     
-    # Show individual packages
-    if individual_packages:
-        result_lines.append("## Individual packages:")
-        for pkg in individual_packages[:5]:
-            desc = pkg['description'][:60] + "..." if len(pkg['description']) > 60 else pkg['description']
-            version = f" ({pkg['version']})" if pkg['version'] else ""
-            result_lines.append(f"  - {pkg['name']}{version} ({pkg['score']:.3f}): {desc}")
-        
-        if len(individual_packages) > 5:
-            result_lines.append(f"  ... and {len(individual_packages) - 5} more")
-        result_lines.append("")
+    # Add individual packages
+    for pkg in individual_packages[:5]:
+        result_items.append((pkg['name'], {
+            "description": pkg['description'],
+            "pname": pkg['name'],
+            "version": pkg['version']
+        }))
+    
+    if len(individual_packages) > 5:
+        result_items.append(("_comment_individual", f"... and {len(individual_packages) - 5} more individual packages"))
+    
+    # Manually build JSON with comments
+    json_lines = ["{"]    
+    for i, (key, value) in enumerate(result_items):
+        if key.startswith("_comment_"):
+            json_lines.append(f"  // {value}")
+        else:
+            json_str = json.dumps({key: value}, indent=2)[1:-1].strip()
+            # Add comma if not last real item
+            has_more = any(not k.startswith("_comment_") for k, _ in result_items[i+1:])
+            if has_more:
+                json_str += ","
+            json_lines.append("  " + json_str)
+    json_lines.append("}")
 
-    return "\n".join(result_lines)
+    return "\n".join(json_lines)
 
 def search_nix_functions(query: str) -> str:
     """
