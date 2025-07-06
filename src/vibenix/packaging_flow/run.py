@@ -220,36 +220,25 @@ def package_project(output_dir=None, project_url=None, revision=None, fetcher=No
     iteration = 0
     MAX_ITERATIONS = 40
     candidate = best
-    MAX_CONSECUTIVE_REBUILDS_WITHOUT_PROGRESS = 5
+    MAX_CONSECUTIVE_REBUILDS_WITHOUT_PROGRESS = 10
     consecutive_rebuilds_without_progress = 0
-    MAX_CONSECUTIVE_NON_BUILD_ERRORS = 5
+    # we have to evaluate if a small limit here helps or hurts
+    # or just get rid of it
+    MAX_CONSECUTIVE_NON_BUILD_ERRORS = 99
     consecutive_non_build_errors = 0
+
+    first_build_error = True
     
-    while iteration < MAX_ITERATIONS and consecutive_rebuilds_without_progress < MAX_CONSECUTIVE_REBUILDS_WITHOUT_PROGRESS:
+    while (
+        (not candidate.result.success) and
+        (iteration < MAX_ITERATIONS) and
+        (consecutive_rebuilds_without_progress < MAX_CONSECUTIVE_REBUILDS_WITHOUT_PROGRESS)):
+      
         coordinator_message(f"Iteration {iteration + 1}:")
         coordinator_message(f"```\n{candidate.result.error.truncated()}\n```")
         ccl_logger.log_iteration_start(iteration)
         
-        # Fix the error based on type
-        if candidate.result.success:
-            coordinator_message("Build succeeded! Refining package...")
-            refined_candidate, completed = refine_package(candidate, summary)
-            
-            if completed == RefinementExit.ERROR:
-                coordinator_error("Refinement encountered an error. Returning pre-refinement solution.")
-            elif completed == RefinementExit.INCOMPLETE:
-                coordinator_message("Refinement process reached max iterations.")
-            
-            # Always log success and return, regardless of refinement outcome
-            from vibenix.packaging_flow.model_prompts import end_stream_logger
-            ccl_logger.log_session_end(True, iteration, end_stream_logger.total_cost)
-            close_logger()
-            if output_dir:
-                # Use refined version if no error, otherwise use pre-refinement version
-                final_code = refined_candidate.code if completed != RefinementExit.ERROR else candidate.code
-                save_package_output(final_code, project_url, output_dir)
-            return refined_candidate.code if completed != RefinementExit.ERROR else candidate.code
-        elif candidate.result.error.type == NixErrorKind.HASH_MISMATCH:
+        if candidate.result.error.type == NixErrorKind.HASH_MISMATCH:
             coordinator_message("Hash mismatch detected, fixing...")
             coordinator_message(f"code:\n{candidate.code}\n")
             coordinator_message(f"error:\n{candidate.result.error.truncated()}\n")
@@ -266,11 +255,18 @@ def package_project(output_dir=None, project_url=None, revision=None, fetcher=No
         coordinator_progress(f"Iteration {iteration}: Testing fix attempt {iteration} of {MAX_ITERATIONS}...")
         new_result = execute_build_and_add_to_stack(updated_code)
         candidate = Solution(code=updated_code, result=new_result)
-        
-        if not new_result.success and new_result.error.type == NixErrorKind.BUILD_ERROR:
+
+        if ((not new_result.success)
+            and (new_result.error.type == NixErrorKind.BUILD_ERROR)):
             coordinator_message(f"Nix build result: {candidate.result.error.type}")
-            eval_result = eval_progress(best.result, candidate.result, iteration)
-            ccl_logger.log_progress_eval(iteration, eval_result)
+            if first_build_error:
+                eval_result = NixBuildErrorDiff.PROGRESS
+                first_build_error = False
+            elif best.result.error == candidate.result.error:
+                eval_result = NixBuildErrorDiff.REGRESS
+            else:
+                eval_result = eval_progress(best.result, candidate.result, iteration)
+                ccl_logger.log_progress_eval(iteration, eval_result)
             
             if eval_result == NixBuildErrorDiff.PROGRESS:
                 coordinator_message(f"Iteration {iteration} made progress...")
@@ -281,20 +277,40 @@ def package_project(output_dir=None, project_url=None, revision=None, fetcher=No
                 candidate = best
                 consecutive_rebuilds_without_progress += 1
             consecutive_non_build_errors = 0
-        else:
-            consecutive_non_build_errors += 1
-            
-        if consecutive_non_build_errors >= MAX_CONSECUTIVE_NON_BUILD_ERRORS:
-            candidate = best
-            consecutive_non_build_errors = 0
+
+            if (new_result.error.type != NixErrorKind.BUILD_ERROR):
+                consecutive_non_build_errors += 1          
+                if consecutive_non_build_errors >= MAX_CONSECUTIVE_NON_BUILD_ERRORS:
+                    candidate = best
+                    consecutive_non_build_errors = 0
+
         ccl_logger.log_iteration_end(iteration, new_result)
         iteration += 1
 
-    if consecutive_non_build_errors >= MAX_CONSECUTIVE_NON_BUILD_ERRORS:
-        coordinator_error(f"Aborted: {consecutive_rebuilds_without_progress} consecutive rebuilds without progress.")
-
+    if candidate.result.success:
+        coordinator_message("Build succeeded! Refining package...")
+        refined_candidate, completed = refine_package(candidate, summary)
+        
+        if completed == RefinementExit.ERROR:
+            coordinator_error("Refinement encountered an error. Returning pre-refinement solution.")
+        elif completed == RefinementExit.INCOMPLETE:
+            coordinator_message("Refinement process reached max iterations.")
+        
+        # Always log success and return, regardless of refinement outcome
+        from vibenix.packaging_flow.model_prompts import end_stream_logger
+        ccl_logger.log_session_end(True, iteration, end_stream_logger.total_cost)
+        close_logger()
+        if output_dir:
+            # Use refined version if no error, otherwise use pre-refinement version
+            final_code = refined_candidate.code if completed != RefinementExit.ERROR else candidate.code
+            save_package_output(final_code, project_url, output_dir)
+        return refined_candidate.code if completed != RefinementExit.ERROR else candidate.code  
     else:
-        coordinator_error("Reached temporary build iteration limit.")
+        if consecutive_non_build_errors >= MAX_CONSECUTIVE_NON_BUILD_ERRORS:
+            coordinator_error(f"Aborted: {consecutive_rebuilds_without_progress} consecutive rebuilds without progress.")
+
+        else:
+            coordinator_error(f"Reached MAX_ITERATIONS build iteration limit of {MAX_ITERATIONS}.")
     
     from vibenix.packaging_flow.model_prompts import end_stream_logger
     ccl_logger.log_session_end(False, iteration, end_stream_logger.total_cost)
