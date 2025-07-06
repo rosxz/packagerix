@@ -117,3 +117,10 @@ When modifying package templates:
 2. Each template has an associated `.notes` file with guidance
 3. Templates use placeholders that are replaced during generation
 4. Test template changes with known packages of that language type
+
+## Code Style Guidelines
+
+- **No defensive fallbacks**: Use single code paths that work correctly. Don't add fallback logic for when things might fail - let exceptions propagate.
+- **No babysitting**: This codebase is maintained by capable software engineers. Don't hide exceptions or add unnecessary safety checks.
+- **Reproducibility**: Ensure all code paths are deterministic and reproducible across different machines.
+- **Direct approach**: When implementing functionality, use the most direct approach without unnecessary abstractions or safety nets.
