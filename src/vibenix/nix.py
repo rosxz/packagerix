@@ -191,7 +191,7 @@ def eval_progress(previous_result: NixBuildResult, current_result: NixBuildResul
     log_comparison = prepare_logs_for_comparison(
         previous_result.error.error_message,
         current_result.error.error_message,
-        max_lines=260
+        max_lines=240 # 260 exceeded token limit on gianni-rosato/aviator
     )
     
     # Log the comparison details
