@@ -14,9 +14,7 @@ from litellm.integrations.custom_logger import CustomLogger
 from litellm.files.main import ModelResponse, BaseModel
 import litellm
 from enum import Enum
-import os
 import sys
-from typing import Literal, Iterable
 
 
 class EndStreamLogger(CustomLogger):

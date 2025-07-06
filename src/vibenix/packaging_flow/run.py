@@ -218,7 +218,7 @@ def package_project(output_dir=None, project_url=None, revision=None, fetcher=No
     ccl_logger.log_before_iterations()
     
     iteration = 0
-    MAX_ITERATIONS = 10
+    MAX_ITERATIONS = 40
     candidate = best
     MAX_CONSECUTIVE_REBUILDS_WITHOUT_PROGRESS = 10
     consecutive_rebuilds_without_progress = 0
