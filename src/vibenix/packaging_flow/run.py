@@ -284,7 +284,7 @@ def package_project(output_dir=None, project_url=None, revision=None, fetcher=No
         else:
             consecutive_non_build_errors += 1
             
-        if consecutive_non_build_errors < MAX_CONSECUTIVE_NON_BUILD_ERRORS:
+        if consecutive_non_build_errors >= MAX_CONSECUTIVE_NON_BUILD_ERRORS:
             candidate = best
             consecutive_non_build_errors = 0
         ccl_logger.log_iteration_end(iteration, new_result)
