@@ -180,8 +180,11 @@ jobs:
           if [ $exit_code -eq 0 ]; then
             # Command didn't fail, but we need to verify it actually created a package
             if [ -d output ]; then
-              package_name=$(ls output | head -n1)
-              if [ -n "$package_name" ] && [ -f "output/$package_name/package.nix" ]; then
+              # Find any package.nix file in subdirectories
+              package_nix_path=$(find output -name "package.nix" -type f | head -n1)
+              if [ -n "$package_nix_path" ]; then
+                # Extract package name from path (e.g., output/wikiman/package.nix -> wikiman)
+                package_name=$(basename $(dirname "$package_nix_path"))
                 echo "status=success" >> $GITHUB_OUTPUT
                 echo "package_name=$package_name" >> $GITHUB_OUTPUT
               else
