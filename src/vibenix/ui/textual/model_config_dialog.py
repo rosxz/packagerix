@@ -13,7 +13,7 @@ from vibenix.ui.logging_config import logger
 
 
 def check_api_key_valid(provider: Provider) -> bool:
-    """Check if the API key for a provider is valid."""
+    """Check if the API key for a provider exists (does not validate against API)."""
     if not provider.requires_api_key:
         return True
     
@@ -24,27 +24,9 @@ def check_api_key_valid(provider: Provider) -> bool:
     if not api_key:
         from vibenix.secure_keys import get_api_key
         api_key = get_api_key(provider.env_var)
-        if api_key:
-            # Set in environment for this session
-            os.environ[provider.env_var] = api_key
     
-    if not api_key:
-        # For OpenAI with custom endpoint, no key might be valid
-        if provider.name == "openai" and os.environ.get("OPENAI_BASE_URL"):
-            # Set empty string to avoid issues with authorization header
-            os.environ[provider.env_var] = ""
-            return True
-        return False
-    
-    try:
-        # Try to get models from the provider endpoint - this validates the API key
-        models = litellm.utils.get_valid_models(
-            check_provider_endpoint=True,
-            custom_llm_provider=provider.name
-        )
-        return len(models) > 0
-    except:
-        return False
+    # Just check if key exists, don't validate against provider
+    return bool(api_key)
 
 
 class ModelConfigDialog(ModalScreen):
@@ -58,8 +40,8 @@ class ModelConfigDialog(ModalScreen):
     #config-dialog {
         width: 80;
         height: auto;
-        min-height: 20;
-        max-height: 40;
+        min-height: 30;
+        max-height: 50;
         border: thick $background 80%;
         background: $surface;
         padding: 1 2;
@@ -80,7 +62,7 @@ class ModelConfigDialog(ModalScreen):
     }
     
     .config-label {
-        margin-bottom: 0;
+        margin: 0;
     }
     
     Select {
@@ -88,7 +70,7 @@ class ModelConfigDialog(ModalScreen):
     }
     
     ListView {
-        height: 8;
+        height: 15;
         margin: 0 0 1 0;
         border: solid $primary;
     }
@@ -106,6 +88,27 @@ class ModelConfigDialog(ModalScreen):
     Button {
         margin: 0 1;
         min-width: 12;
+    }
+    
+    .model-header {
+        height: 3;
+        width: 100%;
+        align: left middle;
+        margin: 0 0 1 0;
+    }
+    
+    .model-header Static {
+        width: 1fr;
+    }
+    
+    .model-header Label {
+        margin: 0;
+        height: 3;
+        content-align: left middle;
+    }
+    
+    #refresh-models {
+        min-width: 10;
     }
     
     #status-message {
@@ -163,7 +166,7 @@ class ModelConfigDialog(ModalScreen):
                 for p in PROVIDERS:
                     display_name = p.display_name
                     if check_api_key_valid(p):
-                        display_name += " [valid key configured]"
+                        display_name += " [key configured]"
                     provider_options.append((display_name, p.name))
                 
                 yield Select(
@@ -199,7 +202,10 @@ class ModelConfigDialog(ModalScreen):
             
             # Model selection
             with Vertical(id="model-section", classes="config-section hidden"):
-                yield Label("Select Model:", classes="config-label")
+                with Horizontal(classes="model-header"):
+                    yield Label("Select Model:", classes="config-label")
+                    yield Static("")  # Spacer
+                    yield Button("Refresh", id="refresh-models", variant="default")
                 yield ListView(id="model-list")
             
             # Status message
@@ -427,27 +433,21 @@ class ModelConfigDialog(ModalScreen):
             # Clear model list selection
             model_list = self.query_one("#model-list", ListView)
             model_list.index = None
-        elif event.input.id == "api-key-input" and event.value and self.selected_provider:
-            # Reload models when API key is entered
-            asyncio.create_task(self.load_models())
         elif event.input.id == "ollama-host-input" and self.selected_provider and self.selected_provider.name == "ollama":
-            # Set the environment variable and reload models when Ollama host changes
+            # Just set the environment variable, don't auto-reload
             if event.value.strip():
                 os.environ["OLLAMA_API_BASE"] = event.value.strip()
             else:
                 # Remove the environment variable if empty
                 os.environ.pop("OLLAMA_API_BASE", None)
-            # Reload models with new host
-            asyncio.create_task(self.load_models())
         elif event.input.id == "openai-api-base-input" and self.selected_provider and self.selected_provider.name == "openai":
-            # Set the environment variable and reload models when OpenAI API base changes
+            # Set the environment variable when OpenAI API base changes
             if event.value.strip():
                 os.environ["OPENAI_BASE_URL"] = event.value.strip()
             else:
                 # Remove the environment variable if empty
                 os.environ.pop("OPENAI_BASE_URL", None)
-            # Reload models with new API base
-            asyncio.create_task(self.load_models())
+            # Don't reload models here - wait until user provides API key
         
         self.update_button_states()
     
@@ -475,6 +475,8 @@ class ModelConfigDialog(ModalScreen):
         """Handle button presses."""
         if event.button.id == "save":
             await self.save_configuration()
+        elif event.button.id == "refresh-models":
+            await self.load_models()
     
     
     async def save_configuration(self):

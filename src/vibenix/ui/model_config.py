@@ -59,7 +59,35 @@ PROVIDERS = [
 
 def get_available_models(provider: Provider) -> List[str]:
     """Get available models for a provider."""
+    # Special handling for OpenAI provider with custom base URL
+    if provider.name == "openai" and os.environ.get("OPENAI_BASE_URL"):
+        try:
+            import requests
+            base_url = os.environ.get("OPENAI_BASE_URL").rstrip('/')
+            headers = {}
+            api_key = os.environ.get("OPENAI_API_KEY", "")
+            if api_key:
+                headers["Authorization"] = f"Bearer {api_key}"
+            
+            logger.info(f"Querying {base_url}/models for available models")
+            response = requests.get(f"{base_url}/models", headers=headers, timeout=10)
+            response.raise_for_status()
+            
+            data = response.json()
+            models = [model["id"] for model in data.get("data", [])]
+            logger.info(f"Retrieved {len(models)} models from {base_url}/models")
+            # Return with openai/ prefix for use with LiteLLM
+            return [f"openai/{model}" for model in models]
+        except Exception as e:
+            logger.warning(f"Failed to query custom OpenAI endpoint: {e}")
+            return []
+    
+    # Standard flow for other providers
     try:
+        # Ensure OPENAI_API_KEY is set to empty string if not present for OpenAI provider
+        if provider.name == "openai" and "OPENAI_API_KEY" not in os.environ:
+            os.environ["OPENAI_API_KEY"] = ""
+            
         # Build litellm_params based on provider
         litellm_params = None
         if provider.name == "ollama" and os.environ.get("OLLAMA_API_BASE"):
@@ -121,7 +149,7 @@ def validate_configuration(provider: Provider, model: str) -> bool:
         return False
 
 
-def save_configuration(provider: Provider, model: str, ollama_host: Optional[str] = None):
+def save_configuration(provider: Provider, model: str, ollama_host: Optional[str] = None, openai_api_base: Optional[str] = None):
     """Save the configuration for future use."""
     # Set environment variables for magentic
     os.environ["MAGENTIC_BACKEND"] = "litellm"
@@ -138,10 +166,19 @@ def save_configuration(provider: Provider, model: str, ollama_host: Optional[str
     if ollama_host:
         config_data["ollama_host"] = ollama_host
     
+    # Always save openai_api_base if provided, regardless of current provider
+    if openai_api_base:
+        config_data["openai_api_base"] = openai_api_base
+    
     # Only set OLLAMA_API_BASE if we're actually using Ollama
     if provider.name == "ollama" and ollama_host:
         os.environ["OLLAMA_API_BASE"] = ollama_host
         logger.info(f"Set OLLAMA_API_BASE to {ollama_host}")
+    
+    # Only set OPENAI_BASE_URL if we're actually using OpenAI
+    if provider.name == "openai" and openai_api_base:
+        os.environ["OPENAI_BASE_URL"] = openai_api_base
+        logger.info(f"Set OPENAI_BASE_URL to {openai_api_base}")
     
     try:
         import json
@@ -156,8 +193,8 @@ def save_configuration(provider: Provider, model: str, ollama_host: Optional[str
         logger.warning(f"Could not save configuration: {e}")
 
 
-def load_saved_configuration() -> Optional[Tuple[str, str, Optional[str]]]:
-    """Load previously saved configuration, returns (provider_name, model, ollama_host)."""
+def load_saved_configuration() -> Optional[Tuple[str, str, Optional[str], Optional[str]]]:
+    """Load previously saved configuration, returns (provider_name, model, ollama_host, openai_api_base)."""
     try:
         import json
         config_path = os.path.expanduser("~/.vibenix/config.json")
@@ -170,6 +207,7 @@ def load_saved_configuration() -> Optional[Tuple[str, str, Optional[str]]]:
             provider_name = config_data.get("provider")
             model = config_data.get("model")
             ollama_host = config_data.get("ollama_host")
+            openai_api_base = config_data.get("openai_api_base")
             
             if provider_name and model:
                 # Set environment variables
@@ -190,8 +228,13 @@ def load_saved_configuration() -> Optional[Tuple[str, str, Optional[str]]]:
                     os.environ["OLLAMA_API_BASE"] = ollama_host
                     logger.info(f"Set OLLAMA_API_BASE to {ollama_host}")
                 
+                # Set OPENAI_BASE_URL only if using OpenAI
+                if provider_name == "openai" and openai_api_base:
+                    os.environ["OPENAI_BASE_URL"] = openai_api_base
+                    logger.info(f"Set OPENAI_BASE_URL to {openai_api_base}")
+                
                 logger.info(f"Loaded saved configuration: {model} from {provider_name}")
-                return provider_name, model, ollama_host
+                return provider_name, model, ollama_host, openai_api_base
     
     except Exception as e:
         logger.warning(f"Could not load saved configuration: {e}")

@@ -71,7 +71,7 @@ def choose_provider_terminal() -> Optional[Provider]:
     for i, provider in enumerate(PROVIDERS, 1):
         display_name = provider.display_name
         if check_api_key_valid(provider):
-            display_name += " [valid key configured]"
+            display_name += " [key configured]"
         print(f"{i}. {display_name}")
     
     while True:
