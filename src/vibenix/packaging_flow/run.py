@@ -252,7 +252,7 @@ def package_project(output_dir=None, project_url=None, revision=None, fetcher=No
         updated_code = extract_updated_code(fixed_response)
             
         # Test the fix
-        coordinator_progress(f"Iteration {iteration}: Testing fix attempt {iteration} of {MAX_ITERATIONS}...")
+        coordinator_progress(f"Iteration {iteration + 1}: Testing fix attempt {iteration + 1} of {MAX_ITERATIONS}...")
         new_result = execute_build_and_add_to_stack(updated_code)
         candidate = Solution(code=updated_code, result=new_result)
 
@@ -269,11 +269,11 @@ def package_project(output_dir=None, project_url=None, revision=None, fetcher=No
                 ccl_logger.log_progress_eval(iteration, eval_result)
             
             if eval_result == NixBuildErrorDiff.PROGRESS:
-                coordinator_message(f"Iteration {iteration} made progress...")
+                coordinator_message(f"Iteration {iteration + 1} made progress...")
                 best = candidate
                 consecutive_rebuilds_without_progress = 0
             else:
-                coordinator_message(f"Iteration {iteration} did NOT made progress...")
+                coordinator_message(f"Iteration {iteration + 1} did NOT made progress...")
                 candidate = best
                 consecutive_rebuilds_without_progress += 1
             consecutive_non_build_errors = 0
