@@ -138,12 +138,24 @@ jobs:
       - name: Create vibenix config
         run: |
           mkdir -p ~/.vibenix
+          
+          # Convert ollama/modelname to openai/modelname (no-op for other providers)
+          model="${{ github.event.inputs.model || 'gemini/gemini-2.5-flash' }}"
+          model_converted=$(echo "$model" | sed 's|^ollama/|openai/|')
+          
+          # Use openai provider if ollama was selected
+          provider="${{ github.event.inputs.model_provider || 'gemini' }}"
+          if [ "$provider" = "ollama" ]; then
+            provider="openai"
+          fi
+          
           cat > ~/.vibenix/config.json << EOF
           {
-            "provider": "${{ github.event.inputs.model_provider || 'gemini' }}",
-            "model": "${{ github.event.inputs.model || 'gemini/gemini-2.5-flash' }}",
+            "provider": "$provider",
+            "model": "$model_converted",
             "backend": "litellm",
-            "ollama_host": "${{ github.event.inputs.ollama_host || 'https://hydralisk.van-duck.ts.net:11435' }}"
+            "ollama_host": "${{ github.event.inputs.ollama_host || 'https://hydralisk.van-duck.ts.net:11435' }}",
+            "openai_api_base": "${{ github.event.inputs.ollama_host || 'https://hydralisk.van-duck.ts.net:11435' }}/v1"
           }
           EOF
           
@@ -154,6 +166,9 @@ jobs:
             echo "ANTHROPIC_API_KEY=${{ secrets.ANTHROPIC_API_KEY }}" >> $GITHUB_ENV
           elif [ "${{ github.event.inputs.model_provider || 'gemini' }}" = "gemini" ]; then
             echo "GEMINI_API_KEY=${{ secrets.GEMINI_API_KEY }}" >> $GITHUB_ENV
+          elif [ "${{ github.event.inputs.model_provider || 'gemini' }}" = "ollama" ]; then
+            # For Ollama via OpenAI endpoint, set a dummy API key if needed
+            echo "OPENAI_API_KEY=dummy" >> $GITHUB_ENV
           fi
       
       - name: Process package request
