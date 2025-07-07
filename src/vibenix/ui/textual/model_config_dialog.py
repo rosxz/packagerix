@@ -29,6 +29,11 @@ def check_api_key_valid(provider: Provider) -> bool:
             os.environ[provider.env_var] = api_key
     
     if not api_key:
+        # For OpenAI with custom endpoint, no key might be valid
+        if provider.name == "openai" and os.environ.get("OPENAI_BASE_URL"):
+            # Set empty string to avoid issues with authorization header
+            os.environ[provider.env_var] = ""
+            return True
         return False
     
     try:
@@ -126,18 +131,25 @@ class ModelConfigDialog(ModalScreen):
         from vibenix.ui.model_config import load_saved_configuration
         saved_config = load_saved_configuration()
         if saved_config:
-            if len(saved_config) == 3:  # New format with ollama_host
+            if len(saved_config) == 4:  # New format with ollama_host and openai_api_base
+                provider_name, model, ollama_host, openai_api_base = saved_config
+                self.saved_ollama_host = ollama_host
+                self.saved_openai_api_base = openai_api_base
+            elif len(saved_config) == 3:  # Old format with just ollama_host
                 provider_name, model, ollama_host = saved_config
                 self.saved_ollama_host = ollama_host
+                self.saved_openai_api_base = None
             else:  # Old format compatibility
                 provider_name, model = saved_config
                 self.saved_ollama_host = None
+                self.saved_openai_api_base = None
             self.saved_provider = provider_name
             self.saved_model = model
         else:
             self.saved_provider = None
             self.saved_model = None
             self.saved_ollama_host = None
+            self.saved_openai_api_base = None
         
     def compose(self) -> ComposeResult:
         """Create the configuration dialog layout."""
@@ -160,11 +172,27 @@ class ModelConfigDialog(ModalScreen):
                     id="provider-select"
                 )
             
+            # Ollama host configuration (only shown for Ollama)
+            with Vertical(id="ollama-section", classes="config-section hidden"):
+                yield Label("Ollama Host (optional):", classes="config-label")
+                yield Input(
+                    placeholder="e.g., http://localhost:11434",
+                    id="ollama-host-input"
+                )
+            
+            # OpenAI API base configuration (only shown for OpenAI)
+            with Vertical(id="openai-section", classes="config-section hidden"):
+                yield Label("OpenAI API Base (optional):", classes="config-label")
+                yield Input(
+                    placeholder="e.g., https://api.openai.com/v1",
+                    id="openai-api-base-input"
+                )
+            
             # API key input (hidden by default)
             with Vertical(id="api-key-section", classes="config-section hidden"):
                 yield Label("API Key:", classes="config-label", id="api-key-label")
                 yield Input(
-                    placeholder="Enter your API key",
+                    placeholder="Enter your API key (leave empty for no key)",
                     password=True,
                     id="api-key-input"
                 )
@@ -173,14 +201,6 @@ class ModelConfigDialog(ModalScreen):
             with Vertical(id="model-section", classes="config-section hidden"):
                 yield Label("Select Model:", classes="config-label")
                 yield ListView(id="model-list")
-                
-            # Ollama host configuration (only shown for Ollama)
-            with Vertical(id="ollama-section", classes="config-section hidden"):
-                yield Label("Ollama Host (optional):", classes="config-label")
-                yield Input(
-                    placeholder="e.g., http://localhost:11434",
-                    id="ollama-host-input"
-                )
             
             # Status message
             yield Static("", id="status-message")
@@ -232,6 +252,15 @@ class ModelConfigDialog(ModalScreen):
                 ollama_input = self.query_one("#ollama-host-input", Input)
                 ollama_input.value = self.saved_ollama_host
         
+        # Show OpenAI API base section if needed
+        if self.selected_provider.name == "openai":
+            openai_section = self.query_one("#openai-section")
+            openai_section.remove_class("hidden")
+            # Pre-populate saved OpenAI API base
+            if self.saved_openai_api_base:
+                openai_input = self.query_one("#openai-api-base-input", Input)
+                openai_input.value = self.saved_openai_api_base
+        
         # Show model section
         model_section = self.query_one("#model-section")
         model_section.remove_class("hidden")
@@ -261,6 +290,28 @@ class ModelConfigDialog(ModalScreen):
                 p for p in PROVIDERS if p.name == event.value
             )
             
+            # Show/hide Ollama host section
+            ollama_section = self.query_one("#ollama-section")
+            if self.selected_provider.name == "ollama":
+                ollama_section.remove_class("hidden")
+                # If we have a saved Ollama host, pre-populate it
+                if hasattr(self, 'saved_ollama_host') and self.saved_ollama_host:
+                    ollama_input = self.query_one("#ollama-host-input", Input)
+                    ollama_input.value = self.saved_ollama_host
+            else:
+                ollama_section.add_class("hidden")
+            
+            # Show/hide OpenAI API base section
+            openai_section = self.query_one("#openai-section")
+            if self.selected_provider.name == "openai":
+                openai_section.remove_class("hidden")
+                # If we have a saved OpenAI API base, pre-populate it
+                if hasattr(self, 'saved_openai_api_base') and self.saved_openai_api_base:
+                    openai_input = self.query_one("#openai-api-base-input", Input)
+                    openai_input.value = self.saved_openai_api_base
+            else:
+                openai_section.add_class("hidden")
+            
             # Show/hide API key section
             api_key_section = self.query_one("#api-key-section")
             if self.selected_provider.requires_api_key:
@@ -277,17 +328,6 @@ class ModelConfigDialog(ModalScreen):
                 api_key_input.value = ""
             else:
                 api_key_section.add_class("hidden")
-            
-            # Show/hide Ollama host section
-            ollama_section = self.query_one("#ollama-section")
-            if self.selected_provider.name == "ollama":
-                ollama_section.remove_class("hidden")
-                # If we have a saved Ollama host, pre-populate it
-                if hasattr(self, 'saved_ollama_host') and self.saved_ollama_host:
-                    ollama_input = self.query_one("#ollama-host-input", Input)
-                    ollama_input.value = self.saved_ollama_host
-            else:
-                ollama_section.add_class("hidden")
             
             # Show model section and populate models
             model_section = self.query_one("#model-section")
@@ -311,20 +351,27 @@ class ModelConfigDialog(ModalScreen):
                 from vibenix.secure_keys import get_api_key
                 api_key = get_api_key(self.selected_provider.env_var)
             
-            if not api_key:
+            # For OpenAI with custom endpoint, allow empty API key
+            if not api_key and not (self.selected_provider.name == "openai" and os.environ.get("OPENAI_BASE_URL")):
                 status.update("Enter API key above to load models")
                 model_list.clear()
                 return
             
             # Temporarily set the API key for model discovery
             old_key = os.environ.get(self.selected_provider.env_var)
-            os.environ[self.selected_provider.env_var] = api_key
+            os.environ[self.selected_provider.env_var] = api_key or ""
         
         # For Ollama, ensure OLLAMA_API_BASE is set if we have a host
         if self.selected_provider.name == "ollama":
             ollama_input = self.query_one("#ollama-host-input", Input)
             if ollama_input.value.strip():
                 os.environ["OLLAMA_API_BASE"] = ollama_input.value.strip()
+        
+        # For OpenAI, ensure OPENAI_BASE_URL is set if we have a base URL
+        if self.selected_provider.name == "openai":
+            openai_input = self.query_one("#openai-api-base-input", Input)
+            if openai_input.value.strip():
+                os.environ["OPENAI_BASE_URL"] = openai_input.value.strip()
         
         try:
             # Show loading message
@@ -392,6 +439,15 @@ class ModelConfigDialog(ModalScreen):
                 os.environ.pop("OLLAMA_API_BASE", None)
             # Reload models with new host
             asyncio.create_task(self.load_models())
+        elif event.input.id == "openai-api-base-input" and self.selected_provider and self.selected_provider.name == "openai":
+            # Set the environment variable and reload models when OpenAI API base changes
+            if event.value.strip():
+                os.environ["OPENAI_BASE_URL"] = event.value.strip()
+            else:
+                # Remove the environment variable if empty
+                os.environ.pop("OPENAI_BASE_URL", None)
+            # Reload models with new API base
+            asyncio.create_task(self.load_models())
         
         self.update_button_states()
     
@@ -430,13 +486,15 @@ class ModelConfigDialog(ModalScreen):
         # Set and save API key if needed
         if self.selected_provider.requires_api_key:
             api_key_input = self.query_one("#api-key-input", Input)
-            if api_key_input.value:
-                # Save to secure storage
+            api_key = api_key_input.value
+            
+            if api_key:
+                # Save to secure storage if not empty
                 from vibenix.secure_keys import set_api_key
-                set_api_key(self.selected_provider.env_var, api_key_input.value)
-                
-                # Set in environment for current session
-                os.environ[self.selected_provider.env_var] = api_key_input.value
+                set_api_key(self.selected_provider.env_var, api_key)
+            
+            # Always set in environment (empty string if no key)
+            os.environ[self.selected_provider.env_var] = api_key
         
         # Get Ollama host if provider is Ollama
         ollama_host = None
@@ -444,12 +502,19 @@ class ModelConfigDialog(ModalScreen):
             ollama_input = self.query_one("#ollama-host-input", Input)
             ollama_host = ollama_input.value.strip() if ollama_input.value else None
         
+        # Get OpenAI API base if provider is OpenAI
+        openai_api_base = None
+        if self.selected_provider.name == "openai":
+            openai_input = self.query_one("#openai-api-base-input", Input)
+            openai_api_base = openai_input.value.strip() if openai_input.value else None
+        
         # Save to config file
-        save_configuration(self.selected_provider, self.selected_model, ollama_host)
+        save_configuration(self.selected_provider, self.selected_model, ollama_host, openai_api_base)
         
         # Dismiss with success
         self.dismiss({
             "provider": self.selected_provider.name,
             "model": self.selected_model,
-            "ollama_host": ollama_host
+            "ollama_host": ollama_host,
+            "openai_api_base": openai_api_base
         })
