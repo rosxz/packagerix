@@ -17,10 +17,11 @@
      url = "github:jackmpcollins/magentic/v0.39.3";
      flake = false;
     };
+    nix-index-database.url = "github:nix-community/nix-index-database/2025-06-08-034427";
     noogle.url = github:nix-community/noogle;
   };
 
-  outputs = { self, nixpkgs, flake-utils, pyproject-nix, uv2nix, magentic, noogle }:
+  outputs = { self, nixpkgs, flake-utils, pyproject-nix, uv2nix, magentic, noogle, nix-index-database }:
     flake-utils.lib.eachDefaultSystem (system:
       let
         pkgs = nixpkgs.legacyPackages.${system};
@@ -54,7 +55,7 @@
           }
         );
 
-        cli-dependencies = with pkgs; [ripgrep fzf jq nurl];
+        cli-dependencies = with pkgs; [ ripgrep fzf jq nurl nix-index-database.packages.${system}.nix-index-with-db ];
       in
       {
         packages = {
