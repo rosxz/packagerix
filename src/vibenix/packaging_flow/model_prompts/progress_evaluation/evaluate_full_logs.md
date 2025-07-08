@@ -4,12 +4,12 @@ I am going to show you two complete log files, please make a judgement about whi
 
 Initial build (total lines: {log_diff.initial_lines}):
 ```nix
-{log_diff.initial_error_full}
+{log_diff.previous_log}
 ```
 
 Attempted improvement (total lines: {log_diff.improvement_lines}):
 ```
-{log_diff.attempted_improvement_full}
+{log_diff.new_log}
 ```
 
 These are the complete logs with line numbers. 

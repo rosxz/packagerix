@@ -102,8 +102,8 @@ def prepare_logs_for_comparison(initial_error: str, attempted_improvement: str, 
         attempted_improvement_full = '\n'.join(improvement_numbered_lines)
         
         return FullLogDiff(
-            initial_error_full=initial_error_full,
-            attempted_improvement_full=attempted_improvement_full,
+            previous_log=initial_error_full,
+            new_log=attempted_improvement_full,
             initial_lines=initial_lines,
             improvement_lines=improvement_lines
         )
@@ -143,8 +143,8 @@ def prepare_logs_for_comparison(initial_error: str, attempted_improvement: str, 
     attempted_improvement_truncated = '\n'.join(improvement_truncated_lines)
     
     return ProcessedLogDiff(
-        initial_error_truncated=initial_error_truncated,
-        attempted_improvement_truncated=attempted_improvement_truncated,
+        previous_log_truncated=initial_error_truncated,
+        new_log_truncated=attempted_improvement_truncated,
         initial_lines=initial_lines,
         improvement_lines=improvement_lines,
         divergence_line=divergence_line
