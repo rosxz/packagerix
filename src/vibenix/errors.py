@@ -48,16 +48,16 @@ class NixBuildResult(BaseModel):
 
 class FullLogDiff(BaseModel):
     """Log comparison showing full logs (when both are under 100 lines)."""
-    initial_error_full: str
-    attempted_improvement_full: str
+    previous_log: str
+    new_log: str
     initial_lines: int
     improvement_lines: int
 
 
 class ProcessedLogDiff(BaseModel):
     """Log comparison showing truncated logs with divergence analysis."""
-    initial_error_truncated: str
-    attempted_improvement_truncated: str
+    previous_log_truncated: str
+    new_log_truncated: str
     initial_lines: int
     improvement_lines: int
     divergence_line: int

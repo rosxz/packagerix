@@ -101,17 +101,19 @@ def evaluate_progress(log_diff: LogDiff) -> NixBuildErrorDiff:
         # Use the truncated log template for processed logs
         @ask_model_prompt('progress_evaluation/evaluate_truncated_logs.md')
         def _evaluate_truncated(
-            previous_truncated_log: str,
-            new_truncated_log: str,
-            previous_log_hash: str,
-            new_log_hash: str
+            previous_log_truncated: str,
+            new_log_truncated: str,
+            initial_lines: int,
+            improvement_lines: int,
+            divergence_line: int
         ) -> NixBuildErrorDiff:
             ...
         return _evaluate_truncated(
-            log_diff.previous_truncated_log,
-            log_diff.new_truncated_log,
-            log_diff.previous_log_hash,
-            log_diff.new_log_hash
+            log_diff.previous_log_truncated,
+            log_diff.new_log_truncated,
+            log_diff.initial_lines,
+            log_diff.improvement_lines,
+            log_diff.divergence_line
         )
 
 

@@ -34,7 +34,11 @@ vibenix = "vibenix.main:main"
 where = ["src"]
 
 [tool.setuptools.package-data]
-vibenix = ["template/*"]
+vibenix = [
+    "template/*",
+    "packaging_flow/model_prompts/**/*.md",
+    "packaging_flow/model_prompts/*.md"
+]
 
 [project.optional-dependencies]
 test = [
