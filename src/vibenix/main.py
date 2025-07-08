@@ -164,6 +164,10 @@ def run_textual_ui():
 
 def main():
     """Main entry point for vibenix."""
+    # Set up signal handlers early, while we're in the main thread
+    from vibenix.ccl_log_safe import setup_safe_logging
+    setup_safe_logging()
+    
     parser = argparse.ArgumentParser(
         description="Vibenix - AI-powered Nix package builder",
         formatter_class=argparse.RawDescriptionHelpFormatter,

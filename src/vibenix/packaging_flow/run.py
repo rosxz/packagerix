@@ -143,10 +143,6 @@ def package_project(output_dir=None, project_url=None, revision=None, fetcher=No
     log_file = Path(output_dir) / "run.ccl" if output_dir else Path("run.ccl")
     ccl_logger = init_logger(log_file)
     
-    # Set up signal handlers to ensure logs are written on exit
-    from vibenix.ccl_log_safe import setup_safe_logging
-    setup_safe_logging()
-    
     # Step 1: Get project URL (includes welcome message)
     if project_url is None:
         project_url = get_project_url()
