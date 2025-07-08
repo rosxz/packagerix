@@ -15,6 +15,21 @@ from contextlib import contextmanager
 from .errors import NixBuildErrorDiff, NixBuildResult
 
 
+def get_model_pricing(model: str) -> Optional[tuple[float, float]]:
+    """Get model pricing per token from litellm."""
+    try:
+        import litellm
+        if model in litellm.model_cost:
+            pricing = litellm.model_cost[model]
+            input_cost = pricing.get('input_cost_per_token', 0.0)
+            output_cost = pricing.get('output_cost_per_token', 0.0)
+            if input_cost > 0 or output_cost > 0:
+                return (input_cost, output_cost)
+    except Exception:
+        pass
+    return None
+
+
 @dataclass
 class CCLLogger:
     """
@@ -55,6 +70,7 @@ class CCLLogger:
         if not indent_level:
             indent_level = self._current_indent
         self._file_handle.write("  " * indent_level + line + "\n")
+        self._file_handle.flush()  # Ensure immediate write to disk
 
     @contextmanager
     def _section_begin(self, section_head, indent_level):
@@ -71,6 +87,16 @@ class CCLLogger:
         yield
         self._current_indent = prev_indent + 1
 
+    def log_model_config(self, model: str):
+        """Log model configuration including pricing if available."""
+        with self._section_begin("model-config =", 0):
+            self._write("model = " + model)
+            pricing = get_model_pricing(model)
+            if pricing:
+                input_cost, output_cost = pricing
+                self._write(f"input_cost_per_token = {input_cost:.10f}")
+                self._write(f"output_cost_per_token = {output_cost:.10f}")
+    
     def log_session_start(self, project_url: str):
         """Log the start of a packaging session."""
         with self._section_begin("session-start =", 0):
@@ -132,6 +158,28 @@ class CCLLogger:
             self._write("name = " + function_name)
             for key, value in kwargs.items():
                 self._write(f"{key} = {value}")
+    
+    def log_model_response(self, input_tokens: int, output_tokens: int, 
+                          cost: Optional[float] = None, response_type: str = "model_response"):
+        """Log a model response with token usage and cost."""
+        with self._section_begin(f"{response_type} =", 2):
+            self._write("elapsed = " + self._elapsed_time())
+            self._write("input_tokens = " + str(input_tokens))
+            self._write("output_tokens = " + str(output_tokens))
+            self._write("total_tokens = " + str(input_tokens + output_tokens))
+            if cost is not None:
+                self._write(f"cost = {cost:.6f}")
+    
+    def log_iteration_cost(self, iteration: int, iteration_cost: float, 
+                          input_tokens: int, output_tokens: int):
+        """Log the total cost for an iteration."""
+        with self._section_begin("iteration_cost =", 2):
+            self._write("elapsed = " + self._elapsed_time())
+            self._write("iteration = " + str(iteration))
+            self._write("input_tokens = " + str(input_tokens))
+            self._write("output_tokens = " + str(output_tokens))
+            self._write("total_tokens = " + str(input_tokens + output_tokens))
+            self._write(f"cost = {iteration_cost:.6f}")
     
     def log_error(self, error_type: str, message: str, context: Optional[Dict[str, Any]] = None):
         """Log an error with context."""

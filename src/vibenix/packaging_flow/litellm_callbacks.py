@@ -1,6 +1,7 @@
 from litellm.integrations.custom_logger import CustomLogger
 from litellm import ModelResponse
 import litellm
+import sys
 
 
 class EndStreamLogger(CustomLogger):
@@ -8,13 +9,17 @@ class EndStreamLogger(CustomLogger):
     def __init__(self):
         super().__init__()
         self.total_cost = 0.0
+        self.total_input_tokens = 0
+        self.total_output_tokens = 0
+        self.last_request_cost = None
+        self.last_request_usage = None
         
     def log_success_event(self, kwargs, response_obj: ModelResponse, start_time, end_time):
         print("\n--- STREAM COMPLETE (Callback Triggered) ---")
         try:
             # response_obj is the final, aggregated response.
             # For streaming, the usage is available in the final chunk's response_obj.
-            if response_obj and hasattr(response_obj, 'usage'):
+            if response_obj and hasattr(response_obj, 'usage') and response_obj.usage:
                 usage = response_obj.usage
                 print(f"Final Prompt Tokens: {usage.prompt_tokens}")
                 print(f"Final Completion Tokens: {usage.completion_tokens}")
@@ -23,12 +28,37 @@ class EndStreamLogger(CustomLogger):
                 # Calculate cost from the final aggregated response
                 cost = litellm.completion_cost(completion_response=response_obj)
                 print(f"Total Stream Cost: ${cost:.6f}")
+                
+                # Track totals
                 self.total_cost += cost
+                self.total_input_tokens += usage.prompt_tokens or 0
+                self.total_output_tokens += usage.completion_tokens or 0
+                
+                # Store last request data
+                self.last_request_cost = cost
+                self.last_request_usage = usage
+                
+                # Log to CCL if logger is available
+                try:
+                    from vibenix.ccl_log import get_logger
+                    ccl_logger = get_logger()
+                    model = kwargs.get('model', 'unknown')
+                    ccl_logger.log_model_response(
+                        input_tokens=usage.prompt_tokens or 0,
+                        output_tokens=usage.completion_tokens or 0,
+                        cost=cost,
+                        response_type="model_response"
+                    )
+                except (ImportError, RuntimeError):
+                    # CCL logger not available (e.g., during initial setup)
+                    pass
+                    
             else:
                 if kwargs.get("response_cost") is not None:
                      cost = kwargs['response_cost']
                      print(f"Total Stream Cost (from kwargs): ${cost:.6f}")
                      self.total_cost += cost
+                     self.last_request_cost = cost
 
         except Exception as e:
             print(f"Error in success_callback: {e}")

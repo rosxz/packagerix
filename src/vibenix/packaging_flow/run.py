@@ -18,6 +18,7 @@ from vibenix import config
 from vibenix.errors import NixBuildErrorDiff, NixErrorKind, NixBuildResult
 from vibenix.tools.function_calls_source import create_source_function_calls
 from vibenix.ccl_log import init_logger, get_logger, close_logger
+import os
 
 class Solution(BaseModel):
     """Represents a solution candidate with its code and build result."""
@@ -142,6 +143,10 @@ def package_project(output_dir=None, project_url=None, revision=None, fetcher=No
     log_file = Path(output_dir) / "run.ccl" if output_dir else Path("run.ccl")
     ccl_logger = init_logger(log_file)
     
+    # Set up signal handlers to ensure logs are written on exit
+    from vibenix.ccl_log_safe import setup_safe_logging
+    setup_safe_logging()
+    
     # Step 1: Get project URL (includes welcome message)
     if project_url is None:
         project_url = get_project_url()
@@ -151,6 +156,10 @@ def package_project(output_dir=None, project_url=None, revision=None, fetcher=No
     
     # Log session start
     ccl_logger.log_session_start(project_url)
+    
+    # Log model configuration
+    model = os.environ.get("MAGENTIC_LITELLM_MODEL", "unknown")
+    ccl_logger.log_model_config(model)
 
     # Obtain the project fetcher
     if fetcher: 
@@ -320,6 +329,18 @@ def package_project(output_dir=None, project_url=None, revision=None, fetcher=No
                     consecutive_non_build_errors = 0
 
         ccl_logger.log_iteration_end(iteration, new_result)
+        
+        # Log iteration cost and token usage
+        from vibenix.packaging_flow.model_prompts import end_stream_logger
+        # The iteration cost would be the difference from the start of this iteration
+        # For now, we'll log the cumulative cost
+        ccl_logger.log_iteration_cost(
+            iteration=iteration,
+            iteration_cost=end_stream_logger.total_cost,
+            input_tokens=end_stream_logger.total_input_tokens,
+            output_tokens=end_stream_logger.total_output_tokens
+        )
+        
         iteration += 1
 
     if candidate.result.success:

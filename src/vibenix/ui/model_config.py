@@ -133,14 +133,7 @@ def validate_configuration(provider: Provider, model: str) -> bool:
             if not key_valid:
                 logger.warning(f"API key validation failed for {provider.display_name}")
                 return False
-        
-        # Try a simple completion to validate
-        response = litellm.completion(
-            model=model,
-            messages=[{"role": "user", "content": "Say 'hello'"}],
-            max_tokens=10
-        )
-        
+
         logger.info("Configuration validated successfully!")
         return True
         
