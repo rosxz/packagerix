@@ -1,27 +1,31 @@
 vibenix_verison = {{ commit hash }}
 start_time = {{ start_timestamp }}
-model-config =
+model_config =
   model = {{ model_name }}
   input_token_cost = {{ cost_per_input_token }}
   output_token_cost = {{ cost_per_output_token }}
 project_url = {{ project url }}
 get_release_data_from_forge =
-  forge = {{ identified_forge_name }}
+  forge = "github"
   url = {{ identified_release_data_url }}
   content = {{ downloaded_content }}
   version = {{ None | version_string }}
   rev = {{ "${version}" | "v${version}" | .. or something like that | git_revision }}
 pin_fetcher =
-    started_at = {{ current_time - start_timestamp }}
-    nurl_args = {{nurl args str}}
-    fetcher = {{ fetcher returned from nurl }}
+  started_at = {{ current_time - start_timestamp }}
+  nurl_args = {{nurl args str}}
+  fetcher = {{ fetcher_str_returned_from_nurl }}
 summarize_project =
-    {{ include model_req_resp.ccl.schema }}
-    summary =
-      {{ summary_str }}
+  {{ include model_req_resp.ccl.schema }}
+  summary =
+    {{ summary_str }}
 select_template =
-    {{ include model_req_resp.ccl.schema }}
-    template = TemplateType.{{ template_name_enum_value }}
+  {{ include model_req_resp.ccl.schema }}
+  template_type = TemplateType.{{ template_name_enum_value }}
+  template =
+    {{ tempate_string }}
+  notes =
+    {{ notes_string }}
 initial =
   code =
     {{ initial_nix_code }}
@@ -37,8 +41,8 @@ iterate =
       error =
       {{ None | include nix_error.ccl.schema }}
       {{ None | evaluate_progress =
-          {{ include model_req_resp.ccl.schema }}
-          progress = NixBuildErrorDiff.{{ nix_build_error_diff_value }}
+        {{ include model_req_resp.ccl.schema }}
+        progress = NixBuildErrorDiff.{{ nix_build_error_diff_value }}
       }}
   stop_iteration =
       reason = {{ which limit caused the termination }}
