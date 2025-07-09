@@ -8,12 +8,12 @@ Please determine on a case by case basis, if you need to
 * make lib.fakeHash and an actual hash value switch places in the Nix code.    
 
 ```nix
-{code}
+{{ code }}
 ```
 
 Error:
 ```
-{error}
+{{ error }}
 ```
            
 Note: Your reply should contain exactly one code block with the updated Nix code.

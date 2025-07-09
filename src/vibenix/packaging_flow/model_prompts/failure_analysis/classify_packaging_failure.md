@@ -5,5 +5,5 @@ It is most important that you choose the most appropriate failure type, only sel
 
 Here is the details:
 ```text
-{details}
+{{ details }}
 ```

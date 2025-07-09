@@ -98,27 +98,15 @@ def evaluate_progress(log_diff: LogDiff) -> NixBuildErrorDiff:
     if isinstance(log_diff, FullLogDiff):
         # Use the full log template for complete logs
         @ask_model_prompt('progress_evaluation/evaluate_full_logs.md')
-        def _evaluate_full(previous_log: str, new_log: str) -> NixBuildErrorDiff:
+        def _evaluate_full(log_diff: FullLogDiff) -> NixBuildErrorDiff:
             ...
-        return _evaluate_full(log_diff.previous_log, log_diff.new_log)
+        return _evaluate_full(log_diff)
     else:  # ProcessedLogDiff
         # Use the truncated log template for processed logs
         @ask_model_prompt('progress_evaluation/evaluate_truncated_logs.md')
-        def _evaluate_truncated(
-            previous_log_truncated: str,
-            new_log_truncated: str,
-            initial_lines: int,
-            improvement_lines: int,
-            divergence_line: int
-        ) -> NixBuildErrorDiff:
+        def _evaluate_truncated(log_diff: ProcessedLogDiff) -> NixBuildErrorDiff:
             ...
-        return _evaluate_truncated(
-            log_diff.previous_log_truncated,
-            log_diff.new_log_truncated,
-            log_diff.initial_lines,
-            log_diff.improvement_lines,
-            log_diff.divergence_line
-        )
+        return _evaluate_truncated(log_diff)
 
 
 @ask_model_prompt('failure_analysis/classify_packaging_failure.md')

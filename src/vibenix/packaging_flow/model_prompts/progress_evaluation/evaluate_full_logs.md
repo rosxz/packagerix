@@ -2,14 +2,14 @@ You are software packaging expert who can build any project using the Nix progra
 
 I am going to show you two complete log files, please make a judgement about which build proceeded further.
 
-Initial build (total lines: {log_diff.initial_lines}):
+Initial build (total lines: {{ log_diff.initial_lines }}):
 ```nix
-{log_diff.previous_log}
+{{ log_diff.previous_log }}
 ```
 
-Attempted improvement (total lines: {log_diff.improvement_lines}):
+Attempted improvement (total lines: {{ log_diff.improvement_lines }}):
 ```
-{log_diff.new_log}
+{{ log_diff.new_log }}
 ```
 
 These are the complete logs with line numbers. 

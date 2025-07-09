@@ -10,15 +10,15 @@ Return:
 
 Here is the current Nix code for you to evaluate:
 ```nix
-{code}
+{{ code }}
 ```
 
 Here is the feedback provided by the evaluator:
 ```text
-{feedback}
+{{ feedback }}
 ```
 
 Here is the previous Nix code:
 ```nix
-{previous_code}
+{{ previous_code }}
 ```
