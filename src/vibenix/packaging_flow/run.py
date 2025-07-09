@@ -16,7 +16,7 @@ from vibenix.packaging_flow.model_prompts import (
 from vibenix.packaging_flow.user_prompts import get_project_url
 from vibenix import config
 from vibenix.errors import NixBuildErrorDiff, NixErrorKind, NixBuildResult
-from vibenix.tools.function_calls_source import create_source_function_calls
+from vibenix.tools.file_tools import create_source_function_calls
 from vibenix.ccl_log import init_logger, get_logger, close_logger
 import os
 

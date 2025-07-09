@@ -2,7 +2,7 @@
 
 import pytest
 from magentic import prompt_chain
-from vibenix.function_calls import search_nixpkgs_for_package, web_search, fetch_url_content, search_nix_functions
+from vibenix.tools import search_nixpkgs_for_package_literal, search_nixpkgs_for_package_semantic, search_nix_functions
 
 
 def print_model_response(response: str, request) -> str:
@@ -17,21 +17,9 @@ def print_model_response(response: str, request) -> str:
 # Define prompt_chain functions outside of class to avoid self parameter conflicts
 @prompt_chain(
     "Search for a package called {package_name} in nixpkgs and tell me what you found.",
-    functions=[search_nixpkgs_for_package],
+    functions=[search_nixpkgs_for_package_literal],
 )
 def search_and_describe_package(package_name: str) -> str: ...
-
-@prompt_chain(
-    "Search the web for information about {topic} and summarize what you find.",
-    functions=[web_search],
-)
-def search_web_and_summarize(topic: str) -> str: ...
-
-@prompt_chain(
-    "Fetch the content from {url} and tell me what kind of page it is.",
-    functions=[fetch_url_content],
-)
-def fetch_and_analyze_url(url: str) -> str: ...
 
 @prompt_chain(
     "Find Nix functions related to {keyword} and list a few examples.",
@@ -44,7 +32,7 @@ class TestModelIntegration:
     """Tests where the model actually calls the function tools."""
     
     def test_model_calls_nixpkgs_search(self, model_config, request):
-        """Test that the model can call search_nixpkgs_for_package."""
+        """Test that the model can call search_nixpkgs_for_package_literal."""
         result = print_model_response(
             search_and_describe_package("git"), 
             request
@@ -55,27 +43,6 @@ class TestModelIntegration:
         assert len(result) > 0
         # Should mention something about git or version control
         assert any(word in result.lower() for word in ["git", "version", "control", "repository"])
-    
-    def test_model_calls_web_search(self, model_config):
-        """Test that the model can call web_search."""
-        result = search_web_and_summarize("nixpkgs packaging tutorial")
-        
-        # The model should have called the function and summarized results
-        assert isinstance(result, str)
-        assert len(result) > 0
-        # Should mention something about nixpkgs or packaging
-        assert any(word in result.lower() for word in ["nix", "package", "packaging", "tutorial"])
-    
-    def test_model_calls_fetch_url(self, model_config):
-        """Test that the model can call fetch_url_content."""
-        # Use a reliable URL that should work
-        result = fetch_and_analyze_url("https://httpbin.org/json")
-        
-        # The model should have called the function and analyzed the content
-        assert isinstance(result, str)
-        assert len(result) > 0
-        # Should recognize it's a JSON endpoint or API
-        assert any(word in result.lower() for word in ["json", "api", "data", "endpoint"])
     
     @pytest.mark.skipif(
         not pytest.importorskip("os").environ.get("NOOGLE_FUNCTION_NAMES"),

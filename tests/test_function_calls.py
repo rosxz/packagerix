@@ -4,12 +4,12 @@ import pytest
 import os
 import json
 from unittest.mock import patch, MagicMock
-from vibenix.function_calls import search_nixpkgs_for_package, web_search, fetch_url_content, search_nix_functions
-from vibenix.source_function_calls import create_source_function_calls
+from vibenix.tools import search_nixpkgs_for_package_literal, search_nixpkgs_for_package_semantic, search_nix_functions
+from vibenix.tools.file_tools import create_source_function_calls
 
 
 class TestSearchNixpkgsForPackage:
-    """Tests for search_nixpkgs_for_package function."""
+    """Tests for search_nixpkgs_for_package functions."""
     
     def test_search_returns_json(self):
         """Test that search returns valid JSON output."""
@@ -26,7 +26,7 @@ class TestSearchNixpkgsForPackage:
             })
             mock_run.return_value = mock_result
             
-            result = search_nixpkgs_for_package("cowsay")
+            result = search_nixpkgs_for_package_literal("cowsay")
             
             # Verify it returns JSON
             parsed = json.loads(result)
@@ -41,7 +41,7 @@ class TestSearchNixpkgsForPackage:
             mock_result.stdout = ""
             mock_run.return_value = mock_result
             
-            result = search_nixpkgs_for_package("nonexistentpackage123")
+            result = search_nixpkgs_for_package_literal("nonexistentpackage123")
             assert "no results found" in result
     
     def test_search_command_format(self):
@@ -52,7 +52,7 @@ class TestSearchNixpkgsForPackage:
             mock_result.stdout = "{}"
             mock_run.return_value = mock_result
             
-            search_nixpkgs_for_package("test")
+            search_nixpkgs_for_package_literal("test")
             
             # Verify the command includes nix search --json and jq pipeline
             mock_run.assert_called_once()
@@ -85,72 +85,6 @@ class TestListDirectoryContents:
 
         result = list_function("../")
         assert "is outside the allowed root directory" in result
-
-class TestWebSearch:
-    """Tests for web_search function."""
-    
-    def test_web_search_success(self):
-        """Test successful web search."""
-        with patch("subprocess.run") as mock_run:
-            mock_result = MagicMock()
-            mock_result.returncode = 0
-            mock_result.stdout = json.dumps([
-                {
-                    "title": "Test Result",
-                    "url": "https://example.com",
-                    "abstract": "Test abstract"
-                }
-            ])
-            mock_run.return_value = mock_result
-            
-            result = web_search("test query")
-            assert "Test Result" in result
-            assert "https://example.com" in result
-    
-    def test_web_search_timeout(self):
-        """Test web search timeout handling."""
-        with patch("subprocess.run") as mock_run:
-            import subprocess
-            mock_run.side_effect = subprocess.TimeoutExpired("ddgr", 30)
-            
-            result = web_search("test query")
-            assert "search timed out" in result
-    
-    def test_web_search_tool_not_found(self):
-        """Test when ddgr is not installed."""
-        with patch("subprocess.run") as mock_run:
-            mock_run.side_effect = FileNotFoundError()
-            
-            result = web_search("test query")
-            assert "search tool not found" in result
-            assert "ddgr" in result
-
-
-class TestFetchUrlContent:
-    """Tests for fetch_url_content function."""
-    
-    def test_fetch_url_success(self):
-        """Test successful URL fetch."""
-        with patch("requests.get") as mock_get:
-            mock_response = MagicMock()
-            mock_response.text = "<html><body>Test content</body></html>"
-            mock_response.raise_for_status = MagicMock()
-            mock_get.return_value = mock_response
-            
-            result = fetch_url_content("https://example.com")
-            assert "Test content" in result
-            mock_get.assert_called_once_with("https://example.com", timeout=30)
-    
-    def test_fetch_url_error(self):
-        """Test URL fetch with error."""
-        with patch("requests.get") as mock_get:
-            import requests
-            mock_get.side_effect = requests.RequestException("Connection error")
-            
-            result = fetch_url_content("https://example.com")
-            assert "Error fetching URL" in result
-            assert "Connection error" in result
-
 
 class TestSearchNixFunctions:
     """Tests for search_nix_functions function."""

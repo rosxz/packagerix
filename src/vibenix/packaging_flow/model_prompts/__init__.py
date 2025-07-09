@@ -9,7 +9,7 @@ from typing import List, Optional
 from magentic import StreamedStr
 from vibenix.template.template_types import TemplateType
 from vibenix.ui.conversation_templated import ask_model_prompt
-from vibenix.tools.function_calls import (
+from vibenix.tools import (
     search_nixpkgs_for_package_semantic,
     search_nixpkgs_for_package_literal,
     search_nix_functions,
