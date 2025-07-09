@@ -1,0 +1,4 @@
+function_call =
+    name = {{ function_name }}
+    {{ arg1_name }} = {{ arg1_value }}
+    {{ arg2_name }} = {{ arg2_value }}

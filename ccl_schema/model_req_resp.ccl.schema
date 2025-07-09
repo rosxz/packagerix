@@ -1,0 +1,28 @@
+started_at =
+model_prompt =
+  args =
+    {{ arg1_name }} = {{ arg1_value }}
+    {{ arg2_name }} = {{ arg2_value }}
+  template =
+    {{ prompt_template }}
+reply_chunks =
+  = 0 =
+    text =
+    {{ first text chunk }}
+  = 1 =
+    function_call =
+        name = {{ function_name }}
+        {{ arg1_name }} = {{ arg1_value }}
+        {{ arg2_name }} = {{ arg2_value }}
+  = 2 =
+    function_call =
+        name = {{ function_name }}
+        {{ arg1_name }} = {{ arg1_value }}
+        {{ arg2_name }} = {{ arg2_value }}
+  = 0 =
+    text =
+    {{ last text chunk }}
+request_metadata =
+  input_tokens = {{ req_resp_input_token_count }}
+  output_tokens = {{ req_resp_output_token_count }}
+  cost = {{ req_resp_cost }}
