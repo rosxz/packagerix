@@ -4,6 +4,7 @@ Another expert Nix agent failed to produce a Nix package for a given software pr
 
 Your task is to analyze the provided Nix code, the last error message obtained, and the project source code in the Nix store to describe the problem.
 You should not solely focus on the error message, as it may not show the true problem the agent had with packaging.
+Your reply should be an, at most, 3-sentence long summary of the problem that concisely describes it.
 
 This task will help
     - the developer of the software in making their software easier to package, or

@@ -101,7 +101,7 @@ def refine_package(curr: Solution, project_page: str):
     max_iterations = 3
 
     for iteration in range(max_iterations):
-        # Get feedback
+        # Get feedback for current code
         # TODO BUILD LOG IS NOT BEING PASSED!
         feedback = get_feedback(curr.code, "", project_page)
         coordinator_message(f"Refining package (iteration {iteration}/{max_iterations})...")
@@ -115,8 +115,8 @@ def refine_package(curr: Solution, project_page: str):
         
         # Verify the updated code still builds
         if not attempt.result.success:
-            coordinator_message(f"Refinement caused a regression: {attempt.result.error.type}")
-            return attempt, RefinementExit.ERROR
+            coordinator_error(f"Refinement caused a regression ({attempt.result.error.type}). Returning last successful solution.")
+            return curr
         else:
             coordinator_message("Refined packaging code successfuly builds...")
             prev = curr
@@ -132,7 +132,8 @@ def refine_package(curr: Solution, project_page: str):
         else:
             coordinator_message("Evaluator deems there has been a regression in the packaging code. Reverting to previous state.")
             curr = prev
-    return curr, RefinementExit.INCOMPLETE
+    coordinator_message("Refinement process reached max iterations.")
+    return curr
 
 
 def package_project(output_dir=None, project_url=None, revision=None, fetcher=None):
@@ -208,7 +209,6 @@ def package_project(output_dir=None, project_url=None, revision=None, fetcher=No
     coordinator_progress("Testing the initial build...")
     initial_result = execute_build_and_add_to_stack(initial_code)
     best = Solution(code=initial_code, result=initial_result)
-    last_successful = None
 
     # Log that we're starting iterations
     ccl_logger.log_before_iterations()
@@ -269,7 +269,7 @@ def package_project(output_dir=None, project_url=None, revision=None, fetcher=No
                 best = candidate
                 consecutive_rebuilds_without_progress = 0
             else:
-                coordinator_message(f"Iteration {iteration + 1} did NOT made progress...")
+                coordinator_message(f"Iteration {iteration + 1} did NOT make progress...")
                 candidate = best
                 consecutive_rebuilds_without_progress += 1
             consecutive_non_build_errors = 0
@@ -285,22 +285,15 @@ def package_project(output_dir=None, project_url=None, revision=None, fetcher=No
 
     if candidate.result.success:
         coordinator_message("Build succeeded! Refining package...")
-        refined_candidate, completed = refine_package(candidate, summary)
-        
-        if completed == RefinementExit.ERROR:
-            coordinator_error("Refinement encountered an error. Returning pre-refinement solution.")
-        elif completed == RefinementExit.INCOMPLETE:
-            coordinator_message("Refinement process reached max iterations.")
+        candidate = refine_package(candidate, summary)
         
         # Always log success and return, regardless of refinement outcome
         from vibenix.packaging_flow.model_prompts import end_stream_logger
         ccl_logger.log_session_end(True, iteration, end_stream_logger.total_cost)
         close_logger()
         if output_dir:
-            # Use refined version if no error, otherwise use pre-refinement version
-            final_code = refined_candidate.code if completed != RefinementExit.ERROR else candidate.code
-            save_package_output(final_code, project_url, output_dir)
-        return refined_candidate.code if completed != RefinementExit.ERROR else candidate.code  
+            save_package_output(candidate.code, project_url, output_dir)
+        return candidate.code  
     else:
         if consecutive_non_build_errors >= MAX_CONSECUTIVE_NON_BUILD_ERRORS:
             coordinator_error(f"Aborted: {consecutive_rebuilds_without_progress} consecutive rebuilds without progress.")
