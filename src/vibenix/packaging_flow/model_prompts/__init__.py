@@ -79,6 +79,7 @@ def fix_build_error(
     template_notes: Optional[str] = None,
     additional_functions: List = [],
     is_broken_log_output: bool = False,
+    is_dependency_build_error: bool = False,
     attempted_tool_calls: List = [],
     tool_call_collector: List = None
 ) -> StreamedStr:

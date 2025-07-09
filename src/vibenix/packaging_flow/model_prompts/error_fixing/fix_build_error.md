@@ -23,6 +23,27 @@ Error:
 Do NOT guess at solutions - use your tools to find real examples and patterns from nixpkgs, the project's CI, or the project itself.
 {% endif %}
 
+{% if is_dependency_build_error %}
+**IMPORTANT: This appears to be a dependency build failure, not an error in your derivation.**
+
+The error shows that a dependency from nixpkgs failed to build. **DO NOT try to fix the dependency itself.**
+
+Common causes for dependency build failures:
+1. Missing lock files (package-lock.json, Cargo.lock, etc.) - Check if the project needs these files
+2. Wrong nixpkgs version or channel - But you cannot change this
+3. Platform-specific issues - But you cannot fix these
+
+**Focus only on:**
+- Checking if the project requires lock files that are missing and finding them
+- Ensuring your derivation correctly specifies its dependencies
+- Looking for alternative ways to express the dependency requirements
+
+**DO NOT:**
+- Try to write derivations for the failing dependencies
+- Attempt to patch or fix nixpkgs packages
+- Get distracted from building the main project
+{% endif %}
+
 {% if attempted_tool_calls %}
 **The following tool calls have already been attempted without making progress. Consider trying different approaches:**
 {% for call in attempted_tool_calls %}

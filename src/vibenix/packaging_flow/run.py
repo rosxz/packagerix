@@ -255,6 +255,7 @@ def package_project(output_dir=None, project_url=None, revision=None, fetcher=No
             
             # Create a collector for this iteration's tool calls
             iteration_tool_calls = []
+            is_dependency_error = candidate.result.error.type == NixErrorKind.DEPENDENCY_BUILD_ERROR
             fixed_response = fix_build_error(
                 candidate.code, 
                 candidate.result.error.truncated(), 
@@ -262,6 +263,7 @@ def package_project(output_dir=None, project_url=None, revision=None, fetcher=No
                 template_notes, 
                 additional_functions, 
                 has_broken_log_output,
+                is_dependency_error,
                 attempted_tool_calls,
                 iteration_tool_calls
             )
