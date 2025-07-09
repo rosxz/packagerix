@@ -1,9 +1,9 @@
 """Search for packages that provide specific files using nix-locate."""
 
-from vibenix.ccl_log import get_logger
+from vibenix.ccl_log import get_logger, log_function_call
 from vibenix.tools.nix_locate_tool import nix_locate_for_llm
 
-
+@log_function_call("search_nixpkgs_for_file")
 def search_nixpkgs_for_file(file_path: str, regex: bool = False, exact_match: bool = False) -> str:
     """
     Find packages in nixpkgs that provide a specific file path (using nix-locate).
@@ -27,7 +27,5 @@ def search_nixpkgs_for_file(file_path: str, regex: bool = False, exact_match: bo
         
     The symlink_matches list contains packages where the file is not contained directly, but reachable through symlinks (indirect matches).
     """
-    print(f"📞 Function called: search_nixpkgs_for_file with file_path: {file_path}, regex: {regex}, exact_match: {exact_match}")
-    get_logger().log_function_call("search_nixpkgs_for_file", file_path=file_path, regex=regex, exact_match=exact_match)
-    
+
     return nix_locate_for_llm(file_path, regex=regex, exact_match=exact_match)

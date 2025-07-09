@@ -5,9 +5,9 @@ import pickle
 import numpy as np
 from sentence_transformers import SentenceTransformer
 from sklearn.metrics.pairwise import cosine_similarity
-from vibenix.ccl_log import get_logger
+from vibenix.ccl_log import get_logger, log_function_call
 
-
+@log_function_call("search_nixpkgs_for_package_semantic")
 def search_nixpkgs_for_package_semantic(query: str, package_set: str = None) -> str:
     """Search the nixpkgs repository using semantic similarity with embeddings.
     
@@ -18,8 +18,6 @@ def search_nixpkgs_for_package_semantic(query: str, package_set: str = None) -> 
     Uses sentence transformers to find semantically similar package names and descriptions.
     Returns a Nix expression with matching packages grouped by package set.
     """
-    print(f"📞 Function called: search_nixpkgs_for_package_semantic (embeddings) with query: {query}, package_set: {package_set}")
-    get_logger().log_function_call("search_nixpkgs_for_package_semantic", query=query, package_set=package_set)
     
     # Get path to pre-computed embeddings from environment
     embeddings_path = os.environ.get('NIXPKGS_EMBEDDINGS')

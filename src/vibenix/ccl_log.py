@@ -4,13 +4,15 @@ Structured logging in CCL (Categorical Configuration Language) format for Vibeni
 Based on: https://chshersh.com/blog/2025-01-06-the-most-elegant-configuration-language.html
 """
 
-import hashlib
+import textwrap
 import time
 from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict, Optional, TextIO
 from dataclasses import dataclass, field
 from contextlib import contextmanager
+from jinja2 import Environment
+import functools
 
 from .errors import NixBuildErrorDiff, NixBuildResult
 
@@ -38,14 +40,25 @@ class CCLLogger:
     """
     
     log_file: Path
+    print_to_console: bool = True
     _file_handle: TextIO = field(init=False)
     _current_indent: int = field(default=0, init=False)
     _start_time: float = field(init=False)
+    _jinja_env: Environment = field(init=False)
     
     def __post_init__(self):
         self._file_handle = open(self.log_file, 'w', buffering=1)
         self._start_time = time.time()
+        self._setup_jinja_env()
         self._write_header()
+    
+    def _setup_jinja_env(self):
+        """Set up Jinja2 environment for string templates."""
+        self._jinja_env = Environment(
+            trim_blocks=True,
+            lstrip_blocks=True,
+            keep_trailing_newline=True,
+        )
     
     def _write_header(self):
         """Write header with metadata."""
@@ -60,6 +73,20 @@ class CCLLogger:
         minutes = int((elapsed % 3600) // 60)
         seconds = elapsed % 60
         return f"{hours:02d}:{minutes:02d}:{seconds:06.3f}"
+   
+    def _format_value(self, value: Any) -> str:
+        """Format a value for Jinja2 template, handling multi-line strings.
+        
+        For multi-line values, returns the value with a newline prefix
+        and proper indentation for each line.
+        """
+        value_str = str(value)
+        if '\n' in value_str:
+            lines = value_str.splitlines()
+            # Return newline, then each line indented by 8 spaces
+            return '\n' + '\n'.join('        ' + line for line in lines)
+        else:
+            return value_str
     
     def close(self):
         """Close the log file."""
@@ -151,13 +178,6 @@ class CCLLogger:
             self._write("elapsed = " + self._elapsed_time())
     
     
-    def log_function_call(self, function_name: str, **kwargs):
-        """Log a function call to the model."""
-        with self._section_begin("function_call =", 2):
-            self._write("elapsed = " + self._elapsed_time())
-            self._write("name = " + function_name)
-            for key, value in kwargs.items():
-                self._write(f"{key} = {value}")
     
     def log_model_response(self, input_tokens: int, output_tokens: int, 
                           cost: Optional[float] = None, response_type: str = "model_response"):
@@ -191,16 +211,57 @@ class CCLLogger:
                 with self._section_begin("context =", 1):
                     for key, value in context.items():
                         self._write(f"{key} = {value}")
+    
+    def function_begin(self, function_name: str, indent_level: int, **kwargs):
+        """Log the beginning of a function call."""
+        template_str = textwrap.indent(textwrap.dedent("""\
+          function_call =
+            start_at = {{ elapsed_time }}
+            name = {{ function_name }}
+            args =
+              {% for key, value in args.items() %}
+              {{ key }} = {{ format_value(value) }}
+              {% endfor %}"""), "  " * indent_level)
+        
+        # Register the format_value function as a Jinja2 function
+        template = self._jinja_env.from_string(template_str)
+        output = template.render(
+            elapsed_time=self._elapsed_time(),
+            function_name=function_name,
+            args=kwargs,
+            format_value=self._format_value,
+            spaces=indent_level * 2
+        )
 
+        self._file_handle.write(output)
+        if self.print_to_console:
+            print(output)
+    
+    def function_end(self, function_name: str, result: Any, indent_level: int):
+        """Log the end of a function call with result."""
+        template_str = textwrap.indent(textwrap.dedent("""\
+          result = {{ format_value(result) }}
+          end_at = {{ elapsed_time }}"""), "  " * (indent_level + 1))
+        
+        template = self._jinja_env.from_string(template_str)
+        output = template.render(
+            result=result,
+            elapsed_time=self._elapsed_time(),
+            format_value=self._format_value
+        )
+        
+        self._file_handle.write(output)
+        if self.print_to_console:
+            print(output)
 
 # Global logger instance
 _logger: CCLLogger = None
 
 
-def init_logger(log_file: Path) -> CCLLogger:
+def init_logger(log_file: Path, print_to_console: bool = True) -> CCLLogger:
     """Initialize the global CCL logger."""
     global _logger
-    _logger = CCLLogger(log_file=log_file)
+    _logger = CCLLogger(log_file=log_file, print_to_console=print_to_console)
     return _logger
 
 
@@ -217,3 +278,23 @@ def close_logger():
     if _logger:
         _logger.close()
         _logger = None
+
+
+def log_function_call(function_name: str, indent_level: int = 2):
+    """Decorator to log function calls with their arguments and results."""
+    def decorator(func):
+        @functools.wraps(func)
+        def wrapper(*args, **kwargs):
+            # Log function beginning
+            logger = get_logger()
+            logger.function_begin(function_name, indent_level, **kwargs)
+            
+            # Execute function
+            result = func(*args, **kwargs)
+            
+            # Log function end
+            logger.function_end(function_name, result, indent_level)
+            
+            return result
+        return wrapper
+    return decorator
