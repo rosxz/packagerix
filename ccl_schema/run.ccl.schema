@@ -12,7 +12,7 @@ get_release_data_from_forge =
   version = {{ None | version_string }}
   rev = {{ "${version}" | "v${version}" | .. or something like that | git_revision }}
 pin_fetcher =
-    started_at = #
+    started_at = {{ current_time - start_timestamp }}
     nurl_args = {{nurl args str}}
     fetcher = {{ fetcher returned from nurl }}
 summarize_project =
@@ -28,21 +28,27 @@ initial =
   error =
     {{ None | include nix_error.ccl.schema }}
 iterate =
-  = 0 =
-    type = NixErrorKind.{{ error_kind_enum_value }}
-    {{ include model_req_resp.ccl.schema }}
-    updated_code =
-      {{ updated_nix_code }}
-    error =
-    {{ None | include nix_error.ccl.schema }}
-    {{ None | evaluate_progress =
-        {{ include model_req_resp.ccl.schema }}
-        progress = NixBuildErrorDiff.{{ nix_build_error_diff_value }}
-    }}
-stop_iteration =
-    reason = {{ which limit caused the termination }}
-    last_error =
+  loop =
+    = 0 =
+      type = NixErrorKind.{{ error_kind_enum_value }}
+      {{ include model_req_resp.ccl.schema }}
+      updated_code =
+        {{ updated_nix_code }}
+      error =
       {{ None | include nix_error.ccl.schema }}
+      {{ None | evaluate_progress =
+          {{ include model_req_resp.ccl.schema }}
+          progress = NixBuildErrorDiff.{{ nix_build_error_diff_value }}
+      }}
+  stop_iteration =
+      reason = {{ which limit caused the termination }}
+      last_error =
+        {{ None | include nix_error.ccl.schema }}
+  request_metadata_sum =
+    req_count = {{ request_count }}
+    input_tokens = {{ req_resp_input_token_count }}
+    output_tokens = {{ req_resp_output_token_count }}
+    cost = {{ req_resp_cost }}
 {{
 analyze_failure =
   describe_cause =
@@ -58,8 +64,9 @@ analyze_failure =
     input_tokens = {{ req_resp_input_token_count }}
     output_tokens = {{ req_resp_output_token_count }}
     cost = {{ req_resp_cost }}
+    [TODO: this stil needs some work]
 refine_package =
-    [TODO]
+    [TODO: this still needs to be defined]
 |
 exception =
   {{ exception_str }}
@@ -69,3 +76,4 @@ request_metadata_total =
   input_tokens = {{ req_resp_input_token_count }}
   output_tokens = {{ req_resp_output_token_count }}
   cost = {{ req_resp_cost }}
+elapsed_time = {{  current_time - start_timestamp  }}

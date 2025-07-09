@@ -1,4 +1,9 @@
 function_call =
-    name = {{ function_name }}
+  start_at = {{ current_time - start_timestamp }}
+  name = {{ function_name }}
+  args =
     {{ arg1_name }} = {{ arg1_value }}
     {{ arg2_name }} = {{ arg2_value }}
+  result =
+    {{ invocation_result }}
+  end_at = {{ current_time - start_timestamp }}

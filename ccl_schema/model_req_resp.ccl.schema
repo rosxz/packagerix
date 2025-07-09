@@ -1,4 +1,4 @@
-started_at =
+start_at = {{ current_time - start_timestamp }}
 model_prompt =
   args =
     {{ arg1_name }} = {{ arg1_value }}
@@ -11,14 +11,10 @@ reply_chunks =
     {{ first text chunk }}
   = 1 =
     function_call =
-        name = {{ function_name }}
-        {{ arg1_name }} = {{ arg1_value }}
-        {{ arg2_name }} = {{ arg2_value }}
+      {{ include function_call.ccl.schema }}
   = 2 =
     function_call =
-        name = {{ function_name }}
-        {{ arg1_name }} = {{ arg1_value }}
-        {{ arg2_name }} = {{ arg2_value }}
+      {{ include function_call.ccl.schema }}
   = 0 =
     text =
     {{ last text chunk }}
@@ -26,3 +22,4 @@ request_metadata =
   input_tokens = {{ req_resp_input_token_count }}
   output_tokens = {{ req_resp_output_token_count }}
   cost = {{ req_resp_cost }}
+end_at = {{ current_time - start_timestamp }}
