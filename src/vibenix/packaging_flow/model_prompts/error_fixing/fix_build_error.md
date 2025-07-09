@@ -11,6 +11,18 @@ Error:
 {{ error }}
 ```
 
+{% if is_broken_log_output %}
+**IMPORTANT: The build log output appears to be garbled. This is typically because the build system is outputting interactive elements (progress bars, ANSI codes, etc.) that don't work well in non-interactive environments.** However, it can also have other reasons.
+
+**You MUST prioritize fixing the log output and use your search tools to find a solution:**
+1. Search nixpkgs for packages using the same build system to see how they handle this
+2. Search the project source files for build configuration options or documentation about non-interactive output
+3. Look at the project's CI configuration files (e.g., .github/workflows, .gitlab-ci.yml) to see how they handle non-interactive builds
+4. Look for command-line flags or environment variables that control output formatting
+
+Do NOT guess at solutions - use your tools to find real examples and patterns from nixpkgs, the project's CI, or the project itself.
+{% endif %}
+
 {% include 'snippets/project_info_section.md' %}
 
 {% include 'snippets/template_note_section.md' %}

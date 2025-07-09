@@ -14,6 +14,4 @@ Attempted improvement (total lines: {log_diff.improvement_lines}):
 
 These are the complete logs with line numbers. 
 
-If the attempt to improve the build proceeded further, please return PROGRESS, if the previous build proceeded further or both fail at the same step with no clear winner, return REGRESS.
-
-Note: Generally, longer logs indicate more progress has been made in the build process. Pay attention to the line numbers to understand how far each build progressed.
+{% include 'snippets/progress_evaluation_options.md' %}

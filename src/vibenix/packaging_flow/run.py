@@ -224,6 +224,7 @@ def package_project(output_dir=None, project_url=None, revision=None, fetcher=No
     consecutive_non_build_errors = 0
 
     first_build_error = True
+    has_broken_log_output = False
     
     while (
         (not candidate.result.success) and
@@ -243,7 +244,7 @@ def package_project(output_dir=None, project_url=None, revision=None, fetcher=No
             coordinator_message("Other error detected, fixing...")
             coordinator_message(f"code:\n{candidate.code}\n")
             coordinator_message(f"error:\n{candidate.result.error.truncated()}\n")
-            fixed_response = fix_build_error(candidate.code, candidate.result.error.truncated(), summary, template_notes, additional_functions)
+            fixed_response = fix_build_error(candidate.code, candidate.result.error.truncated(), summary, template_notes, additional_functions, has_broken_log_output)
         
         updated_code = extract_updated_code(fixed_response)
             
@@ -252,29 +253,47 @@ def package_project(output_dir=None, project_url=None, revision=None, fetcher=No
         new_result = execute_build_and_add_to_stack(updated_code)
         candidate = Solution(code=updated_code, result=new_result)
 
-        if ((not new_result.success)
-            and (new_result.error.type == NixErrorKind.BUILD_ERROR)):
-            coordinator_message(f"Nix build result: {candidate.result.error.type}")
-            if first_build_error:
-                eval_result = NixBuildErrorDiff.PROGRESS
-                first_build_error = False
-            elif best.result.error == candidate.result.error:
-                eval_result = NixBuildErrorDiff.REGRESS
+        if not new_result.success:
+            if new_result.error.type == NixErrorKind.BUILD_ERROR:
+                coordinator_message(f"Nix build result: {candidate.result.error.type}")
+                if first_build_error:
+                    eval_result = NixBuildErrorDiff.PROGRESS
+                    first_build_error = False
+                elif best.result.error == candidate.result.error:
+                    eval_result = NixBuildErrorDiff.REGRESS
+                else:
+                    eval_result = eval_progress(best.result, candidate.result, iteration)
+                    ccl_logger.log_progress_eval(iteration, eval_result)
+                
+                if eval_result == NixBuildErrorDiff.PROGRESS:
+                    coordinator_message(f"Iteration {iteration + 1} made progress...")
+                    best = candidate
+                    consecutive_rebuilds_without_progress = 0
+                    has_broken_log_output = False  # Reset since we made progress
+                elif eval_result == NixBuildErrorDiff.BROKEN_LOG_OUTPUT:
+                    coordinator_message(f"Iteration {iteration + 1} produced broken log output - continuing without rollback...")
+                    has_broken_log_output = True
+                    # Don't update best, but also don't rollback candidate
+                    # Don't increment consecutive_rebuilds_without_progress since this is a special case
+                elif eval_result == NixBuildErrorDiff.STAGNATION:
+                    if has_broken_log_output:
+                        # Stagnation after broken log output means we fixed the log output!
+                        coordinator_message(f"Iteration {iteration + 1} fixed broken log output (now showing clear error)...")
+                        best = candidate
+                        has_broken_log_output = False
+                        consecutive_rebuilds_without_progress = 0
+                    else:
+                        coordinator_message(f"Iteration {iteration + 1} stagnated...")
+                        candidate = best
+                        consecutive_rebuilds_without_progress += 1
+                else:  # REGRESS
+                    coordinator_message(f"Iteration {iteration + 1} regressed...")
+                    candidate = best
+                    consecutive_rebuilds_without_progress += 1
+                consecutive_non_build_errors = 0
             else:
-                eval_result = eval_progress(best.result, candidate.result, iteration)
-                ccl_logger.log_progress_eval(iteration, eval_result)
-            
-            if eval_result == NixBuildErrorDiff.PROGRESS:
-                coordinator_message(f"Iteration {iteration + 1} made progress...")
-                best = candidate
-                consecutive_rebuilds_without_progress = 0
-            else:
-                coordinator_message(f"Iteration {iteration + 1} did NOT make progress...")
-                candidate = best
-                consecutive_rebuilds_without_progress += 1
-            consecutive_non_build_errors = 0
-
-            if (new_result.error.type != NixErrorKind.BUILD_ERROR):
+                # Non-build errors (EVAL_ERROR, HASH_MISMATCH)
+                coordinator_message(f"Non-build error: {new_result.error.type}")
                 consecutive_non_build_errors += 1          
                 if consecutive_non_build_errors >= MAX_CONSECUTIVE_NON_BUILD_ERRORS:
                     candidate = best

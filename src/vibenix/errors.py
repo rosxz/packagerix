@@ -4,10 +4,11 @@ from enum import Enum
 from pydantic import BaseModel
 from typing import Optional
 
-
 class NixBuildErrorDiff(Enum):
     REGRESS = "REGRESS"
     PROGRESS = "PROGRESS"
+    STAGNATION = "STAGNATION"
+    BROKEN_LOG_OUTPUT = "BROKEN_LOG_OUTPUT"
 
 class NixErrorKind(Enum):
     EVAL_ERROR = "EVAL_ERROR"
