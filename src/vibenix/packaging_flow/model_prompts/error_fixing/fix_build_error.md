@@ -23,6 +23,19 @@ Error:
 Do NOT guess at solutions - use your tools to find real examples and patterns from nixpkgs, the project's CI, or the project itself.
 {% endif %}
 
+{% if attempted_tool_calls %}
+**The following tool calls have already been attempted without making progress. Consider trying different approaches:**
+{% for call in attempted_tool_calls %}
+- {{ call.function }}({% for key, value in call.arguments.items() %}{{ key }}="{{ value }}"{% if not loop.last %}, {% endif %}{% endfor %})
+{% endfor %}
+
+**Suggestions for alternative approaches:**
+- Try different search queries or terms
+- Look in different parts of nixpkgs or the project
+- Use a different tool that might provide better information
+- Consider if the issue requires a fundamentally different solution approach
+{% endif %}
+
 {% include 'snippets/project_info_section.md' %}
 
 {% include 'snippets/template_note_section.md' %}

@@ -275,11 +275,12 @@ def _retry_with_rate_limit(func, *args, max_retries=20, base_delay=5, **kwargs):
                 raise
 
 
-def handle_model_chat(chat: Chat) -> str:
+def handle_model_chat(chat: Chat, tool_call_collector=None) -> str:
     """Handle a model chat session with function calls and streaming responses.
     
     Args:
         chat: The Chat instance to handle
+        tool_call_collector: Optional list to collect tool calls made during this chat
         
     Returns:
         The final string response from the model
@@ -298,6 +299,15 @@ def handle_model_chat(chat: Chat) -> str:
                     output = item
                     ends_with_function_call = False
                 elif isinstance(item, FunctionCall):
+                    # Capture tool call info before execution
+                    if tool_call_collector is not None:
+                        # Extract function name and arguments from the FunctionCall object
+                        tool_info = {
+                            'function': item.function.__name__,
+                            'arguments': item.arguments
+                        }
+                        tool_call_collector.append(tool_info)
+                    
                     function_call = item()
                     adapter.show_message(Message(Actor.MODEL, function_call))
                     current_chat = current_chat.add_message(ToolResultMessage(function_call, item._unique_id))

@@ -88,7 +88,9 @@ def ask_model_prompt(template_path: str, functions: Optional[List[Callable]] = N
                 if is_streaming:
                     # For streaming, submit the chat and use handle_model_chat
                     submitted_chat = _retry_with_rate_limit(chat.submit)
-                    return handle_model_chat(submitted_chat)
+                    # Check if tool_call_collector was passed in kwargs
+                    tool_call_collector = template_context.get('tool_call_collector')
+                    return handle_model_chat(submitted_chat, tool_call_collector)
                 else:
                     # For non-streaming (enum), we need to handle differently
                     def _get_enum_result():

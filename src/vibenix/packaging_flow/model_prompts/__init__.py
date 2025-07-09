@@ -78,7 +78,9 @@ def fix_build_error(
     project_page: Optional[str] = None,
     template_notes: Optional[str] = None,
     additional_functions: List = [],
-    is_broken_log_output: bool = False
+    is_broken_log_output: bool = False,
+    attempted_tool_calls: List = [],
+    tool_call_collector: List = None
 ) -> StreamedStr:
     """Fix a build error in Nix code."""
     ...

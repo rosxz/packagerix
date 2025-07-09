@@ -226,6 +226,9 @@ def package_project(output_dir=None, project_url=None, revision=None, fetcher=No
     first_build_error = True
     has_broken_log_output = False
     
+    # Track attempted tool calls to avoid repetition
+    attempted_tool_calls = []
+    
     while (
         (not candidate.result.success) and
         (iteration < MAX_ITERATIONS) and
@@ -244,7 +247,22 @@ def package_project(output_dir=None, project_url=None, revision=None, fetcher=No
             coordinator_message("Other error detected, fixing...")
             coordinator_message(f"code:\n{candidate.code}\n")
             coordinator_message(f"error:\n{candidate.result.error.truncated()}\n")
-            fixed_response = fix_build_error(candidate.code, candidate.result.error.truncated(), summary, template_notes, additional_functions, has_broken_log_output)
+            
+            # Create a collector for this iteration's tool calls
+            iteration_tool_calls = []
+            fixed_response = fix_build_error(
+                candidate.code, 
+                candidate.result.error.truncated(), 
+                summary, 
+                template_notes, 
+                additional_functions, 
+                has_broken_log_output,
+                attempted_tool_calls,
+                iteration_tool_calls
+            )
+            
+            # Add this iteration's tool calls to the attempted list
+            attempted_tool_calls.extend(iteration_tool_calls)
         
         updated_code = extract_updated_code(fixed_response)
             
@@ -270,6 +288,7 @@ def package_project(output_dir=None, project_url=None, revision=None, fetcher=No
                     best = candidate
                     consecutive_rebuilds_without_progress = 0
                     has_broken_log_output = False  # Reset since we made progress
+                    attempted_tool_calls = []  # Reset tool calls since we made progress
                 elif eval_result == NixBuildErrorDiff.BROKEN_LOG_OUTPUT:
                     coordinator_message(f"Iteration {iteration + 1} produced broken log output - continuing without rollback...")
                     has_broken_log_output = True
@@ -282,6 +301,7 @@ def package_project(output_dir=None, project_url=None, revision=None, fetcher=No
                         best = candidate
                         has_broken_log_output = False
                         consecutive_rebuilds_without_progress = 0
+                        attempted_tool_calls = []  # Reset tool calls since we fixed log output
                     else:
                         coordinator_message(f"Iteration {iteration + 1} stagnated...")
                         candidate = best
