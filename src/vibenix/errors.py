@@ -14,6 +14,7 @@ class NixErrorKind(Enum):
     EVAL_ERROR = "EVAL_ERROR"
     BUILD_ERROR = "BUILD_ERROR"
     HASH_MISMATCH = "HASH_MISMATCH"
+    DEPENDENCY_BUILD_ERROR = "DEPENDENCY_BUILD_ERROR"
 
 class NixError(BaseModel):
     type: NixErrorKind

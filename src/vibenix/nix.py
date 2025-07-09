@@ -70,7 +70,11 @@ def invoke_build(is_src_attr_only: bool) -> NixBuildResult:
     if log_result.returncode != 0:
         # This is unexpected - we should always be able to get logs after a build
         # Except if the build of a dependency failed
-        raise RuntimeError(f"Failed to retrieve build logs for {derivation_path}: {log_result.stderr}\n\nFull Error:{build_result.stderr}")
+        return NixBuildResult(
+            success=False,
+            is_src_attr_only=is_src_attr_only,
+            error=NixError(type=NixErrorKind.DEPENDENCY_BUILD_ERROR, error_message=build_result.stderr)
+        )
 
     return NixBuildResult(
         success=False,

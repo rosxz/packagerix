@@ -292,7 +292,7 @@ def package_project(output_dir=None, project_url=None, revision=None, fetcher=No
                     consecutive_rebuilds_without_progress += 1
                 consecutive_non_build_errors = 0
             else:
-                # Non-build errors (EVAL_ERROR, HASH_MISMATCH)
+                # Non-build errors (EVAL_ERROR, HASH_MISMATCH, DEPENDENCY_BUILD_ERROR)
                 coordinator_message(f"Non-build error: {new_result.error.type}")
                 consecutive_non_build_errors += 1          
                 if consecutive_non_build_errors >= MAX_CONSECUTIVE_NON_BUILD_ERRORS:
