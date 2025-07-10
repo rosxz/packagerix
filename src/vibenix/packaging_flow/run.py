@@ -98,7 +98,6 @@ def read_fetcher_file(fetcher: str) -> str:
 
 def refine_package(curr: Solution, project_page: str):
     """Refinement cycle to improve the packaging."""
-    prev = curr
     max_iterations = 3
 
     for iteration in range(max_iterations):
@@ -116,24 +115,11 @@ def refine_package(curr: Solution, project_page: str):
         
         # Verify the updated code still builds
         if not attempt.result.success:
-            coordinator_error(f"Refinement caused a regression ({attempt.result.error.type}). Returning last successful solution.")
-            return curr
+            coordinator_error(f"Refinement caused a regression ({attempt.result.error.type}), reverting to last successful solution.")
         else:
-            coordinator_message("Refined packaging code successfuly builds...")
-            prev = curr
+            coordinator_message("Refined packaging code successfuly builds, continuing...")
             curr = attempt
-
-        # Verify if the state of the refinement process
-        evaluation = evaluate_code(curr.code, prev.code, feedback)
-        if evaluation == RefinementExit.COMPLETE:
-            coordinator_message("Evaluator deems the improvements complete.")
-            return curr, RefinementExit.COMPLETE
-        elif evaluation == RefinementExit.INCOMPLETE:
-            coordinator_message("Evaluator suggests further improvements are needed.")
-        else:
-            coordinator_message("Evaluator deems there has been a regression in the packaging code. Reverting to previous state.")
-            curr = prev
-    coordinator_message("Refinement process reached max iterations.")
+    coordinator_message("Refinement process reached its conclusion (max iterations).")
     return curr
 
 
