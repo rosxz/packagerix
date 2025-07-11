@@ -96,14 +96,14 @@ def read_fetcher_file(fetcher: str) -> str:
         raise
 
 
-def refine_package(curr: Solution, project_page: str):
+def refine_package(curr: Solution, project_page: str, additional_functions: list = None) -> Solution:
     """Refinement cycle to improve the packaging."""
     max_iterations = 3
 
     for iteration in range(max_iterations):
         # Get feedback for current code
         # TODO BUILD LOG IS NOT BEING PASSED!
-        feedback = get_feedback(curr.code, "", project_page)
+        feedback = get_feedback(curr.code, project_page, iteration, max_iterations, additional_functions)
         coordinator_message(f"Refining package (iteration {iteration}/{max_iterations})...")
         coordinator_message(f"Received feedback: {feedback}")
 
@@ -329,7 +329,7 @@ def package_project(output_dir=None, project_url=None, revision=None, fetcher=No
 
     if candidate.result.success:
         coordinator_message("Build succeeded! Refining package...")
-        candidate = refine_package(candidate, summary)
+        candidate = refine_package(candidate, summary, additional_functions)
         
         # Always log success and return, regardless of refinement outcome
         from vibenix.packaging_flow.model_prompts import end_stream_logger

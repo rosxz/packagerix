@@ -24,6 +24,8 @@ Here is the Nix code for you to evaluate:
 {{ code }}
 ```
 
+This is refinement attempt {{ iteration }} / {{ total_iterations }}. Prioritize simpler improvements that don't break the build.
+
 {% include 'snippets/project_info_section.md' %}
 
 {% include 'snippets/template_note_section.md' %}
@@ -37,6 +39,6 @@ Notes:
 - Your feedback needs to be concise, concrete to the specific project source, and follow the given format:
 ```text
 # <improvement title>
-<improvement description, detailing which tool and how it was used validate it>
+<improvement description, detailing which tool and how it was used validate it. at most 3 sentences>
 (...)
 ```

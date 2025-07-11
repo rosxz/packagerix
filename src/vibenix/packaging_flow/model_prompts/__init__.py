@@ -50,9 +50,9 @@ def evaluate_code(code: str, previous_code: str, feedback: str) -> RefinementExi
 @ask_model_prompt('refinement/get_feedback.md', functions=SEARCH_FUNCTIONS)
 def get_feedback(
     code: str,
-    log: str,
     project_page: Optional[str] = None,
-    template_notes: Optional[str] = None,
+    iteration: int = 0,
+    max_iterations: int = 0,
     additional_functions: List = []
 ) -> StreamedStr:
     """Get feedback on a successfully built package."""
