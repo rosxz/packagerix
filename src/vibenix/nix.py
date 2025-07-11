@@ -68,7 +68,7 @@ def invoke_build(is_src_attr_only: bool) -> NixBuildResult:
     )
     
     if log_result.returncode != 0:
-        # This is unexpected - we should always be able to get logs after a build
+        # We should always be able to get logs after a build
         # Except if the build of a dependency failed
         # Return the build output which shows the dependency context more clearly
         return NixBuildResult(
