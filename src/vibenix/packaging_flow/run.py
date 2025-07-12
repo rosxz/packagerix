@@ -391,9 +391,15 @@ def package_project(output_dir=None, project_url=None, revision=None, fetcher=No
         
         iteration += 1
 
+    # Log the raw package code before refinement or analysis
+    ccl_logger.write_kv("raw_package", candidate.code)
+    
     if candidate.result.success:
         coordinator_message("Build succeeded! Refining package...")
+        ccl_logger.enter_attribute("refine_package")
         candidate = refine_package(candidate, summary, additional_functions)
+        ccl_logger.write_kv("refined_package", candidate.code)
+        ccl_logger.leave_attribute()
         
         # Always log success and return, regardless of refinement outcome
         from vibenix.packaging_flow.model_prompts import end_stream_logger
@@ -409,8 +415,10 @@ def package_project(output_dir=None, project_url=None, revision=None, fetcher=No
         else:
             coordinator_error(f"Reached MAX_ITERATIONS build iteration limit of {MAX_ITERATIONS}.")
     
+    ccl_logger.enter_attribute("analyze_failure")
     details = analyze_package_failure(best.code, best.result.error.truncated(), summary, template_notes, additional_functions)
     packaging_failure = classify_packaging_failure(details)
+    ccl_logger.leave_attribute()
     if isinstance(packaging_failure, PackagingFailure):
         coordinator_message(f"Packaging failure type: {packaging_failure}\nDetails:\n{details}\n")
     from vibenix.packaging_flow.model_prompts import end_stream_logger

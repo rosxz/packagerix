@@ -39,7 +39,7 @@ iterate =
       updated_code =
         {{ updated_nix_code }}
       error =
-      {{ None | include nix_error.ccl.schema }}
+        {{ None | include nix_error.ccl.schema }}
       {{ None | evaluate_progress =
         {{ include model_req_resp.ccl.schema }}
         progress = NixBuildErrorDiff.{{ nix_build_error_diff_value }}
@@ -69,7 +69,7 @@ analyze_failure =
     output_tokens = {{ req_resp_output_token_count }}
     cost = {{ req_resp_cost }}
     [TODO: this stil needs some work]
-refine_package =
+| refine_package =
     [TODO: this still needs to be defined]
 |
 exception =
