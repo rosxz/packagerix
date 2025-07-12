@@ -391,6 +391,10 @@ def package_project(output_dir=None, project_url=None, revision=None, fetcher=No
         
         iteration += 1
 
+    # Close the iteration list and iterate attribute
+    ccl_logger.leave_list()
+    ccl_logger.leave_attribute()
+    
     # Log the raw package code before refinement or analysis
     ccl_logger.write_kv("raw_package", candidate.code)
     
