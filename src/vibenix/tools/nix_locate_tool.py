@@ -6,7 +6,7 @@ import re
 
 from vibenix.ccl_log import log_function_call
 
-@log_function_call("search_nix_functions")
+@log_function_call("find_nix_packages")
 def find_nix_packages(file_path: str, regex: bool = False, exact_match: bool = False, limit: int = 50) -> tuple[List[str], int, int]:
     """
     Search for Nix packages that provide a given file path.
