@@ -74,7 +74,7 @@ def invoke_build(is_src_attr_only: bool) -> NixBuildResult:
         return NixBuildResult(
             success=False,
             is_src_attr_only=is_src_attr_only,
-            error=NixError(type=NixErrorKind.DEPENDENCY_BUILD_ERROR, error_message=build_result.stdout)
+            error=NixError(type=NixErrorKind.DEPENDENCY_BUILD_ERROR, error_message=build_result.stderr)
         )
 
     return NixBuildResult(
