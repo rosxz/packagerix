@@ -23,7 +23,7 @@ def get_git_info():
         
         # Check if repository is dirty (has uncommitted changes)
         status_result = subprocess.run(
-            ["git", "status", "--porcelain"],
+            ["git", "status", "--porcelain", "--untracked-files=no"],
             capture_output=True,
             text=True,
             check=True
