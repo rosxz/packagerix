@@ -230,11 +230,15 @@ jobs:
           fi
           cp ~/.vibenix/config.json artifact-${{ matrix.issue_number }}/
           
+          # Create artifact name with sanitized repo name
+          repo_name_sanitized=$(echo "${{ matrix.repo_name }}" | tr '/' '-')
+          echo "artifact_name=vibenix-output-${{ matrix.issue_number }}-${repo_name_sanitized}" >> $GITHUB_ENV
+          
       - name: Upload results
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: vibenix-output-${{ matrix.issue_number }}-${{ matrix.repo_name | replace('/', '-') }}
+          name: ${{ env.artifact_name }}
           path: artifact-${{ matrix.issue_number }}/
           retention-days: 1
           
