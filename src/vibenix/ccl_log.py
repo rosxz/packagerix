@@ -65,9 +65,9 @@ class CCLLogger:
             self.write_time("start_at")
 
     def leave_attribute(self, log_end=False):
-        attr_str = self._current_attr_path.pop()
         if log_end:
             self.write_time("end_at")
+        attr_str = self._current_attr_path.pop()
         attr_str + ""
 
     def enter_list(self):
