@@ -5,6 +5,8 @@ Signal-safe CCL logging implementation.
 import signal
 import atexit
 import threading
+import sys
+import traceback
 from typing import Optional
 
 from .ccl_log import get_logger, close_logger
@@ -30,10 +32,42 @@ def ensure_log_cleanup(signal_name: Optional[str] = None):
         pass
 
 
+def handle_uncaught_exception(exc_type, exc_value, exc_traceback):
+    """Handle uncaught exceptions by logging them before exit."""
+    # Don't handle KeyboardInterrupt (let it be handled by signal handler)
+    if issubclass(exc_type, KeyboardInterrupt):
+        sys.__excepthook__(exc_type, exc_value, exc_traceback)
+        return
+    
+    try:
+        logger = get_logger()
+        # Format the exception
+        exception_str = ''.join(traceback.format_exception(exc_type, exc_value, exc_traceback))
+        # Log the exception
+        logger.log_exception(exception_str)
+        # Log session end with signal indicating exception
+        from vibenix.packaging_flow.litellm_callbacks import end_stream_logger
+        logger.log_session_end(
+            signal="EXCEPTION",
+            total_cost=end_stream_logger.total_cost if end_stream_logger.total_cost > 0 else None
+        )
+        close_logger()
+    except Exception:
+        # If logging fails, at least try to print the exception
+        sys.__excepthook__(exc_type, exc_value, exc_traceback)
+    
+    # Exit with error code
+    import os
+    os._exit(1)
+
+
 def setup_safe_logging():
     """Set up signal handlers to ensure logs are written on termination."""
     # Register cleanup function for normal exit
     atexit.register(ensure_log_cleanup)
+    
+    # Set up global exception handler
+    sys.excepthook = handle_uncaught_exception
     
     # Handle common termination signals
     def signal_handler(signum, frame):

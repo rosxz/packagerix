@@ -179,6 +179,17 @@ class CCLLogger:
             self.write_kv("total_cost", f"{total_cost:.6f}")
         self.leave_attribute()
     
+    def log_exception(self, exception_str: str):
+        """Log an exception that terminated the session.
+        
+        Args:
+            exception_str: String representation of the exception
+        """
+        # Reset indentation stack to ensure we're at level 0
+        self._current_attr_path = []
+        
+        self.write_kv("exception", exception_str)
+    
     def log_template_selected_begin(self, indent_level: int = 0):
         """Log template selection."""
         self.enter_attribute("select_template")
