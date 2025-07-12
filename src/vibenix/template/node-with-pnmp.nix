@@ -6,15 +6,10 @@
 , npmHooks
 }:
 stdenv.mkDerivation rec {
-  pname = ...;
-  version = ...;
+  pname = "{{ pname }}";
+  version = "{{ version }}";
 
-  src = fetchFromGitHub {
-    owner = ...;
-    repo = ...;
-    rev = ...;
-    hash = lib.fakeHash;
-  };
+  src = {{ src_fetcher }};
 
   pnpmDeps = pnpm.fetchDeps {
     inherit pname version src;

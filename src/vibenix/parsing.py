@@ -9,6 +9,7 @@ import subprocess
 
 from diskcache import Cache
 from vibenix.ui.logging_config import logger
+from jinja2 import Template
 
 cache = Cache("cachedir")
 
@@ -99,28 +100,29 @@ def extract_src_attributes(src_attr, release=None):
 
     return version, repo, hash, src_attr
 
-def fill_src_attributes(template, src_attr):
+def fill_src_attributes(template, pname, version, src_fetcher):
     """Fill the pname, version and src attributes in a given template."""
-    # Extract attributes from src_attr
-    version, repo, hash, src_attr = extract_src_attributes(src_attr)
-
+    # Extract hash from the fetcher to compute store path
+    hash_match = re.search(r'hash\s*=\s*"(.*?)"', src_fetcher)
+    if not hash_match:
+        logger.error("Could not extract hash from fetcher")
+        raise ValueError("Could not extract hash from fetcher")
+    
+    hash = hash_match.group(1)
+    
     # Get the store path
     store_path = subprocess.run(["nix-store", "--print-fixed-path", "sha256",
                                  "--recursive", hash, "source"],
                                  capture_output=True, text=True)
     store_path = str(store_path.stdout).strip()
 
-    # Indent properly
-    lines = src_attr.splitlines()
-    src_attr = "\n".join("  " + line for line in lines)[2:]
-
-    # Fill in the "pname = ...", "version = ..." attributes in the template
-    filled_template = template.replace("pname = ...", f"pname = \"{repo}\"")
-    filled_template = filled_template.replace("version = ...", f"version = \"{version}\"")
-
-    # Replace the src attribute in the template with the extracted src
-    pattern = r"fetchFromGitHub\s*\{.*?\}"
-    filled_template = re.sub(pattern, src_attr, filled_template, flags=re.DOTALL)
+    jinja_template = Template(template)
+    filled_template = jinja_template.render(
+        pname=pname,
+        version=version,
+        src_fetcher=src_fetcher
+    )
+    
     logger.info(f"Filled template: \n{filled_template}")
     
     return filled_template, store_path

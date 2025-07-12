@@ -4,15 +4,10 @@
 }:
 
 buildDartApplication rec {
-  pname = ...;
-  version = ...;
+  pname = "{{ pname }}";
+  version = "{{ version }}";
 
-  src = fetchFromGitHub {
-    owner = ...;
-    repo = ...;
-    rev = ...;
-    hash = lib.fakeHash;
-  };
+  src = {{ src_fetcher }};
 
   # Required: pubspec.lock must be converted to JSON
   # 1. Build once with autoPubspecLock = ./path/to/pubspec.lock;

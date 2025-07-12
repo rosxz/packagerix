@@ -17,15 +17,10 @@ let
   flutter = flutter329;
 in
 flutter.buildFlutterApplication rec {
-  pname = ...;
-  version = ...;
+  pname = "{{ pname }}";
+  version = "{{ version }}";
 
-  src = fetchFromGitHub {
-    owner = ...;
-    repo = ...;
-    rev = ...;
-    hash = lib.fakeHash;
-  };
+  src = {{ src_fetcher }};
 
   # Required: pubspec.lock must be converted to JSON
   # Generate with: yq . pubspec.lock > pubspec.lock.json

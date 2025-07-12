@@ -1,5 +1,6 @@
 """Business logic for vibenix using the coordinator pattern."""
 
+import re
 import subprocess
 from pathlib import Path
 from pydantic import BaseModel
@@ -56,16 +57,43 @@ def create_initial_package(template: str, project_page: str, template_notes: str
     return extract_updated_code(result)
 
 
+def get_release_data_and_version(url, rev=None):
+    """Fetch release data and compute version string with proper logging."""
+    from vibenix.ccl_log import get_logger
+    ccl_logger = get_logger()
+    
+    ccl_logger.enter_attribute("get_release_data_from_forge", log_start=True)
+    ccl_logger.write_kv("forge", "github")
+    ccl_logger.write_kv("url", url)
+    
+    # Fetch latest release if rev not provided
+    if not rev:
+        rev = fetch_github_release_data(url)
+        ccl_logger.write_kv("latest_gh_release_tag", rev)
+    
+    # Compute version based on whether we have a rev
+    if rev:
+        version = rev[1:] if rev.startswith('v') else rev
+        ccl_logger.write_kv("version", version)
+        ccl_logger.write_kv("rev", f"v${{version}}" if rev.startswith('v') else "${{version}}")
+    else:
+        version = None
+        ccl_logger.write_kv("version", None)
+        ccl_logger.write_kv("rev", None)
+    
+    ccl_logger.leave_attribute(log_end=True)
+    return rev, version
+
+
 def run_nurl(url, rev=None):
-    """Run nurl command and return the output."""
+    """Run nurl command and return the version and fetcher."""
     try:
         from vibenix.ccl_log import get_logger
         ccl_logger = get_logger()
         ccl_logger.enter_attribute("pin_fetcher", log_start=True)
-        rev = None
-        if not rev:
-            rev = fetch_github_release_data(url)
-            ccl_logger.write_kv("latest_gh_relese_tag", rev)
+        
+        # Get release data and version
+        rev, version = get_release_data_and_version(url, rev)
 
         cmd = ['nurl', url, rev] if rev else ['nurl', url]
         ccl_logger.write_kv("nurl_args", " ".join(cmd[1:]))
@@ -77,26 +105,26 @@ def run_nurl(url, rev=None):
         )
         fetcher = result.stdout.strip()
 
-        if rev:
-            version = rev[1:] if rev.startswith('v') else rev
-            fetcher = f"version = \"{version}\";\nsrc = " + fetcher.replace(version, "${version}") + ";"
+        # Format fetcher with version
+        if version:
+            fetcher = fetcher.replace(rev, f"v${{version}}" if rev.startswith('v') else "${{version}}")
         else:
-            version = f"unstable-${{src.rev}}"
-            fetcher = f"version = \"{version}\";\nsrc = " + fetcher + ";"
+            version = "unstable-${src.rev}"
+        
         ccl_logger.write_kv("fetcher", fetcher)
         ccl_logger.leave_attribute(log_end=True)
-        return fetcher
+        return version, fetcher
     except subprocess.CalledProcessError as e:
         error_output = e.stderr.lower()
         # Check for various rate limit indicators
         if any(indicator in error_output for indicator in ["rate limit", "429", "403", "forbidden"]):
             print(f"Rate limit/forbidden error for {url}")
-            return "RATE_LIMITED"
+            return None, "RATE_LIMITED"
         print(f"Error running nurl for {url}: {e.stderr}")
-        return None
+        return None, None
     except FileNotFoundError:
         print("Error: nurl command not found. Please ensure nurl is installed.")
-        return None
+        return None, None
 
 
 def read_fetcher_file(fetcher: str) -> str:
@@ -165,12 +193,18 @@ def package_project(output_dir=None, project_url=None, revision=None, fetcher=No
     if fetcher: 
         coordinator_progress(f"Using provided fetcher: {fetcher}")
         fetcher = read_fetcher_file(fetcher)
-        ccl_logger.log_fetcher(fetcher, [], 0)
+        # Extract version from the fetcher if present
+        version_match = re.search(r'version\s*=\s*"([^"]+)"', fetcher)
+        version = version_match.group(1) if version_match else "unstable-${src.rev}"
+        ccl_logger.write_kv("version", version)
+        ccl_logger.write_kv("fetcher", fetcher)
         if revision:
             coordinator_error("Ignoring revision parameter in favor of provided fetcher.")
     else:
         coordinator_progress("Obtaining project fetcher from the provided URL")
-        fetcher = run_nurl(project_url, revision)
+        version, fetcher = run_nurl(project_url, revision)
+        ccl_logger.write_kv("version", version)
+        ccl_logger.write_kv("fetcher", fetcher)
 
     coordinator_progress(f"Fetching project information from {project_url}")
     
@@ -207,7 +241,13 @@ def package_project(output_dir=None, project_url=None, revision=None, fetcher=No
 
     # Step 6.a: Manual src setup
     coordinator_message("Setting up the src attribute in the template...")
-    initial_code, store_path = fill_src_attributes(starting_template, fetcher)
+    # Extract pname (repo name) from the fetcher
+    repo_match = re.search(r'repo\s*=\s*"(.*?)"', fetcher)
+    if not repo_match:
+        raise ValueError("Could not extract repo name from fetcher")
+    pname = repo_match.group(1)
+    
+    initial_code, store_path = fill_src_attributes(starting_template, pname, version, fetcher)
 
     # Create functions for both the project source and nixpkgs
     project_functions = create_source_function_calls(store_path, "project_")

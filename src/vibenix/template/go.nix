@@ -4,15 +4,10 @@
 }:
 
 buildGoModule rec {
-  pname = ...;
-  version = ...;
+  pname = "{{ pname }}";
+  version = "{{ version }}";
 
-  src = fetchFromGitHub {
-    owner = ...;
-    repo = ...;
-    rev = ...;
-    hash = lib.fakeHash;
-  };
+  src = {{ src_fetcher }};
 
   vendorHash = lib.fakeHash;  # Use null if no vendor dependencies
 

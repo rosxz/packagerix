@@ -4,15 +4,10 @@
 }:
 
 python3Packages.buildPythonApplication rec {
-  pname = ...;
-  version = ...;
+  pname = "{{ pname }}";
+  version = "{{ version }}";
 
-  src = fetchFromGitHub {
-    owner = ...;
-    repo = ...;
-    rev = ...;
-    hash = lib.fakeHash;
-  };
+  src = {{ src_fetcher }};
 
   # For pure Python packages, use format:
   # format = "setuptools";  # or "wheel", "pyproject", etc.
