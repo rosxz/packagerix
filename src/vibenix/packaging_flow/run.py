@@ -67,16 +67,11 @@ def get_release_data_and_version(url, rev=None):
     # Compute version based on whether we have a rev
     if rev:
         version = rev[1:] if rev.startswith('v') else rev
-        ccl_logger.write_kv("version", version)
-        ccl_logger.write_kv("rev", f"v${{version}}" if rev.startswith('v') else "${{version}}")
+        ccl_logger.write_kv("extracted_version", version)
     else:
         version = None
-        ccl_logger.write_kv("version", None)
-        ccl_logger.write_kv("rev", None)
-    
     ccl_logger.leave_attribute(log_end=True)
     return rev, version
-
 
 def run_nurl(url, rev=None):
     """Run nurl command and return the version and fetcher."""
@@ -197,15 +192,11 @@ def package_project(output_dir=None, project_url=None, revision=None, fetcher=No
         # Extract version from the fetcher if present
         version_match = re.search(r'version\s*=\s*"([^"]+)"', fetcher)
         version = version_match.group(1) if version_match else "unstable-${src.rev}"
-        ccl_logger.write_kv("version", version)
-        ccl_logger.write_kv("fetcher", fetcher)
         if revision:
             coordinator_error("Ignoring revision parameter in favor of provided fetcher.")
     else:
         coordinator_progress("Obtaining project fetcher from the provided URL")
         version, fetcher = run_nurl(project_url, revision)
-        ccl_logger.write_kv("version", version)
-        ccl_logger.write_kv("fetcher", fetcher)
 
     coordinator_progress(f"Fetching project information from {project_url}")
     
