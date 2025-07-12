@@ -334,11 +334,13 @@ def package_project(output_dir=None, project_url=None, revision=None, fetcher=No
                 if first_build_error:
                     eval_result = NixBuildErrorDiff.PROGRESS
                     first_build_error = False
+                    ccl_logger.write_kv("is_first_build_error", None)
                 elif best.result.error == candidate.result.error:
                     eval_result = NixBuildErrorDiff.REGRESS
                 else:
+                    ccl_logger.log_progress_eval_start()
                     eval_result = eval_progress(best.result, candidate.result, iteration)
-                    ccl_logger.log_progress_eval(iteration, eval_result)
+                    ccl_logger.log_progress_eval_end(eval_result)
                 
                 if eval_result == NixBuildErrorDiff.PROGRESS:
                     coordinator_message(f"Iteration {iteration + 1} made progress...")

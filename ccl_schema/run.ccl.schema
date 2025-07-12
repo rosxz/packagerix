@@ -29,7 +29,7 @@ select_template =
 initial =
   code =
     {{ initial_nix_code }}
-  error =
+  build =
     {{ None | include nix_error.ccl.schema }}
 iterate =
   loop =
@@ -44,7 +44,7 @@ iterate =
         {{ include model_req_resp.ccl.schema }}
         progress = NixBuildErrorDiff.{{ nix_build_error_diff_value }}
       }}
-  stop_iteration =
+  stop =
       reason = {{ which limit caused the termination }}
       last_error =
         {{ None | include nix_error.ccl.schema }}

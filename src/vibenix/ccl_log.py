@@ -197,11 +197,13 @@ class CCLLogger:
         if error_type:
             self.write_kv("type", enum_str(error_type))
 
-    def log_progress_eval(self, iteration: int, diff : NixBuildErrorDiff):
-        """Log progress evaluation."""
-        self.enter_attribute("progress_eval")
-        self.write_kv("result", diff.value)
-        self.write_time("elapsed")
+    def log_progress_eval_start(self):
+        """Start logging progress evaluation."""
+        self.enter_attribute("evaluate_progress")
+    
+    def log_progress_eval_end(self, diff : NixBuildErrorDiff):
+        """End logging progress evaluation with result."""
+        self.write_kv("progress", enum_str(diff))
         self.leave_attribute()
     
     
