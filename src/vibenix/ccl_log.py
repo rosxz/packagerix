@@ -70,7 +70,6 @@ class CCLLogger:
         if log_end:
             self.write_time("end_at")
         attr_str = self._current_attr_path.pop()
-        print(f"Leaving attribute: {attr_str}")
         attr_str + ""
 
     def enter_list(self):
