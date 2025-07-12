@@ -153,8 +153,8 @@ class CCLLogger:
         pricing = get_model_pricing(model)
         if pricing:
             input_cost, output_cost = pricing
-            self.write_kv("input_cost_per_token", f"{input_cost:.6f}")
-            self.write_kv("output_cost_per_token", f"{output_cost:.6f}")
+            self.write_kv("input_cost_per_token", f"{input_cost:.15f}".rstrip('0'))
+            self.write_kv("output_cost_per_token", f"{output_cost:.15f}".rstrip('0'))
         self.leave_attribute()
 
     def log_session_end(self, success: bool, total_iterations: int, total_cost: float = None):
