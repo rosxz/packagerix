@@ -245,6 +245,7 @@ jobs:
           
           echo "## ${status_emoji} Issue #${{ matrix.issue_number }}" >> $GITHUB_STEP_SUMMARY
           echo "- Repository: ${{ matrix.repo_url }}" >> $GITHUB_STEP_SUMMARY
+          echo "- Packaging Request: https://github.com/NixOS/nixpkgs/issues/${{ matrix.issue_number }}" >> $GITHUB_STEP_SUMMARY
           echo "- Provider: ${{ github.event.inputs.model_provider || 'gemini' }}" >> $GITHUB_STEP_SUMMARY
           echo "- Model: ${{ github.event.inputs.model || 'gemini/gemini-2.5-flash' }}" >> $GITHUB_STEP_SUMMARY
           echo "- Status: ${status_emoji} **${status_text}**" >> $GITHUB_STEP_SUMMARY
