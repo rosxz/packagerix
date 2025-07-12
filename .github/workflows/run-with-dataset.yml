@@ -220,15 +220,22 @@ jobs:
             exit $exit_code  # Propagate the original exit code
           fi
           
+      - name: Prepare artifact directory
+        if: always()
+        run: |
+          mkdir -p artifact-${{ matrix.issue_number }}
+          cp ${{ matrix.issue_number }}.log artifact-${{ matrix.issue_number }}/
+          if [ -d output ]; then
+            cp -r output/* artifact-${{ matrix.issue_number }}/
+          fi
+          cp ~/.vibenix/config.json artifact-${{ matrix.issue_number }}/
+          
       - name: Upload results
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: vibenix-output-${{ matrix.issue_number }}
-          path: |
-            ${{ matrix.issue_number }}.log
-            output/
-            ~/.vibenix/config.json
+          path: artifact-${{ matrix.issue_number }}/
           retention-days: 1
           
       - name: Create summary
@@ -317,8 +324,8 @@ jobs:
               fi
               
               # Extract cost from run.ccl if it exists
-              if [ -f "$dir/output/run.ccl" ]; then
-                cost=$(grep "total_cost =" "$dir/output/run.ccl" | tail -1 | cut -d'=' -f2 | tr -d ' ')
+              if [ -f "$dir/run.ccl" ]; then
+                cost=$(grep "total_cost =" "$dir/run.ccl" | tail -1 | cut -d'=' -f2 | tr -d ' ')
                 if [ -n "$cost" ]; then
                   # Add to total using bc for floating point arithmetic
                   total_cost=$(echo "$total_cost + $cost" | bc)
@@ -346,27 +353,39 @@ jobs:
         run: |
           mkdir -p combined-results
           if [ -d artifacts ] && [ "$(ls -A artifacts)" ]; then
-            cp -r artifacts/* combined-results/
-            
-            # Create a cost summary file
-            echo "# API Cost Summary" > combined-results/cost_summary.txt
-            echo "" >> combined-results/cost_summary.txt
-            total_cost=0
-            
-            # Process each artifact to create cost report
+            # Process each artifact and reorganize
             for dir in artifacts/vibenix-output-*; do
-              if [ -d "$dir" ] && [ -f "$dir/output/run.ccl" ]; then
+              if [ -d "$dir" ]; then
                 issue_num=$(basename "$dir" | sed 's/vibenix-output-//')
-                cost=$(grep "total_cost =" "$dir/output/run.ccl" | tail -1 | cut -d'=' -f2 | tr -d ' ')
-                if [ -n "$cost" ]; then
-                  echo "Issue #$issue_num: \$$cost" >> combined-results/cost_summary.txt
-                  total_cost=$(echo "$total_cost + $cost" | bc)
+                
+                # Create issue-specific directory
+                mkdir -p "combined-results/$issue_num"
+                
+                # Copy log file
+                if [ -f "$dir/${issue_num}.log" ]; then
+                  cp "$dir/${issue_num}.log" "combined-results/$issue_num/"
+                fi
+                
+                # Copy package files (should be flatter now)
+                if [ -f "$dir/run.ccl" ]; then
+                  cp "$dir/run.ccl" "combined-results/$issue_num/"
+                fi
+                
+                # Copy package directory if it exists
+                for pkg_dir in "$dir"/*/; do
+                  if [ -d "$pkg_dir" ] && [ -f "$pkg_dir/package.nix" ]; then
+                    pkg_name=$(basename "$pkg_dir")
+                    mkdir -p "combined-results/$issue_num/$pkg_name"
+                    cp "$pkg_dir/package.nix" "combined-results/$issue_num/$pkg_name/"
+                  fi
+                done
+                
+                # Copy config.json
+                if [ -f "$dir/config.json" ]; then
+                  cp "$dir/config.json" "combined-results/$issue_num/"
                 fi
               fi
             done
-            
-            echo "" >> combined-results/cost_summary.txt
-            echo "Total: \$$total_cost" >> combined-results/cost_summary.txt
           else
             echo "No artifacts found to combine"
             echo "No successful packages were built" > combined-results/README.txt
