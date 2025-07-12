@@ -234,7 +234,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: vibenix-output-${{ matrix.issue_number }}
+          name: vibenix-output-${{ matrix.issue_number }}-${{ matrix.repo_name | replace('/', '-') }}
           path: artifact-${{ matrix.issue_number }}/
           retention-days: 1
           
@@ -311,7 +311,9 @@ jobs:
           # Process each artifact directory
           for dir in artifacts/vibenix-output-*; do
             if [ -d "$dir" ]; then
-              issue_num=$(basename "$dir" | sed 's/vibenix-output-//')
+              # Extract issue number from the directory name (format: vibenix-output-ISSUE-PROJECT)
+              base_name=$(basename "$dir")
+              issue_num=$(echo "$base_name" | sed 's/vibenix-output-//' | cut -d'-' -f1)
               total=$((total + 1))
               
               # Check if there's a package.nix file in any subdirectory
@@ -356,33 +358,45 @@ jobs:
             # Process each artifact and reorganize
             for dir in artifacts/vibenix-output-*; do
               if [ -d "$dir" ]; then
-                issue_num=$(basename "$dir" | sed 's/vibenix-output-//')
+                # Extract issue number and project name from the directory name (format: vibenix-output-ISSUE-PROJECT)
+                base_name=$(basename "$dir")
+                issue_and_project=$(echo "$base_name" | sed 's/vibenix-output-//')
+                issue_num=$(echo "$issue_and_project" | cut -d'-' -f1)
+                # Get everything after the first dash as the project name
+                project_name=$(echo "$issue_and_project" | cut -d'-' -f2-)
+                
+                # Create folder with issue-project naming
+                if [ -n "$project_name" ]; then
+                  folder_name="${issue_num}-${project_name}"
+                else
+                  folder_name="$issue_num"
+                fi
                 
                 # Create issue-specific directory
-                mkdir -p "combined-results/$issue_num"
+                mkdir -p "combined-results/$folder_name"
                 
                 # Copy log file
                 if [ -f "$dir/${issue_num}.log" ]; then
-                  cp "$dir/${issue_num}.log" "combined-results/$issue_num/"
+                  cp "$dir/${issue_num}.log" "combined-results/$folder_name/"
                 fi
                 
                 # Copy package files (should be flatter now)
                 if [ -f "$dir/run.ccl" ]; then
-                  cp "$dir/run.ccl" "combined-results/$issue_num/"
+                  cp "$dir/run.ccl" "combined-results/$folder_name/"
                 fi
                 
                 # Copy package directory if it exists
                 for pkg_dir in "$dir"/*/; do
                   if [ -d "$pkg_dir" ] && [ -f "$pkg_dir/package.nix" ]; then
                     pkg_name=$(basename "$pkg_dir")
-                    mkdir -p "combined-results/$issue_num/$pkg_name"
-                    cp "$pkg_dir/package.nix" "combined-results/$issue_num/$pkg_name/"
+                    mkdir -p "combined-results/$folder_name/$pkg_name"
+                    cp "$pkg_dir/package.nix" "combined-results/$folder_name/$pkg_name/"
                   fi
                 done
                 
                 # Copy config.json
                 if [ -f "$dir/config.json" ]; then
-                  cp "$dir/config.json" "combined-results/$issue_num/"
+                  cp "$dir/config.json" "combined-results/$folder_name/"
                 fi
               fi
             done
