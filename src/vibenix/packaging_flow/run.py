@@ -407,7 +407,7 @@ def package_project(output_dir=None, project_url=None, revision=None, fetcher=No
         
         # Always log success and return, regardless of refinement outcome
         from vibenix.packaging_flow.model_prompts import end_stream_logger
-        ccl_logger.log_session_end(True, iteration, end_stream_logger.total_cost)
+        ccl_logger.log_session_end(signal=None, total_cost=end_stream_logger.total_cost)
         close_logger()
         if output_dir:
             save_package_output(candidate.code, project_url, output_dir)
@@ -426,7 +426,7 @@ def package_project(output_dir=None, project_url=None, revision=None, fetcher=No
     if isinstance(packaging_failure, PackagingFailure):
         coordinator_message(f"Packaging failure type: {packaging_failure}\nDetails:\n{details}\n")
     from vibenix.packaging_flow.model_prompts import end_stream_logger
-    ccl_logger.log_session_end(False, iteration, end_stream_logger.total_cost)
+    ccl_logger.log_session_end(signal=None, total_cost=end_stream_logger.total_cost)
     close_logger()
     return None
 

@@ -162,12 +162,19 @@ class CCLLogger:
             self.write_kv("output_cost_per_token", f"{output_cost:.15f}".rstrip('0'))
         self.leave_attribute()
 
-    def log_session_end(self, success: bool, total_iterations: int, total_cost: float = None):
-        """Log the end of a packaging session."""
+    def log_session_end(self, signal: str = None, total_cost: float = None):
+        """Log the end of a packaging session.
+        
+        Args:
+            signal: None for orderly termination, or the signal name (e.g., "SIGTERM", "SIGINT") if terminated by signal
+            total_cost: Optional total cost of the session
+        """
+        # Reset indentation stack to ensure we're at level 0
+        self._current_attr_path = []
+        
         self.enter_attribute("session_end")
         self.write_time("elapsed")
-        self.write_kv("success", "true" if success else "false")
-        self.write_kv("total_iterations", str(total_iterations))
+        self.write_kv("signal", signal)
         if total_cost is not None:
             self.write_kv("total_cost", f"{total_cost:.6f}")
         self.leave_attribute()
