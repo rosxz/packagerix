@@ -86,6 +86,11 @@ class CCLLogger:
         num + 1
 
     def write_kv(self, key: str, value: str):
+        # Handle None values by writing just "key ="
+        if value is None:
+            self._write(self._indent() + key + " =\n")
+            return
+            
         value_str = str(value).strip()
         is_multiline = '\n' in value_str
         curr_key_path = "@" + "/".join(str(x) for x in self._current_attr_path + [ key ])
@@ -186,17 +191,11 @@ class CCLLogger:
         self.write_kv("error", result.error.truncated() if not result.success else "")
         self.leave_attribute()
     
-    def log_iteration_start(self, iteration: int):
+    def log_iteration_start(self, iteration: int, error_type=None):
         """Log the start of a build iteration."""
         self.enter_list() if iteration == 0 else self.next_list_item()
-
-    def log_iteration_end(self, iteration: int, output : NixBuildResult):
-        """Log the end of a build iteration."""
-        if output.success:
-            self.write_kv("type", "success")
-        elif output.error:
-            self.write_kv("type", enum_str(output.error.type))
-        self.write_time("elapsed")
+        if error_type:
+            self.write_kv("type", enum_str(error_type))
 
     def log_progress_eval(self, iteration: int, diff : NixBuildErrorDiff):
         """Log progress evaluation."""

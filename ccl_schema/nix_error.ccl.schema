@@ -1,5 +1,5 @@
 start_at = {{ current_time - start_timestamp }}
-type = NixErrorKind.{{ error_kind_enum_value }}
-error_message =
-  {{ nix error message }}
+error = {{ None | NixErrorKind.{{ error_kind_enum_value }} }}
+log =
+  {{ nix log message }}
 end_at = {{ current_time - start_timestamp }}

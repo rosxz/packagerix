@@ -18,7 +18,7 @@ from vibenix.packaging_flow.user_prompts import get_project_url
 from vibenix import config
 from vibenix.errors import NixBuildErrorDiff, NixErrorKind, NixBuildResult
 from vibenix.tools.file_tools import create_source_function_calls
-from vibenix.ccl_log import init_logger, get_logger, close_logger
+from vibenix.ccl_log import init_logger, get_logger, close_logger, enum_str
 from vibenix.git_info import get_git_info
 import os
 
@@ -278,7 +278,7 @@ def package_project(output_dir=None, project_url=None, revision=None, fetcher=No
       
         coordinator_message(f"Iteration {iteration + 1}:")
         coordinator_message(f"```\n{candidate.result.error.truncated()}\n```")
-        ccl_logger.log_iteration_start(iteration)
+        ccl_logger.log_iteration_start(iteration, candidate.result.error.type if candidate.result.error else None)
         
         if candidate.result.error.type == NixErrorKind.HASH_MISMATCH:
             coordinator_message("Hash mismatch detected, fixing...")
@@ -309,11 +309,24 @@ def package_project(output_dir=None, project_url=None, revision=None, fetcher=No
             attempted_tool_calls.extend(iteration_tool_calls)
         
         updated_code = extract_updated_code(fixed_response)
+        
+        # Log the updated code
+        ccl_logger.write_kv("updated_code", updated_code)
             
         # Test the fix
         coordinator_progress(f"Iteration {iteration + 1}: Testing fix attempt {iteration + 1} of {MAX_ITERATIONS}...")
         new_result = execute_build_and_add_to_stack(updated_code)
         candidate = Solution(code=updated_code, result=new_result)
+        
+        # Log the build result
+        ccl_logger.enter_attribute("build", log_start=True)
+        if new_result.success:
+            ccl_logger.write_kv("error", None)
+            ccl_logger.write_kv("log", None)
+        else:
+            ccl_logger.write_kv("error", enum_str(new_result.error.type))
+            ccl_logger.write_kv("log", new_result.error.error_message)
+        ccl_logger.leave_attribute(log_end=True)
 
         if not new_result.success:
             if new_result.error.type == NixErrorKind.BUILD_ERROR:
@@ -362,8 +375,6 @@ def package_project(output_dir=None, project_url=None, revision=None, fetcher=No
                 if consecutive_non_build_errors >= MAX_CONSECUTIVE_NON_BUILD_ERRORS:
                     candidate = best
                     consecutive_non_build_errors = 0
-
-        ccl_logger.log_iteration_end(iteration, new_result)
         
         # Log iteration cost and token usage
         from vibenix.packaging_flow.model_prompts import end_stream_logger
