@@ -18,6 +18,8 @@ from magentic import FunctionCall
 
 from .errors import NixBuildErrorDiff, NixBuildResult
 
+def enum_str(enum: Enum):
+    return f"{type(enum).__name__}.{enum.name}"
 
 def get_model_pricing(model: str) -> Optional[tuple[float, float]]:
     """Get model pricing per token from litellm."""
@@ -172,7 +174,7 @@ class CCLLogger:
 
     def log_template_selected_end(self, template_type: str, template_content: str, notes: str | None, indent_level: int = 0):
         """Log template selection."""
-        self.write_kv("template_type", template_type)
+        self.write_kv("template_type", enum_str(template_type))
         self.write_kv("template", template_content)
         self.write_kv("notes", notes if notes else "")
         self.leave_attribute()
@@ -193,7 +195,7 @@ class CCLLogger:
         if output.success:
             self.write_kv("type", "success")
         elif output.error:
-            self.write_kv("type", output.error.type.value)
+            self.write_kv("type", enum_str(output.error.type))
         self.write_time("elapsed")
 
     def log_progress_eval(self, iteration: int, diff : NixBuildErrorDiff):
@@ -252,13 +254,13 @@ class CCLLogger:
         else:
             self.next_list_item()
 
-    def reply_chunk_enum(self, num: int, _type : str, value : str, indent_level: int):
+    def reply_chunk_enum(self, num: int, enum : Enum, indent_level: int):
         """Log one response chunk."""
         if num == 0:
             self.enter_list()
         else:
             self.next_list_item()
-        self.write_kv("enum", f"{_type}.{value}")
+        self.write_kv("enum", enum_str(enum))
 
     def prompt_end(self, indent_level: int):
         """Log the end of a model prompt."""

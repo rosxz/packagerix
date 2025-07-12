@@ -229,7 +229,7 @@ def package_project(output_dir=None, project_url=None, revision=None, fetcher=No
     notes_filename = f"{template_type.value}.notes"
     notes_path = config.template_dir / notes_filename
     template_notes = notes_path.read_text() if notes_path.exists() else None
-    ccl_logger.log_template_selected_end(template_type.value, starting_template, template_notes)
+    ccl_logger.log_template_selected_end(template_type, starting_template, template_notes)
 
     # Step 6.a: Manual src setup
     coordinator_message("Setting up the src attribute in the template...")
