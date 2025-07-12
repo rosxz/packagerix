@@ -19,6 +19,7 @@ from vibenix import config
 from vibenix.errors import NixBuildErrorDiff, NixErrorKind, NixBuildResult
 from vibenix.tools.file_tools import create_source_function_calls
 from vibenix.ccl_log import init_logger, get_logger, close_logger
+from vibenix.git_info import get_git_info
 import os
 
 class Solution(BaseModel):
@@ -167,6 +168,14 @@ def package_project(output_dir=None, project_url=None, revision=None, fetcher=No
     # Initialize CCL logger
     log_file = Path(output_dir) / "run.ccl" if output_dir else Path("run.ccl")
     ccl_logger = init_logger(log_file)
+    
+    # Log vibenix version info
+    git_info = get_git_info()
+    if git_info["commit_hash"]:
+        ccl_logger.enter_attribute("vibenix_version")
+        ccl_logger.write_kv("git_hash", git_info["commit_hash"])
+        ccl_logger.write_kv("dirty", "true" if git_info["is_dirty"] else "false")
+        ccl_logger.leave_attribute()
     
     # Step 1: Get project URL (includes welcome message)
     if project_url is None:
