@@ -14,10 +14,6 @@ from datetime import datetime
 
 # Import existing vibenix functionality
 from vibenix import config
-from vibenix.packaging_flow.model_prompts import (
-    set_up_project,
-    summarize_github
-)
 from vibenix.parsing import scrape_and_process, extract_updated_code
 from vibenix.flake import init_flake
 from vibenix.nix import invoke_build

@@ -148,9 +148,5 @@ def analyze_package_failure(
     """Analyze why packaging failed."""
     ...
 
-
-# Import set_up_project from separate module since it's not yet migrated
-from vibenix.packaging_flow.model_prompts.set_up_project import set_up_project
-
 # Import logger callbacks - use the global instance
 from vibenix.packaging_flow.litellm_callbacks import end_stream_logger

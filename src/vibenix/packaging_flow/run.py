@@ -10,7 +10,7 @@ from vibenix.parsing import fetch_github_release_data, scrape_and_process, extra
 from vibenix.flake import init_flake
 from vibenix.nix import eval_progress, execute_build_and_add_to_stack
 from vibenix.packaging_flow.model_prompts import (
-    pick_template, summarize_github, set_up_project, fix_build_error, fix_hash_mismatch,
+    pick_template, summarize_github, fix_build_error, fix_hash_mismatch,
     evaluate_code, refine_code, get_feedback, RefinementExit, 
     analyze_package_failure, classify_packaging_failure, PackagingFailure
 )
@@ -48,14 +48,6 @@ def analyze_project(project_page: str) -> str:
     """Analyze the project using the model."""
     # summarize_github already has the @ask_model decorator
     return summarize_github(project_page)
-
-
-def create_initial_package(template: str, project_page: str, template_notes: str = None) -> str:
-    """Create initial package configuration."""
-    # set_up_project now has the @ask_model decorator that handles UI and streaming
-    result = set_up_project(template, project_page, template_notes)
-    return extract_updated_code(result)
-
 
 def get_release_data_and_version(url, rev=None):
     """Fetch release data and compute version string with proper logging."""
