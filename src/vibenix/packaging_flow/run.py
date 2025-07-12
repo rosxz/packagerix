@@ -135,25 +135,45 @@ def refine_package(curr: Solution, project_page: str, additional_functions: list
     """Refinement cycle to improve the packaging."""
     max_iterations = 3
 
+    from vibenix.ccl_log import get_logger, close_logger
+    ccl_logger = get_logger()
+    ccl_logger.enter_attribute("refine_package", log_start=True)
     for iteration in range(max_iterations):
+        ccl_logger.log_iteration_start(iteration)
+        ccl_logger.write_kv("code", curr.code)
         # Get feedback for current code
         # TODO BUILD LOG IS NOT BEING PASSED!
-        feedback = get_feedback(curr.code, project_page, iteration, max_iterations, additional_functions)
-        coordinator_message(f"Refining package (iteration {iteration}/{max_iterations})...")
+        feedback = get_feedback(curr.code, project_page, iteration+1, max_iterations, additional_functions)
+        coordinator_message(f"Refining package (iteration {iteration+1}/{max_iterations})...")
         coordinator_message(f"Received feedback: {feedback}")
+        ccl_logger.write_kv("feedback", str(feedback))
 
         # Pass the feedback to the generator (refine_code)
         response = refine_code(curr.code, feedback, project_page)
         updated_code = extract_updated_code(response)
+        ccl_logger.write_kv("refined_code", updated_code)
         updated_res = execute_build_and_add_to_stack(updated_code)
         attempt = Solution(code=updated_code, result=updated_res)
         
         # Verify the updated code still builds
         if not attempt.result.success:
             coordinator_error(f"Refinement caused a regression ({attempt.result.error.type}), reverting to last successful solution.")
+            ccl_logger.write_kv("type", attempt.result.error.type)
+            ccl_logger.write_kv("error", attempt.result.error.truncated())
         else:
             coordinator_message("Refined packaging code successfuly builds, continuing...")
             curr = attempt
+
+        from vibenix.packaging_flow.model_prompts import end_stream_logger
+        ccl_logger.log_iteration_cost(
+            iteration=iteration,
+            iteration_cost=end_stream_logger.total_cost,
+            input_tokens=end_stream_logger.total_input_tokens,
+            output_tokens=end_stream_logger.total_output_tokens
+        )
+    # Close the iteration list and refine_package attribute
+    ccl_logger.leave_list()
+    ccl_logger.leave_attribute(log_end=True)
     coordinator_message("Refinement process reached its conclusion (max iterations).")
     return curr
 
@@ -400,10 +420,8 @@ def package_project(output_dir=None, project_url=None, revision=None, fetcher=No
     
     if candidate.result.success:
         coordinator_message("Build succeeded! Refining package...")
-        ccl_logger.enter_attribute("refine_package")
         candidate = refine_package(candidate, summary, additional_functions)
         ccl_logger.write_kv("refined_package", candidate.code)
-        ccl_logger.leave_attribute()
         
         # Always log success and return, regardless of refinement outcome
         from vibenix.packaging_flow.model_prompts import end_stream_logger
@@ -421,7 +439,9 @@ def package_project(output_dir=None, project_url=None, revision=None, fetcher=No
     
     ccl_logger.enter_attribute("analyze_failure")
     details = analyze_package_failure(best.code, best.result.error.truncated(), summary, template_notes, additional_functions)
+    ccl_logger.write_kv("description", str(details))
     packaging_failure = classify_packaging_failure(details)
+    ccl_logger.write_kv("failure_type", enum_str(packaging_failure))
     ccl_logger.leave_attribute()
     if isinstance(packaging_failure, PackagingFailure):
         coordinator_message(f"Packaging failure type: {packaging_failure}\nDetails:\n{details}\n")

@@ -55,14 +55,9 @@ iterate =
     cost = {{ req_resp_cost }}
 {{
 analyze_failure =
-  describe_cause =
-    {{ include model_req_resp.ccl.schema }}
-    description =
-    {{ description_str }}
-  categorize_cause =
-    {{ include model_req_resp.ccl.schema }}
-    failure_cause =
-    {{ description_str }}
+  failure_details =
+      {{ description_str }}
+  failure_type = PackagingFailure.{{ packaging_failure_type }}
   request_metadata_sum =
     req_count = {{ request_count }}
     input_tokens = {{ req_resp_input_token_count }}
@@ -70,7 +65,27 @@ analyze_failure =
     cost = {{ req_resp_cost }}
     [TODO: this stil needs some work]
 | refine_package =
-    [TODO: this still needs to be defined]
+	loop =
+  	  = 0 =
+	    code =
+		  {{ code }}
+	    feedback =
+		  {{ feedback_str }}
+		refined_code =
+		  {{ refined_code }}
+		{{ None | 
+		 type = NixErrorKind.{{ error_kind_enum_value }}
+		 error =
+		   {{ None | include nix_error.ccl.schema }}
+  	     {{ include model_req_resp.ccl.schema }}
+		}}
+  	request_metadata_sum =
+  	  req_count = {{ request_count }}
+  	  input_tokens = {{ req_resp_input_token_count }}
+  	  output_tokens = {{ req_resp_output_token_count }}
+  	  cost = {{ req_resp_cost }}
+    refined_package =
+	  {{ refined_package }}
 |
 exception =
   {{ exception_str }}
