@@ -20,6 +20,7 @@ def find_nix_packages(file_path: str, regex: bool = False, exact_match: bool = F
     Returns:
         A tuple of (list of Nix expressions, total direct packages, total indirect packages)
     """
+    print(f"📞 Function called: find_nix_packages with file_path: {file_path}, regex: {regex}, exact_match: {exact_match}")
     cmd = ["nix-locate"]
     
     if regex:

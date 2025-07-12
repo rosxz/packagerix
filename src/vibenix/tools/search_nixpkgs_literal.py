@@ -15,6 +15,7 @@ def search_nixpkgs_for_package_literal(query: str, package_set: str = None) -> s
     
     Returns a Nix expression with matching packages grouped by package set.
     """
+    print(f"📞 Function called: search_nixpkgs_for_package_literal with query: {query}, package_set: {package_set}")
 
     
     # Get all packages (using ^ to match everything)

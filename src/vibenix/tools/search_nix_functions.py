@@ -13,6 +13,8 @@ def search_nix_functions(query: str) -> str:
     Invoke multiple times to find different spellings, because search is not fuzzy.
     """
     
+    print("📞 Function called: search_nix_functions with query: ", query)
+    
     try:
         # Get the path from environment variable
         function_names_path = os.environ.get('NOOGLE_FUNCTION_NAMES')

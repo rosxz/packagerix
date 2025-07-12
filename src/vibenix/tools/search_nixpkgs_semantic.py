@@ -18,6 +18,7 @@ def search_nixpkgs_for_package_semantic(query: str, package_set: str = None) -> 
     Uses sentence transformers to find semantically similar package names and descriptions.
     Returns a Nix expression with matching packages grouped by package set.
     """
+    print(f"📞 Function called: search_nixpkgs_for_package_semantic with query: {query}, package_set: {package_set}")
     
     # Get path to pre-computed embeddings from environment
     embeddings_path = os.environ.get('NIXPKGS_EMBEDDINGS')

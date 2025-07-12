@@ -27,5 +27,6 @@ def search_nixpkgs_for_file(file_path: str, regex: bool = False, exact_match: bo
         
     The symlink_matches list contains packages where the file is not contained directly, but reachable through symlinks (indirect matches).
     """
+    print(f"📞 Function called: search_nixpkgs_for_file with file_path: {file_path}, regex: {regex}, exact_match: {exact_match}")
 
     return nix_locate_for_llm(file_path, regex=regex, exact_match=exact_match)
