@@ -32,6 +32,14 @@ on:
         description: 'Ollama host URL (e.g., http://your-host.tailnet:11434)'
         required: false
         type: string
+      dataset:
+        description: 'Which dataset to use'
+        required: false
+        default: 'implementation'
+        type: choice
+        options:
+          - implementation
+          - evaluation
   push:
     branches:
       - main
@@ -75,7 +83,15 @@ jobs:
           import random
           
           matrix_data = []
-          with open('research/packaging_requests/used_during_implementation.csv', 'r') as f:
+          
+          # Select CSV file based on dataset choice
+          dataset = '${{ github.event.inputs.dataset || 'implementation' }}'
+          if dataset == 'implementation':
+              csv_file = 'research/packaging_requests/used_during_implementation.csv'
+          else:  # evaluation
+              csv_file = 'research/packaging_requests/post_project_evaluation.csv'
+          
+          with open(csv_file, 'r') as f:
               reader = csv.DictReader(f)
               for row in reader:
                   if row['repo_url']:  # Skip entries without repo URLs
