@@ -7,7 +7,7 @@ and it starts from a template and iteratively improves on that until it finally 
 
 ---
 
-🚧 Can only build at most 20 % of all unseen things so far. 🚧
+🚧 Can only build at most 38 % (14 % verified functionally correct) of all unseen things so far. 🚧
 
 ---
 
