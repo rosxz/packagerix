@@ -134,6 +134,12 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       
+      - name: Set provider
+        id: provider
+        run: |
+          provider="${{ github.event.inputs.model_provider || 'gemini' }}"
+          echo "provider=$provider" >> $GITHUB_OUTPUT
+      
       - name: Install Nix
         uses: cachix/install-nix-action@v24
         
@@ -144,7 +150,7 @@ jobs:
           authToken: '${{ secrets.CACHIX_TOKEN }}'
         
       - name: Tailscale
-        if: ${{ (github.event.inputs.model_provider || 'gemini') == 'ollama' }}
+        if: ${{ steps.provider.outputs.provider == 'ollama' || steps.provider.outputs.provider == 'openai' }}
         uses: tailscale/github-action@v3
         with:
           oauth-client-id: ${{ secrets.TS_OAUTH_CLIENT_ID }}
@@ -160,7 +166,7 @@ jobs:
           model_converted=$(echo "$model" | sed 's|^ollama/|openai/|')
           
           # Use openai provider if ollama was selected
-          provider="${{ github.event.inputs.model_provider || 'gemini' }}"
+          provider="${{ steps.provider.outputs.provider }}"
           if [ "$provider" = "ollama" ]; then
             provider="openai"
           fi
@@ -181,14 +187,14 @@ jobs:
       - name: Setup environment
         run: |
           # Set API keys as environment variables based on provider
-          if [ "${{ github.event.inputs.model_provider || 'gemini' }}" = "anthropic" ]; then
+          if [ "${{ steps.provider.outputs.provider }}" = "anthropic" ]; then
             echo "ANTHROPIC_API_KEY=${{ secrets.ANTHROPIC_API_KEY }}" >> $GITHUB_ENV
-          elif [ "${{ github.event.inputs.model_provider || 'gemini' }}" = "gemini" ]; then
+          elif [ "${{ steps.provider.outputs.provider }}" = "gemini" ]; then
             echo "GEMINI_API_KEY=${{ secrets.GEMINI_API_KEY }}" >> $GITHUB_ENV
-          elif [ "${{ github.event.inputs.model_provider || 'gemini' }}" = "ollama" ]; then
+          elif [ "${{ steps.provider.outputs.provider }}" = "ollama" ]; then
             # For Ollama via OpenAI endpoint, set a dummy API key if needed
             echo "OPENAI_API_KEY=dummy" >> $GITHUB_ENV
-          elif [ "${{ github.event.inputs.model_provider || 'gemini' }}" = "openai" ]; then
+          elif [ "${{ steps.provider.outputs.provider }}" = "openai" ]; then
             echo "OPENAI_API_KEY=${{ secrets.OPENAI_API_KEY }}" >> $GITHUB_ENV
           fi
       
@@ -278,7 +284,7 @@ jobs:
           echo "## ${status_emoji} Issue #${{ matrix.issue_number }}" >> $GITHUB_STEP_SUMMARY
           echo "- Repository: ${{ matrix.repo_url }}" >> $GITHUB_STEP_SUMMARY
           echo "- Packaging Request: https://github.com/NixOS/nixpkgs/issues/${{ matrix.issue_number }}" >> $GITHUB_STEP_SUMMARY
-          echo "- Provider: ${{ github.event.inputs.model_provider || 'gemini' }}" >> $GITHUB_STEP_SUMMARY
+          echo "- Provider: ${{ steps.provider.outputs.provider }}" >> $GITHUB_STEP_SUMMARY
           echo "- Model: ${{ github.event.inputs.model || 'gemini/gemini-2.5-flash' }}" >> $GITHUB_STEP_SUMMARY
           echo "- Status: ${status_emoji} **${status_text}**" >> $GITHUB_STEP_SUMMARY
           if [ -n "${{ steps.process.outputs.package_name }}" ]; then
