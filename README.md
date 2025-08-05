@@ -26,7 +26,8 @@ nix develop -c python -m vibenix
 
 You will be asked to pick a model and also provide an API key if requried.
 
-Models we have tested to perform well are `gemini-2.5-flash` (38 %), as the default model.
-While `claude-3-5-haiku-20241022` (32 %) and `o3-mini-2025-01-31` (26 %) - numbers in prarenthesis are raw sucess rate before validation. Manually validated success rate with `gemini-2.5-flash` is about half, at 14 %.
+Models we have tested to perform well are our default model `gemini-2.5-flash` (38 %),
+`claude-3-5-haiku-20241022` (32 %) and `o3-mini-2025-01-31` (26 %).
+Numbers in prarenthesis are raw sucess rate before validation. Manually validated success rate with `gemini-2.5-flash` is about half, at 14 %.
 We would like to target local models in the future, but we are still working on issues to get that working (https://github.com/mschwaig/vibenix/issues/42).
 Right now vibenix tries to stay within 32k context size, which with `32b` class models results in a bit more than 32GB VRAM usage.
