@@ -23,17 +23,17 @@
         pkgs = nixpkgs.legacyPackages.${system};
         python = pkgs.python312;
 
-        
+
         # Preprocessed noogle function names
         noogleFunctionNames = pkgs.runCommand "noogle-function-names" {
           buildInputs = [ pkgs.jq ];
         } ''
           ${pkgs.jq}/bin/jq -r '.[].meta.title' ${noogle.packages.${system}.data-json} > $out
         '';
-        
+
         # Pre-computed package embeddings
         packageEmbeddings = pkgs.callPackage ./nix/package-embeddings.nix { inherit nixpkgs; };
-        
+
         # Load the workspace
         workspace = uv2nix.lib.workspace.loadWorkspace { workspaceRoot = ./.; };
 
@@ -69,7 +69,7 @@
           (final: prev: { torch = python.pkgs.torchWithoutCuda; })
         ]);
 
-        cli-dependencies = with pkgs; [ ripgrep fzf jq nurl nix-index-database.packages.${system}.nix-index-with-db ];
+        cli-dependencies = with pkgs; [ ripgrep fzf jq nurl tree findutils nix-index-database.packages.${system}.nix-index-with-db ];
 
         # Build the vibenix package
         vibenixPackage = pythonSet.vibenix.overrideAttrs (old: {
@@ -79,7 +79,7 @@
             "--set" "NIXPKGS_EMBEDDINGS" "${packageEmbeddings}/embeddings.pkl"
           ];
         });
-        
+
         # Create a virtual environment with vibenix
         vibenixVenv = pythonSet.mkVirtualEnv "vibenix-env" workspace.deps.default;
       in
@@ -88,11 +88,11 @@
           default = vibenixPackage;
           vibenix = vibenixPackage;
           noogle-function-names = noogleFunctionNames;
-          
+
           dockerImage = pkgs.dockerTools.buildLayeredImage {
             name = "vibenix";
             tag = "latest";
-            
+
             contents = with pkgs; [
               bashInteractive
               coreutils
@@ -100,11 +100,11 @@
               nix
               git
               cacert
-              
+
               vibenixVenv
-              
+
             ] ++ cli-dependencies;
-            
+
             config = {
               Cmd = [ "${vibenixVenv}/bin/vibenix" ];
               Env = [
@@ -117,9 +117,9 @@
               ];
               WorkingDir = "/workspace";
             };
-            
+
             # Extra configuration for Nix to work in container
-            # I think we would would need 
+            # I think we would would need
             # echo "sandbox = false" > etc/nix/nix.conf
             # to make this run in an unprivileged container,
             # which I think would defeat the point.
@@ -128,7 +128,7 @@
             extraCommands = ''
               mkdir -p etc/nix
               echo "experimental-features = nix-command flakes" >> etc/nix/nix.conf
-              
+
               # Create workspace directory
               mkdir -p workspace
               chmod 755 workspace
@@ -145,10 +145,10 @@
 
             # Path to preprocessed noogle function names
             NOOGLE_FUNCTION_NAMES = "${noogleFunctionNames}";
-            
+
             # Path to pre-computed package embeddings
             NIXPKGS_EMBEDDINGS = "${packageEmbeddings}/embeddings.pkl";
-            
+
             # Use only dependencies environment, not the built package, plus torch
             packages = [
               python
@@ -159,7 +159,7 @@
 
             # Point to source files for development
             PYTHONPATH = "src";
-            
+
             # Ensure CLI tools are on PATH
             shellHook = ''
               export PATH="${pkgs.lib.makeBinPath cli-dependencies}:$PATH"

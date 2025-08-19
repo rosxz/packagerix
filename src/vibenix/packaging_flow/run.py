@@ -11,8 +11,9 @@ from vibenix.flake import init_flake
 from vibenix.nix import eval_progress, execute_build_and_add_to_stack
 from vibenix.packaging_flow.model_prompts import (
     pick_template, summarize_github, fix_build_error, fix_hash_mismatch,
-    evaluate_code, refine_code, get_feedback, RefinementExit, 
-    analyze_package_failure, classify_packaging_failure, PackagingFailure
+    evaluate_code, refine_code, get_feedback, analyze_package_failure,
+    classify_packaging_failure, PackagingFailure, identify_project_dependencies,
+    get_project_dependencies
 )
 from vibenix.packaging_flow.user_prompts import get_project_url
 from vibenix import config
@@ -138,6 +139,9 @@ def refine_package(curr: Solution, project_page: str, additional_functions: list
     from vibenix.ccl_log import get_logger, close_logger
     ccl_logger = get_logger()
     ccl_logger.enter_attribute("refine_package", log_start=True)
+
+    template = pick_template(project_page)
+    ccl_logger.write_kv("runtime_template", template.value)
     for iteration in range(max_iterations):
         ccl_logger.log_iteration_start(iteration)
         ccl_logger.write_kv("code", curr.code)
