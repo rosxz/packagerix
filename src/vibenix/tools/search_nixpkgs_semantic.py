@@ -7,7 +7,7 @@ from sentence_transformers import SentenceTransformer
 from sklearn.metrics.pairwise import cosine_similarity
 from vibenix.ccl_log import get_logger, log_function_call
 
-@log_function_call("search_nixpkgs_for_package_semantic")
+#@log_function_call("search_nixpkgs_for_package_semantic")
 def search_nixpkgs_for_package_semantic(query: str, package_set: str = None) -> str:
     """Search the nixpkgs repository using semantic similarity with embeddings.
     

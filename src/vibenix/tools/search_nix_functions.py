@@ -3,15 +3,16 @@
 import os
 import subprocess
 from vibenix.ccl_log import get_logger, log_function_call
+from vibenix.tools.search_nixpkgs_manual import search_across_language_frameworks
 
 
 @log_function_call("search_nix_functions")
 def search_nix_functions(query: str) -> str:
     """
     Search for Nix builtin and library functions by name.
-    Can be used to search for package sets or packages by their full name, or a part of their name.
     Invoke multiple times to find different spellings, because search is not fuzzy.
     """
+    # Can be used to search for package sets or packages by their full name, or a part of their name.
     
     print("📞 Function called: search_nix_functions with query: ", query)
     
@@ -42,7 +43,7 @@ def search_nix_functions(query: str) -> str:
                 result_text += f"\n\n... and {len(matches) - 50} more results"
             return result_text
         else:
-            return f"No Nix functions found matching '{query}'"
+            return f"No results found in Noogle." + search_across_language_frameworks(query)
             
     except FileNotFoundError:
         return "Error: fzf not found. Please ensure fzf is available in the environment."

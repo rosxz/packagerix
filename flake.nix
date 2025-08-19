@@ -27,17 +27,17 @@
         pkgs = nixpkgs.legacyPackages.${system};
         python = pkgs.python312;
 
-        
+
         # Preprocessed noogle function names
         noogleFunctionNames = pkgs.runCommand "noogle-function-names" {
           buildInputs = [ pkgs.jq ];
         } ''
           ${pkgs.jq}/bin/jq -r '.[].meta.title' ${noogle.packages.${system}.data-json} > $out
         '';
-        
+
         # Pre-computed package embeddings
         packageEmbeddings = pkgs.callPackage ./nix/package-embeddings.nix { inherit nixpkgs; };
-        
+
         # Load the workspace
         workspace = uv2nix.lib.workspace.loadWorkspace { workspaceRoot = ./.; };
 
@@ -73,7 +73,7 @@
           (final: prev: { torch = python.pkgs.torchWithoutCuda; })
         ]);
 
-        cli-dependencies = with pkgs; [ ripgrep fzf jq nurl nix-index-database.packages.${system}.nix-index-with-db ];
+        cli-dependencies = with pkgs; [ ripgrep fzf jq nurl tree findutils nix-index-database.packages.${system}.nix-index-with-db ];
       in
       {
         packages = {
@@ -89,10 +89,10 @@
 
             # Path to preprocessed noogle function names
             NOOGLE_FUNCTION_NAMES = "${noogleFunctionNames}";
-            
+
             # Path to pre-computed package embeddings
             NIXPKGS_EMBEDDINGS = "${packageEmbeddings}/embeddings.pkl";
-            
+
             # Use only dependencies environment, not the built package, plus torch
             packages = [
               python
@@ -103,7 +103,7 @@
 
             # Point to source files for development
             PYTHONPATH = "src";
-            
+
             # Ensure CLI tools are on PATH
             shellHook = ''
               export PATH="${pkgs.lib.makeBinPath cli-dependencies}:$PATH"
