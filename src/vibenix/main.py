@@ -11,7 +11,6 @@ from pydantic import BaseModel
 
 from vibenix.ui.logging_config import logger  # Import logger first to ensure it's initialized
 from vibenix import config
-import litellm
 from typing import Optional
 from functools import wraps
 import hashlib
@@ -21,9 +20,8 @@ config.init()
 
 from vibenix.parsing import cache
 
-# Check which backend we're using
-magentic_backend = os.environ.get("MAGENTIC_BACKEND", "litellm")
-logger.info(f"Using magentic backend: {magentic_backend}")
+# TODO: Configure pydantic-ai model
+logger.info("Using pydantic-ai for model integration")
 
 # Global variable to track if we're in UI mode
 _ui_mode = False
@@ -39,12 +37,7 @@ if "OLLAMA_HOST" in os.environ:
 else:
     logger.warning("OLLAMA_HOST environment variable is not set")
 
-#litellm.set_verbose=True
-# litellm.set_verbose=True
-
-# Note: Do NOT set litellm.api_base globally as it affects all models
-# Instead, Ollama models should specify api_base per request
-# or use LITELLM_LOG=DEBUG to see endpoint selection
+# TODO: Configure pydantic-ai logging if needed
 if "OLLAMA_HOST" in os.environ:
     logger.info(f"OLLAMA_HOST available at: {os.environ['OLLAMA_HOST']}")
     logger.info("Note: api_base will be set per-model, not globally")
@@ -117,24 +110,18 @@ def run_terminal_ui(output_dir=None, project_url=None, revision=None, fetcher=No
     # Use the coordinator pattern for CLI
     from vibenix.ui.conversation import set_ui_adapter, TerminalUIAdapter
     from vibenix.packaging_flow.run import run_packaging_flow
-    from vibenix.ui.raw_terminal.terminal_model_config import ensure_model_configured
+    # TODO: Use hardcoded model configuration
     
     # Set up terminal UI adapter
     set_ui_adapter(TerminalUIAdapter())
     
     # If project URL is provided, skip interactive configuration
     if project_url:
-        from vibenix.ui.model_config import load_saved_configuration
-        saved_config = load_saved_configuration()
-        if not saved_config:
-            logger.error("No saved model configuration found. Please run interactively first to configure.")
-            sys.exit(1)
-        logger.info("Using saved model configuration")
+        # TODO: Use hardcoded model configuration
+        logger.info("Using hardcoded model configuration")
     else:
-        # Interactive mode - prompt for configuration if needed
-        if not ensure_model_configured():
-            logger.error("Model configuration required to continue")
-            sys.exit(1)
+        # TODO: Use hardcoded model configuration
+        logger.info("Using hardcoded model configuration")
     
     # Run the packaging flow in background thread (like textual UI)
     import threading

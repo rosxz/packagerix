@@ -1,5 +1,5 @@
 {
-  description = "Application packaged using uv2nix";
+  description = "LLM-assisted packaging with Nix";
 
   inputs = {
     flake-utils.url = "github:numtide/flake-utils";
@@ -13,15 +13,11 @@
       inputs.pyproject-nix.follows = "pyproject-nix";
       inputs.nixpkgs.follows = "nixpkgs";
     };
-    magentic = {
-     url = "github:jackmpcollins/magentic/v0.39.3";
-     flake = false;
-    };
     nix-index-database.url = "github:nix-community/nix-index-database/2025-06-08-034427";
     noogle.url = github:nix-community/noogle;
   };
 
-  outputs = { self, nixpkgs, flake-utils, pyproject-nix, uv2nix, magentic, noogle, nix-index-database }:
+  outputs = { self, nixpkgs, flake-utils, pyproject-nix, uv2nix, noogle, nix-index-database }:
     flake-utils.lib.eachDefaultSystem (system:
       let
         pkgs = nixpkgs.legacyPackages.${system};
@@ -46,46 +42,30 @@
           sourcePreference = "wheel";
         };
 
-        # Patch overlay for magentic to add usage tracking
-        patchOverlay = final: prev: {
-          magentic = prev.magentic.overrideAttrs (old: {
-            postFixup = (old.postFixup or "") + ''
-              SITE_PACKAGES=$(echo $out/lib/python*/site-packages)
-              if [ -d "$SITE_PACKAGES/magentic" ]; then
-                echo "Patching magentic in $SITE_PACKAGES"
-                cd "$SITE_PACKAGES"
-                # Strip the 'src/' prefix from the patch paths
-                sed 's|src/magentic/|magentic/|g' ${./0001-add-usage-tracking.patch} | patch -p1
-              else
-                echo "Error: Could not find magentic package to patch"
-                exit 1
-              fi
-            '';
-          });
-        };
 
-        # Python package set with patched magentic and torch from nixpkgs
+        # Python package set with torch from nixpkgs
         pythonSet = (pkgs.callPackage pyproject-nix.build.packages {
           inherit python;
         }).overrideScope (pkgs.lib.composeManyExtensions [
           overlay
-          patchOverlay
-          (final: prev: { torch = python.pkgs.torchWithoutCuda; })
+          (final: prev: {
+            torch = python.pkgs.torchWithoutCuda;
+            pyperclip = python.pkgs.pyperclip;
+          })
         ]);
 
         cli-dependencies = with pkgs; [ ripgrep fzf jq nurl nix-index-database.packages.${system}.nix-index-with-db ];
       in
       {
         packages = {
+          default = pythonSet.vibenix;
           noogle-function-names = noogleFunctionNames;
         };
 
         devShells = {
           default = pkgs.mkShell {
-            MAGENTIC_BACKEND = "litellm";
-            OLLAMA_HOST= "https://hydralisk.van-duck.ts.net:11435";
-#            MAGENTIC_LITELLM_MAX_TOKENS = "1024";
-#             ANTHROPIC_LOG="debug";
+            # Environment variables for development
+            OLLAMA_HOST = "https://hydralisk.van-duck.ts.net:11435";
 
             # Path to preprocessed noogle function names
             NOOGLE_FUNCTION_NAMES = "${noogleFunctionNames}";

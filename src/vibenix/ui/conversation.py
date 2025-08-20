@@ -6,8 +6,6 @@ from functools import wraps
 from enum import Enum
 from dataclasses import dataclass
 from datetime import datetime
-from magentic import StreamedStr, Chat, FunctionCall, ToolResultMessage
-from magentic.chat_model.message import Usage
 from vibenix.ccl_log import get_logger
 
 # Type variable for function return types
@@ -81,17 +79,13 @@ class TerminalUIAdapter(UIAdapter):
     def handle_model_streaming(self, streamed_result) -> str:
         """Handle streaming from a model response."""
         from vibenix.ui.logging_config import logger
-        from magentic import StreamedStr
         
-        if not isinstance(streamed_result, StreamedStr):
-            raise TypeError(f"Expected StreamedStr, got {type(streamed_result)}")
-        
+        # TODO: Will be reimplemented with pydantic-ai streaming
+        # For now, just return the result as a string
         logger.info("🤖 model: ", end="")
         
-        full_response = ""
-        for chunk in streamed_result:
-            full_response += chunk
-            print(chunk, end="", flush=True)
+        full_response = str(streamed_result)
+        print(full_response, flush=True)
         
         print()  # newline at end
         return full_response
@@ -155,21 +149,6 @@ def ask_user(prompt_text: str):
     return decorator
 
 
-def _calculate_retry_delay(attempt: int, base_delay: int = 5, max_delay: int = 600) -> float:
-    """Calculate retry delay using polynomial backoff.
-    
-    Args:
-        attempt: The current attempt number (0-indexed)
-        base_delay: Base delay in seconds
-        max_delay: Maximum delay cap in seconds
-        
-    Returns:
-        Delay in seconds
-    """
-    import math
-    delay = base_delay + base_delay * math.pow(float(attempt), 1.5)
-    return min(delay, max_delay)
-
 def coordinator_message(content: str):
     """Send a message from the coordinator."""
     adapter = get_ui_adapter()
@@ -188,146 +167,40 @@ def coordinator_progress(message: str):
     adapter.show_progress(message)
 
 
-def _retry_with_rate_limit(func, *args, max_retries=20, base_delay=5, **kwargs):
-    """Execute a function with rate limit retry logic.
-    
-    Args:
-        func: The function to execute
-        *args: Positional arguments for func
-        max_retries: Maximum number of retry attempts
-        base_delay: Base delay in seconds for exponential backoff
-        **kwargs: Keyword arguments for func
-        
-    Returns:
-        The result of func
-        
-    Raises:
-        The last exception if all retries are exhausted
-    """
-    import time
-    import traceback
-    from vibenix.ui.logging_config import logger
-    
-    for attempt in range(max_retries):
-        try:
-            return func(*args, **kwargs)
-        except Exception as e:
-            # Import litellm to check for rate limit and server errors
-            try:
-                import litellm
-                is_rate_limit_error = isinstance(e, litellm.RateLimitError)
-                is_overload_error = isinstance(e, litellm.InternalServerError)
-                
-                # Also check for AnthropicError from litellm.llms.anthropic.common_utils
-                try:
-                    from litellm.llms.anthropic.common_utils import AnthropicError
-                    is_anthropic_error = isinstance(e, AnthropicError)
-                except ImportError:
-                    is_anthropic_error = False
-            except ImportError:
-                is_rate_limit_error = False
-                is_overload_error = False
-                is_anthropic_error = False
-            
-            # Check if it's an httpx error with 429 status (for completeness)
-            is_429_error = False
-            retry_after = None
-            if hasattr(e, '__cause__') and e.__cause__:
-                cause = e.__cause__
-                if hasattr(cause, 'response') and hasattr(cause.response, 'status_code'):
-                    is_429_error = cause.response.status_code == 429
-                    # Try to get retry-after header
-                    if is_429_error and hasattr(cause.response, 'headers'):
-                        retry_after = cause.response.headers.get('retry-after')
-            
-            # Check if it's a StopIteration error (can happen during stream parsing)
-            is_stop_iteration_error = isinstance(e, StopIteration)
-            
-            if (is_rate_limit_error or is_overload_error or is_anthropic_error or is_429_error or is_stop_iteration_error) and attempt < max_retries - 1:
-                # Calculate delay based on retry-after header or polynomial backoff
-                if retry_after:
-                    try:
-                        delay = int(retry_after)
-                        logger.warning(f"Rate limit hit, waiting {delay} seconds as specified by retry-after header...")
-                    except ValueError:
-                        # If retry-after is not a valid integer, fall back to polynomial backoff
-                        logger.warning(f"Invalid retry-after header value: {retry_after}, falling back to polynomial backoff")
-                        delay = _calculate_retry_delay(attempt, base_delay)
-                        # Add extra 5 minutes for good measure when retry-after parsing fails
-                        delay += 300
-                        logger.warning(f"Rate limit hit, waiting {delay:.1f} seconds (polynomial backoff + 5 min buffer)...")
-                else:
-                    # Polynomial backoff
-                    delay = _calculate_retry_delay(attempt, base_delay)
-                    if is_rate_limit_error or is_429_error:
-                        logger.warning(f"Rate limit hit, waiting {delay:.1f} seconds before retry...")
-                    elif is_anthropic_error:
-                        logger.warning(f"Anthropic API error ({str(e)}), waiting {delay:.1f} seconds before retry...")
-                    elif is_stop_iteration_error:
-                        logger.warning(f"Stream parsing error (StopIteration), waiting {delay:.1f} seconds before retry...")
-                    else:
-                        logger.warning(f"API overloaded, waiting {delay:.1f} seconds before retry...")
-                
-                time.sleep(delay)
-                continue
-            else:
-                # Either not a retryable error, or we've exhausted retries
-                if attempt == max_retries - 1:
-                    logger.error(f"Exhausted {max_retries} retries due to rate limiting")
-                raise
+# Placeholder for Usage class that will be replaced with pydantic-ai's usage tracking
+@dataclass
+class Usage:
+    """Placeholder for usage tracking."""
+    prompt_tokens: int = 0
+    completion_tokens: int = 0
+    total_tokens: int = 0
 
 
-def handle_model_chat(chat: Chat, tool_call_collector=None) -> tuple[str, Usage]:
-    """Handle a model chat session with function calls and streaming responses.
+def handle_model_chat(chat, tool_call_collector=None) -> tuple[str, Usage]:
+    """Handle model chat using pydantic-ai agent.
     
     Args:
-        chat: The Chat instance to handle
+        chat: A dict with 'agent' (VibenixAgent) and 'prompt' (str)
         tool_call_collector: Optional list to collect tool calls made during this chat
         
     Returns:
         A tuple of (response_text, usage) where usage contains token counts
     """
-    def _chat_processing():
-        output = None
-        ends_with_function_call = True
-        adapter = get_ui_adapter()
-        current_chat = chat
-        last_message = None
-
-        response_chunk_num = 0
-        while ends_with_function_call:
-            ends_with_function_call = False
-            last_message = current_chat.last_message
-            for item in last_message.content:
-                if isinstance(item, StreamedStr):
-                    adapter.handle_model_streaming(item)
-                    output = str(item)
-                    get_logger().reply_chunk_text(response_chunk_num, output, 4)
-                elif isinstance(item, FunctionCall):
-                    # Capture tool call info before execution
-                    if tool_call_collector is not None:
-                        # Extract function name and arguments from the FunctionCall object
-                        tool_info = {
-                            'function': item.function.__name__,
-                            'arguments': item.arguments
-                        }
-                        tool_call_collector.append(tool_info)
-
-                    get_logger().reply_chunk_function_call(response_chunk_num, 4)
-                    function_call = item()
-
-                    adapter.show_message(Message(Actor.MODEL, function_call))
-                    current_chat = current_chat.add_message(ToolResultMessage(function_call, item._unique_id))
-                    ends_with_function_call = True
-                response_chunk_num = response_chunk_num + 1
-            if ends_with_function_call:
-                current_chat = _retry_with_rate_limit(current_chat.submit)
-
-        # Ensure we always have usage data
-        output_str = str(output)
-        #if not last_message or not last_message.usage:
-        #    raise ValueError("No usage data available from model response")
-        return (output_str, last_message.usage)
+    from vibenix.agent import VibenixAgent
     
-    # Use retry wrapper for the entire chat processing
-    return _chat_processing()
+    # Extract agent and prompt from chat dict
+    if isinstance(chat, dict) and 'agent' in chat and 'prompt' in chat:
+        agent = chat['agent']
+        prompt = chat['prompt']
+    else:
+        raise ValueError("Chat must be a dict with 'agent' and 'prompt' keys")
+    
+    # TODO: Implement tool call collection
+    # For now, just run the agent
+    response, usage = agent.run_stream(prompt)
+    
+    # Show the response in the UI
+    adapter = get_ui_adapter()
+    adapter.show_message(Message(Actor.MODEL, response))
+    
+    return response, usage

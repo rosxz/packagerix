@@ -14,7 +14,6 @@ from typing import Any, Dict, List, Optional, TextIO
 from dataclasses import dataclass, field
 from contextlib import contextmanager
 import functools
-from magentic import FunctionCall
 
 from .errors import NixBuildErrorDiff, NixBuildResult
 
@@ -22,18 +21,9 @@ def enum_str(enum: Enum):
     return f"{type(enum).__name__}.{enum.name}"
 
 def get_model_pricing(model: str) -> Optional[tuple[float, float]]:
-    """Get model pricing per token from litellm."""
-    try:
-        import litellm
-        if model in litellm.model_cost:
-            pricing = litellm.model_cost[model]
-            input_cost = pricing.get('input_cost_per_token', 0.0)
-            output_cost = pricing.get('output_cost_per_token', 0.0)
-            if input_cost > 0 or output_cost > 0:
-                return (input_cost, output_cost)
-    except Exception:
-        pass
-    return None
+    """Get model pricing per token."""
+    # TODO: Implement pricing with pydantic-ai
+    return (0.0, 0.0)
 
 
 @dataclass

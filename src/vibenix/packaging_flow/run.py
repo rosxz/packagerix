@@ -200,7 +200,7 @@ def package_project(output_dir=None, project_url=None, revision=None, fetcher=No
         coordinator_message("Welcome to vibenix!")
     
     # Log model configuration
-    model = os.environ.get("MAGENTIC_LITELLM_MODEL", "unknown")
+    model = "ollama/qwen3"  # TODO: Get from pydantic-ai agent config
     ccl_logger.log_model_config(model)
 
     ccl_logger.write_kv("project_url", project_url)
@@ -398,15 +398,12 @@ def package_project(output_dir=None, project_url=None, revision=None, fetcher=No
                     candidate = best
                     consecutive_non_build_errors = 0
         
-        # Log iteration cost and token usage
-        from vibenix.packaging_flow.model_prompts import end_stream_logger
-        # The iteration cost would be the difference from the start of this iteration
-        # For now, we'll log the cumulative cost
+        # TODO: Log iteration cost and token usage from pydantic-ai
         ccl_logger.log_iteration_cost(
             iteration=iteration,
-            iteration_cost=end_stream_logger.total_cost,
-            input_tokens=end_stream_logger.total_input_tokens,
-            output_tokens=end_stream_logger.total_output_tokens
+            iteration_cost=0.0,  # TODO: Get from pydantic-ai result.usage
+            input_tokens=0,
+            output_tokens=0
         )
         
         iteration += 1

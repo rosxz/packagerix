@@ -21,10 +21,10 @@ def ensure_log_cleanup(signal_name: Optional[str] = None):
     try:
         logger = get_logger()
         # Log session end with signal information
-        from vibenix.packaging_flow.litellm_callbacks import end_stream_logger
+        # TODO: Get usage from pydantic-ai
         logger.log_session_end(
             signal=signal_name,
-            total_cost=end_stream_logger.total_cost if end_stream_logger.total_cost > 0 else None
+            total_cost=None  # TODO: Get from pydantic-ai usage tracking
         )
         close_logger()
     except Exception:
@@ -46,10 +46,10 @@ def handle_uncaught_exception(exc_type, exc_value, exc_traceback):
         # Log the exception
         logger.log_exception(exception_str)
         # Log session end with signal indicating exception
-        from vibenix.packaging_flow.litellm_callbacks import end_stream_logger
+        # TODO: Get usage from pydantic-ai
         logger.log_session_end(
             signal="EXCEPTION",
-            total_cost=end_stream_logger.total_cost if end_stream_logger.total_cost > 0 else None
+            total_cost=None  # TODO: Get from pydantic-ai usage tracking
         )
         close_logger()
     except Exception:

@@ -109,10 +109,8 @@ class TextualUIAdapter(UIAdapter):
     
     def handle_model_streaming(self, streamed_result) -> str:
         """Handle streaming from a model response."""
-        from magentic import StreamedStr
-        
-        if not isinstance(streamed_result, StreamedStr):
-            raise TypeError(f"Expected StreamedStr, got {type(streamed_result)}")
+        # TODO: Implement pydantic-ai streaming
+        # For now, just display the result as a single message
         
         # Create initial model message widget
         self.current_model_message = self.app.call_from_thread(
@@ -121,13 +119,10 @@ class TextualUIAdapter(UIAdapter):
             "model"
         )
         
-        # Handle streaming
-        full_response = ""
-        for chunk in streamed_result:
-            full_response += chunk
-            self.current_model_message.content = full_response
-            # Update the message in the UI
-            self._update_last_message(full_response)
+        # For now, treat as non-streaming
+        full_response = str(streamed_result)
+        self.current_model_message.content = full_response
+        self._update_last_message(full_response)
         
         return full_response
     

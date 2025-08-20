@@ -6,7 +6,6 @@ This module contains all functions that interact with the AI model using templat
 from enum import Enum
 from typing import List, Optional
 
-from magentic import StreamedStr
 from vibenix.template.template_types import TemplateType
 from vibenix.ui.conversation_templated import ask_model_prompt
 from vibenix.tools import (
@@ -36,7 +35,7 @@ def pick_template(project_page: str) -> TemplateType:
 
 
 @ask_model_prompt('summarize_project.md')
-def summarize_github(project_page: str) -> StreamedStr:
+def summarize_github(project_page: str) -> str:
     """Summarize a GitHub project page."""
     ...
 
@@ -54,7 +53,7 @@ def get_feedback(
     iteration: int = 0,
     max_iterations: int = 0,
     additional_functions: List = []
-) -> StreamedStr:
+) -> str:
     """Get feedback on a successfully built package."""
     ...
 
@@ -66,7 +65,7 @@ def refine_code(
     project_page: Optional[str] = None,
     template_notes: Optional[str] = None,
     additional_functions: List = []
-) -> StreamedStr:
+) -> str:
     """Refine a nix package based on feedback."""
     ...
 
@@ -82,13 +81,13 @@ def fix_build_error(
     is_dependency_build_error: bool = False,
     attempted_tool_calls: List = [],
     tool_call_collector: List = None
-) -> StreamedStr:
+) -> str:
     """Fix a build error in Nix code."""
     ...
 
 
 @ask_model_prompt('error_fixing/fix_hash_mismatch.md')
-def fix_hash_mismatch(code: str, error: str) -> StreamedStr:
+def fix_hash_mismatch(code: str, error: str) -> str:
     """Fix hash mismatch errors in Nix code."""
     ...
 
@@ -144,9 +143,8 @@ def analyze_package_failure(
     project_page: Optional[str] = None,
     template_notes: Optional[str] = None,
     additional_functions: List = []
-) -> StreamedStr:
+) -> str:
     """Analyze why packaging failed."""
     ...
 
 # Import logger callbacks - use the global instance
-from vibenix.packaging_flow.litellm_callbacks import end_stream_logger
