@@ -13,7 +13,7 @@ def get_model_config() -> dict:
     """Get the hardcoded model configuration."""
     return {
         "provider": "ollama",
-        "model_name": "qwen3-coder:30b-a3b-q4_K_M_131768ctx",
+        "model_name": "qwen3:30b-a3b-instruct-2507-q4_K_M_32768ctx",
         "base_url": os.getenv("OLLAMA_HOST", "https://hydralisk.van-duck.ts.net:11435") + "/v1"
     }
 
