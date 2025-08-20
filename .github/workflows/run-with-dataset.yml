@@ -126,7 +126,7 @@ jobs:
     needs: setup
     runs-on: ubuntu-latest
     name: Package ${{ matrix.repo_name }}
-    timeout-minutes: 45
+    timeout-minutes: 105
     strategy:
       matrix: ${{ fromJson(needs.setup.outputs.matrix) }}
       max-parallel: 1  # Run only 1 job at a time to avoid API rate limits
@@ -208,6 +208,9 @@ jobs:
           
           # Create output directory for this run
           mkdir -p output
+          
+          # Set timeout to 1.5 hours (5400 seconds) for CI
+          export VIBENIX_TIMEOUT_SECONDS=5400
           
           # Run vibenix with raw output and save results
           set -o pipefail
