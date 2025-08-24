@@ -319,3 +319,227 @@ def search_across_language_frameworks(keyword: str) -> str:
             
     except Exception as e:
         raise RuntimeError(f"Error searching language frameworks: {str(e)}")
+
+
+@log_function_call("find_builder_functions")
+def find_builder_functions() -> List[str]:
+    """Find all builder functions in nixpkgs using regex patterns.
+
+    Returns:
+        A sorted list of unique builder functions found in nixpkgs
+        
+    Raises:
+        RuntimeError: If nixpkgs source path cannot be determined or search fails
+    """
+    print("📞 Function called: find_builder_functions")
+    
+    # Check for cached results first
+    import json
+    import tempfile, pathlib
+    
+    # Create a temporary file with fixed prefix for caching
+    temp_file = tempfile.NamedTemporaryFile(
+        mode='w+',
+        prefix='_cache_vibenix_builder_functions',      # Fixed prefix
+        suffix='.json',       # Fixed suffix
+        delete=False          # Don't delete automatically when closed
+    )
+    # Get the path
+    cache_file = pathlib.Path(temp_file.name)
+    
+    if cache_file.exists():
+        try:
+            with open(cache_file, 'r') as f:
+                cached_data = json.load(f)
+            print("📋 Loading builder functions from cache")
+            return cached_data['functions']
+        except (json.JSONDecodeError, KeyError) as e:
+            print(f"⚠️ Cache file corrupted, regenerating: {e}")
+    try:
+        nixpkgs_path = get_nixpkgs_source_path()
+    except Exception as e:
+        raise RuntimeError(f"Failed to get nixpkgs source path: {e}")
+    
+    try:
+        import subprocess
+
+        additional_functions = [ # Not caught by the patterns below
+            'buildComposerProject2'
+        ]
+        blacklist_functions = [ # To remove from results
+            'mkPulumiPackage', # TODO ???
+            'mkChromiumDerivation', # very specific and actual name is mkDerivation under chromium set
+            'buildZipPackage', # would require ...
+            'buildNodePackage', # Would require a node2nix or nodeEnv ????? IDK
+            'buildNodeShell',
+            'buildMaubotPlugin', # Too specific
+            'buildAzureCliPackage', # whatever
+            'mkFranzDerivation', # whatever
+            'mkWmApplication', #??
+            'mkAppleDerivation',
+            'mkMesonDerivation',
+            'mkToolModule',
+            'mkAliasDerivation',
+            'mkAliasOptionModule',
+            'mkChangedOptionModule',
+            'mkLocalDerivation',
+            'mkMergedOptionModule',
+            'mkRemovedOptionModule',
+            'mkRenamedOptionModule',
+        ]
+        # Hardcoded mappings
+        langs = { "rust":  "rustPlatform", "oasis": "ocaml", "dune": "ocaml",
+                 "luarocks": "lua", "dprint": "dprint-plugins", "open": "openmodelica",
+                 "topkg": "ocaml", "composer": "php" }
+        
+        # Generate regex patterns automatically
+        prefixes = ['build', 'mk']
+        suffixes = ['Package', 'Application', 'Module', 'Plugin', 'Derivation', 'Shell']
+        
+        patterns = []
+        for prefix in prefixes:
+            for suffix in suffixes:
+                patterns.append(rf'\b{prefix}[A-Za-z]+{suffix}\b')
+        
+        # Use ripgrep for performance - search all .nix files
+        # Use a dictionary to track which files each function appears in
+        function_files = {}
+        
+        for pattern in patterns:
+            # Use ripgrep to find matches across all .nix files - include filenames
+            cmd = [
+                'rg', 
+                '--type', 'nix',           # Only search .nix files
+                '--only-matching',         # Only show the matched part
+                '--with-filename',         # Show filenames
+                '--no-line-number',        # Don't show line numbers
+                pattern,
+                nixpkgs_path
+            ]
+            
+            try:
+                result = subprocess.run(
+                    cmd,
+                    capture_output=True,
+                    text=True,
+                    timeout=30  # 30 second timeout for performance
+                )
+                
+                if result.returncode == 0:
+                    # Track which files each function appears in
+                    matches = result.stdout.strip().split('\n')
+                    for match in matches:
+                        if match.strip() and ':' in match:  # Skip empty lines and ensure format
+                            filename, function_name = match.split(':', 1)
+                            function_name = function_name.strip()
+                            if function_name not in function_files:
+                                function_files[function_name] = set()
+                            function_files[function_name].add(filename)
+                            
+            except subprocess.TimeoutExpired:
+                print(f"Warning: Search timed out for pattern {pattern}")
+                continue
+            except subprocess.CalledProcessError:
+                # Pattern might not match anything, continue with next pattern
+                continue
+        
+        # Filter functions that appear in more than one file and apply blacklist
+        filtered_functions = []
+        for func, files in function_files.items():
+            if len(files) > 1 and func not in blacklist_functions:
+                filtered_functions.append(func)
+        # Add additional patterns (always include these)
+        filtered_functions.extend(additional_functions)
+        
+        # Find qualified paths for the functions
+        qualified_functions = []
+        for func in filtered_functions:
+            qualified_path = _find_qualified_path(func, langs, nixpkgs_path)
+            qualified_functions.append(qualified_path)
+        
+        # Sort results for consistent output
+        sorted_functions = sorted(qualified_functions)
+        
+        # Cache the results
+        try:
+            cache_data = {
+                'functions': sorted_functions,
+                'timestamp': __import__('time').time(),
+                'nixpkgs_path': nixpkgs_path
+            }
+            with open(cache_file, 'w') as f:
+                json.dump(cache_data, f, indent=2)
+            print(f"💾 Cached {len(sorted_functions)} builder functions to {cache_file}")
+        except Exception as e:
+            print(f"⚠️ Failed to cache results: {e}")
+        
+        if sorted_functions:
+            return sorted_functions
+        else:
+            return None
+            
+    except FileNotFoundError:
+        raise RuntimeError("ripgrep (rg) not found. Please ensure ripgrep is installed.")
+    except Exception as e:
+        raise RuntimeError(f"Error searching for builder functions: {str(e)}")
+
+
+def _find_qualified_path(function_name: str, lang_map: dict, nixpkgs_path: str) -> str:
+    """
+    Attempt to find the fully qualified path of a builder function in nixpkgs.
+    Uses the lang_map to determine the language set if available.
+
+    Args:
+        function_name: The builder function name (e.g., buildPythonPackage)
+        lang_map: Hardcoded language mapping for special cases
+        nixpkgs_path: Path to the nixpkgs source
+    Returns:
+
+    """
+    import re
+
+    # Extract first capitalized segment
+    match = re.search(r'[A-Z][a-z0-9]*', function_name)
+    if not match:
+        print(f"Could not extract language from function name: '{function_name}'")
+        return None
+    lang = match.group().lower()  # e.g., "Go" -> "go"
+    if lang in lang_map:
+        lang = lang_map[lang]
+
+    # Search nixpkgs for function in pkgs root set or <lang>Packages set
+    import subprocess
+    
+    # Try different qualified path patterns
+    test_paths = [
+        f'pkgs',                    # pkgs.buildGoModule
+        f'pkgs.{lang}Packages',     # pkgs.pythonPackages.buildPythonPackage
+        f'pkgs.{lang}',             # pkgs.crystal.buildCrystalPackage
+        f'pkgs.{lang}Utils',      # pkgs.kakouneUtils.buildKakounePlugin
+        f'pkgs.{lang}Plugins',    # pkgs.?
+    ]
+    
+    for path in test_paths:
+        try:
+            # Use nix-instantiate to check if the path exists
+            cmd = [
+                'nix-instantiate',
+                '--eval',
+                '--expr',
+                f'let pkgs = import <nixpkgs> {{}}; in builtins.hasAttr \"{function_name}\" {path}'
+            ]
+            
+            result = subprocess.run(
+                cmd,
+                capture_output=True,
+                text=True,
+                timeout=10
+            )
+            
+            # If it evaluates to 'true', the path exists and is a function
+            if result.returncode == 0 and result.stdout.strip() == 'true':
+                return f"{path}.{function_name}"
+                
+        except (subprocess.TimeoutExpired, subprocess.CalledProcessError):
+            continue
+    return None

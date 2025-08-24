@@ -163,7 +163,7 @@ def create_source_function_calls(store_path: str, prefix: str = "") -> List[Call
             return f"Error in search_for_file: {str(e)}"
     
     def search_in_files(pattern: str, relative_path: str = ".", custom_args: str = None) -> str:
-        f"""Search for a pattern in files within the {source_description} using ripgrep with sensible defaults for LLM usage.
+        f"""Search for a pattern in files within the {source_description} using ripgrep.
         
         Args:
             pattern: The search pattern (regex or literal string)
@@ -178,15 +178,12 @@ def create_source_function_calls(store_path: str, prefix: str = "") -> List[Call
                 # Use custom arguments provided by the user, need to parse them
                 import shlex as shlex_parse
                 args = shlex_parse.split(custom_args)
-                cmd = ["rg"] + args + ["--", pattern, relative_path]
+                cmd = ["rg"] + args + ["--", pattern, path]
             else:
-                # Sensible defaults for LLM usage:
                 # -n: Show line numbers
                 # -H: Show filenames
-                # --color=never: No color codes in output
                 # -m 5: Max 5 matches per file
-                # --max-filesize=10M: Skip files larger than 10MB
-                cmd = ["rg", "-n", "-H", "--color=never", "-m", "5", "--max-filesize=10M", "--", pattern, relative_path]
+                cmd = ["rg", "-n", "-H", "--color=never", "-m", "5", "--max-filesize=10M", "--", pattern, path]
             
             result = subprocess.run(cmd, text=True, capture_output=True, cwd=root_dir)
             
