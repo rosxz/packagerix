@@ -172,5 +172,13 @@ def get_project_dependencies(model_answer: str) -> List[str]:
     """Extract project dependencies from the model's answer."""
     ...
 
+@ask_model_prompt('choose_builders.md', functions=SEARCH_FUNCTIONS)
+def choose_builders(
+    available_builders: List[str],
+    project_page: Optional[str] = None,
+    additional_functions: List = []) -> List[str]:
+    """Extract project dependencies from the model's answer."""
+    ...
+
 # Import logger callbacks - use the global instance
 from vibenix.packaging_flow.litellm_callbacks import end_stream_logger
