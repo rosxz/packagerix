@@ -504,7 +504,7 @@ def _find_qualified_path(function_name: str, helper_map: dict, langs: List[str],
     for lang in [l] + langs: # even if the lang guessing fails, try all langs
         # Try different qualified path patterns
         test_paths = [
-            # f'pkgs',                  # pkgs.buildGoModule ( DONE BELOW )
+            f'pkgs',                  # pkgs.buildGoModule ( DONE BELOW )
             f'pkgs.{lang}Packages',     # pkgs.pythonPackages.buildPythonPackage
             f'pkgs.{lang}',             # pkgs.crystal.buildCrystalPackage
             f'pkgs.{lang}Utils',        # pkgs.kakouneUtils.buildKakounePlugin
@@ -516,11 +516,10 @@ def _find_qualified_path(function_name: str, helper_map: dict, langs: List[str],
             'eval',
             '--impure',
             '--expr',
-            f"let pkgs = import <nixpkgs> {{}}; candidates = [{" ".join(f"{{name=\"{path}\"; set=(let r = builtins.tryEval ({path} or null); in if r.success then r.value else null);}}" for path in test_paths)}]; found = builtins.filter (c: c.set != null && c.set ? {function_name}) candidates; in if found != [] then (builtins.head found).name else false"
+            f"let pkgs = import <nixpkgs> {{}}; candidates = [{" ".join(f"{{name=\"{path}\"; set=(let r = builtins.tryEval ({path}{" or null" if path != "pkgs" else ""}); in if r.success then r.value else null);}}" for path in test_paths)}]; found = builtins.filter (c: c.set != null && c.set ? {function_name}) candidates; in if found != [] then (builtins.head found).name else false"
         ]
         
         try:
-            print("TESTE")
             result = subprocess.run(cmd, capture_output=True, text=True, check=True)
             if result.returncode == 0 and result.stdout.strip() != 'false':
                 print(f"Found qualified path: {result.stdout.strip()}.{function_name}")
