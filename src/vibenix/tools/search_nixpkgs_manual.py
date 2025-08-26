@@ -322,7 +322,7 @@ def search_across_language_frameworks(keyword: str) -> str:
 
 
 @log_function_call("find_builder_functions")
-def find_builder_functions() -> List[str]:
+def find_builder_functions(langs: List[str]) -> List[str]:
     """Find all builder functions in nixpkgs using regex patterns.
 
     Returns:
@@ -337,15 +337,9 @@ def find_builder_functions() -> List[str]:
     import json
     import tempfile, pathlib
     
-    # Create a temporary file with fixed prefix for caching
-    temp_file = tempfile.NamedTemporaryFile(
-        mode='w+',
-        prefix='_cache_vibenix_builder_functions',      # Fixed prefix
-        suffix='.json',       # Fixed suffix
-        delete=False          # Don't delete automatically when closed
-    )
-    # Get the path
-    cache_file = pathlib.Path(temp_file.name)
+    temp_dir = pathlib.Path(tempfile.gettempdir())
+    cache_filename = "cache_vibenix_builder_functions.json"
+    cache_file = temp_dir / cache_filename
     
     if cache_file.exists():
         try:
@@ -364,6 +358,7 @@ def find_builder_functions() -> List[str]:
         import subprocess
 
         additional_functions = [ # Not caught by the patterns below
+            # appimageTools.wrapType2 # TODO
             'buildComposerProject2'
         ]
         blacklist_functions = [ # To remove from results
@@ -388,9 +383,7 @@ def find_builder_functions() -> List[str]:
             'mkRenamedOptionModule',
         ]
         # Hardcoded mappings
-        langs = { "rust":  "rustPlatform", "oasis": "ocaml", "dune": "ocaml",
-                 "luarocks": "lua", "dprint": "dprint-plugins", "open": "openmodelica",
-                 "topkg": "ocaml", "composer": "php" }
+        helper = { "rust":  "rustPlatform", "dprint": "dprint-plugins", "open": "openmodelica"}
         
         # Generate regex patterns automatically
         prefixes = ['build', 'mk']
@@ -454,7 +447,7 @@ def find_builder_functions() -> List[str]:
         # Find qualified paths for the functions
         qualified_functions = []
         for func in filtered_functions:
-            qualified_path = _find_qualified_path(func, langs, nixpkgs_path)
+            qualified_path = _find_qualified_path(func, helper, langs, nixpkgs_path)
             qualified_functions.append(qualified_path)
         
         # Sort results for consistent output
@@ -484,7 +477,7 @@ def find_builder_functions() -> List[str]:
         raise RuntimeError(f"Error searching for builder functions: {str(e)}")
 
 
-def _find_qualified_path(function_name: str, lang_map: dict, nixpkgs_path: str) -> str:
+def _find_qualified_path(function_name: str, helper_map: dict, langs: List[str], nixpkgs_path: str) -> str:
     """
     Attempt to find the fully qualified path of a builder function in nixpkgs.
     Uses the lang_map to determine the language set if available.
@@ -503,43 +496,145 @@ def _find_qualified_path(function_name: str, lang_map: dict, nixpkgs_path: str) 
     if not match:
         print(f"Could not extract language from function name: '{function_name}'")
         return None
-    lang = match.group().lower()  # e.g., "Go" -> "go"
-    if lang in lang_map:
-        lang = lang_map[lang]
+    l = match.group().lower()  # e.g., "Go" -> "go"
+    if l in helper_map:
+        l = helper_map[l]
 
-    # Search nixpkgs for function in pkgs root set or <lang>Packages set
     import subprocess
-    
-    # Try different qualified path patterns
-    test_paths = [
-        f'pkgs',                    # pkgs.buildGoModule
-        f'pkgs.{lang}Packages',     # pkgs.pythonPackages.buildPythonPackage
-        f'pkgs.{lang}',             # pkgs.crystal.buildCrystalPackage
-        f'pkgs.{lang}Utils',      # pkgs.kakouneUtils.buildKakounePlugin
-        f'pkgs.{lang}Plugins',    # pkgs.?
-    ]
-    
-    for path in test_paths:
+    for lang in [l] + langs: # even if the lang guessing fails, try all langs
+        # Try different qualified path patterns
+        test_paths = [
+            # f'pkgs',                  # pkgs.buildGoModule ( DONE BELOW )
+            f'pkgs.{lang}Packages',     # pkgs.pythonPackages.buildPythonPackage
+            f'pkgs.{lang}',             # pkgs.crystal.buildCrystalPackage
+            f'pkgs.{lang}Utils',        # pkgs.kakouneUtils.buildKakounePlugin
+            f'pkgs.{lang}Plugins',      # pkgs.?
+        ]
+        
+        cmd = [
+            'nix',
+            'eval',
+            '--impure',
+            '--expr',
+            f"let pkgs = import <nixpkgs> {{}}; candidates = [{" ".join(f"{{name=\"{path}\"; set=(let r = builtins.tryEval ({path} or null); in if r.success then r.value else null);}}" for path in test_paths)}]; found = builtins.filter (c: c.set != null && c.set ? {function_name}) candidates; in if found != [] then (builtins.head found).name else false"
+        ]
+        
         try:
-            # Use nix-instantiate to check if the path exists
-            cmd = [
-                'nix-instantiate',
-                '--eval',
-                '--expr',
-                f'let pkgs = import <nixpkgs> {{}}; in builtins.hasAttr \"{function_name}\" {path}'
-            ]
-            
-            result = subprocess.run(
-                cmd,
-                capture_output=True,
-                text=True,
-                timeout=10
-            )
-            
-            # If it evaluates to 'true', the path exists and is a function
-            if result.returncode == 0 and result.stdout.strip() == 'true':
-                return f"{path}.{function_name}"
-                
-        except (subprocess.TimeoutExpired, subprocess.CalledProcessError):
-            continue
+            print("TESTE")
+            result = subprocess.run(cmd, capture_output=True, text=True, check=True)
+            if result.returncode == 0 and result.stdout.strip() != 'false':
+                print(f"Found qualified path: {result.stdout.strip()}.{function_name}")
+                return f"{result.stdout.strip()}.{function_name}"
+        except (subprocess.TimeoutExpired, subprocess.CalledProcessError) as e:
+            continue # Try next path/lang
     return None
+
+
+def analyze_builder_usage_patterns(chosen_builders: List[str]) -> str:
+    """
+    Analyze nixpkgs for builder function usage patterns.
+    
+    Args:
+        chosen_builders: List of builder functions to search for
+        
+    Returns:
+        A formatted string showing builder combination analysis
+        
+    Raises:
+        RuntimeError: If nixpkgs source path cannot be determined or search fails
+    """
+    print(f"📞 Function called: analyze_builder_usage_patterns with builders: {chosen_builders}")
+    
+    try:
+        nixpkgs_path = get_nixpkgs_source_path()
+    except Exception as e:
+        raise RuntimeError(f"Failed to get nixpkgs source path: {e}")
+    
+    # Ensure mkDerivation is included
+    all_builders = list(set(chosen_builders + ["pkgs.stdenv.mkDerivation"]))
+    
+    print(f"Analyzing nixpkgs for builder usage: {all_builders}")
+    
+    # Data structures
+    from collections import defaultdict
+    package_to_builders = defaultdict(set)
+    builder_to_packages = defaultdict(set)
+    
+    # Search for each builder function in .nix files
+    for builder in all_builders:
+        print(f"Searching for {builder}...")
+        
+        try:
+            # Use ripgrep to find .nix files containing the builder function
+            import subprocess
+            result = subprocess.run([
+                "rg",
+                "--type", "nix",
+                "--files-with-matches",
+                rf"\b{builder}\b",
+                nixpkgs_path
+            ], capture_output=True, text=True, check=True)
+            
+            files = result.stdout.strip().split('\n') if result.stdout.strip() else []
+            
+            print(f"Found {len(files)} files using {builder}")
+            
+            for file_path in files:
+                # Convert to relative path from nixpkgs
+                rel_path = str(Path(file_path).relative_to(nixpkgs_path))
+                package_to_builders[rel_path].add(builder)
+                builder_to_packages[builder].add(rel_path)
+                
+        except subprocess.CalledProcessError as e:
+            print(f"Error searching for {builder}: {e}")
+            continue
+    
+    # Generate combinations and their frequencies
+    combination_counts = defaultdict(set)
+    
+    for package, builders in package_to_builders.items():
+        if len(builders) > 0:
+            # Create a sorted combination name for consistency
+            combination_name = " + ".join(sorted(builders))
+            combination_counts[combination_name].add(package)
+    
+    # Sort combinations by frequency (descending)
+    sorted_combinations = sorted(
+        combination_counts.items(),
+        key=lambda x: len(x[1]),
+        reverse=True
+    )
+    
+    # Format results
+    result_lines = []
+    result_lines.append("="*80)
+    result_lines.append("BUILDER COMBINATION ANALYSIS")
+    result_lines.append("="*80)
+    
+    for combination, packages in sorted_combinations:
+        result_lines.append(f"\n{combination} ({len(packages)} packages):")
+        result_lines.append("-" * (len(combination) + 20))
+        
+        # Sort packages alphabetically and limit to first 20 for readability
+        sorted_packages = sorted(packages)
+        for i, package in enumerate(sorted_packages[:20]):
+            result_lines.append(f"  {package}")
+        
+        if len(sorted_packages) > 20:
+            result_lines.append(f"  ... and {len(sorted_packages) - 20} more packages")
+    
+    # Summary statistics
+    result_lines.append("\n" + "="*80)
+    result_lines.append("SUMMARY STATISTICS")
+    result_lines.append("="*80)
+    
+    total_packages = len(package_to_builders)
+    result_lines.append(f"Total packages analyzed: {total_packages}")
+    result_lines.append(f"Total unique combinations: {len(combination_counts)}")
+    
+    for builder in all_builders:
+        count = len(builder_to_packages[builder])
+        percentage = (count / total_packages * 100) if total_packages > 0 else 0
+        result_lines.append(f"{builder}: {count} packages ({percentage:.1f}%)")
+    
+    return "\n".join(result_lines)
