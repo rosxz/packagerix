@@ -190,6 +190,8 @@ def create_source_function_calls(store_path: str, prefix: str = "") -> List[Call
             if result.returncode == 0 and result.stdout.strip():
                 # Limit total output to 50 lines
                 lines = result.stdout.strip().split('\n')
+                # replace all instances of the store path with "source"
+                lines = [line.replace(str(root_dir), f"{prefix}source") for line in lines]
                 if len(lines) > 50:
                     return '\n'.join(lines[:50]) + f"\n... (showing first 50 of {len(lines)} matches)"
                 return result.stdout
@@ -211,10 +213,9 @@ def create_source_function_calls(store_path: str, prefix: str = "") -> List[Call
             cmd = f'tree -L {depth} --filesfirst {path}'
             result = subprocess.run(cmd, shell=True, text=True, capture_output=True)
             if result.returncode == 0 and result.stdout.strip():
-                # Limit total output to 500? lines
                 lines = result.stdout.strip().split('\n')
-                if len(lines) > 500:
-                    return '\n'.join(lines[:500]) + f"\n... (showing first 500 of {len(lines)} lines)"
+                if len(lines) > 100:
+                    return '\n'.join(lines[:100]) + f"\n... (showing first 100 of {len(lines)} lines)"
                 return result.stdout
             else:
                 return f"Failed to list file tree for '{relative_path}' in {source_description}."

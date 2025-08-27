@@ -10,142 +10,6 @@ from typing import List, Set, Dict, Any
 from vibenix.template.template_types import TemplateType
 from vibenix.ccl_log import get_logger, log_function_call
 
-# TODO add package set attribute to PackageType (a single package set, the most generic, is enough)
-# TODO use the dependency_files attribute to search in project source for each depedency file (they might be in subdirectories after all), return the relative path to project source root for each found. This should be complementary to the model looking at the source code and project page to find stuff in the README and etc, not a replacement
-
-class PackageType(ABC):
-    """Abstract base class for package types with their builders and dependency files."""
-    
-    @property
-    @abstractmethod
-    def builders(self) -> List[str]:
-        """List of Nix builders used by this package type."""
-        pass
-    
-    @property
-    @abstractmethod
-    def dependency_files(self) -> List[str]:
-        """List of dependency files to search for in the project source."""
-        pass
-    
-    @property
-    @abstractmethod
-    def package_set(self) -> str:
-        """The most generic package set for this package type."""
-        pass
-
-
-class RustPackageType(PackageType):
-    @property
-    def builders(self) -> List[str]:
-        return ["buildRustPackage"]
-    
-    @property
-    def dependency_files(self) -> List[str]:
-        return ["Cargo.toml", "Cargo.lock"]
-    
-    @property
-    def package_set(self) -> str:
-        return ""
-
-
-class PythonPackageType(PackageType):
-    @property
-    def builders(self) -> List[str]:
-        return ["buildPythonPackage", "buildPythonApplication"]
-    
-    @property
-    def dependency_files(self) -> List[str]:
-        return ["requirements.txt", "pyproject.toml", "setup.py", "setup.cfg", "poetry.lock", "uv.lock"]
-    
-    @property
-    def package_set(self) -> str:
-        return "python3Packages"
-
-
-class GoPackageType(PackageType):
-    @property
-    def builders(self) -> List[str]:
-        return ["buildGoModule", "buildGo"]
-    
-    @property
-    def dependency_files(self) -> List[str]:
-        return ["go.mod", "go.sum"]
-    
-    @property
-    def package_set(self) -> str:
-        return ""
-
-
-class NpmPackageType(PackageType):
-    @property
-    def builders(self) -> List[str]:
-        return ["buildNpmPackage", "nodePackages"]
-    
-    @property
-    def dependency_files(self) -> List[str]:
-        return ["package.json", "package-lock.json", "yarn.lock"]
-    
-    @property
-    def package_set(self) -> str:
-        return "nodePackages"
-
-
-class DartPackageType(PackageType):
-    @property
-    def builders(self) -> List[str]:
-        return ["buildDartApplication"]
-    
-    @property
-    def dependency_files(self) -> List[str]:
-        return ["pubspec.yaml", "pubspec.lock"]
-    
-    @property
-    def package_set(self) -> str:
-        return ""
-
-
-class FlutterPackageType(PackageType):
-    @property
-    def builders(self) -> List[str]:
-        return ["buildFlutterApplication"]
-    
-    @property
-    def dependency_files(self) -> List[str]:
-        return ["pubspec.yaml", "pubspec.lock"]
-    
-    @property
-    def package_set(self) -> str:
-        return ""
-
-
-class ZigPackageType(PackageType):
-    @property
-    def builders(self) -> List[str]:
-        return ["buildZigPackage"]
-    
-    @property
-    def dependency_files(self) -> List[str]:
-        return ["build.zig", "build.zig.zon"]
-    
-    @property
-    def package_set(self) -> str:
-        return ""
-
-
-class GenericPackageType(PackageType):
-    @property
-    def builders(self) -> List[str]:
-        return ["mkDerivation"] #, "cmake", "meson", "autotools"
-    
-    @property
-    def dependency_files(self) -> List[str]:
-        return ["CMakeLists.txt", "Makefile", "configure.ac", "meson.build", "Makefile.am"]
-    
-    @property
-    def package_set(self) -> str:
-        return ""
-
 
 def find_dependency_files_in_project(package_type: PackageType, project_search_file_func: Any) -> List[str]:
     """Find dependency files in the project source using the package type's dependency_files.
@@ -173,20 +37,6 @@ def find_dependency_files_in_project(package_type: PackageType, project_search_f
     return found_files
 
 
-TEMPLATE_TO_PACKAGE_TYPE: Dict[TemplateType, PackageType] = {
-    TemplateType.RUST: RustPackageType(),
-    TemplateType.PYTHON: PythonPackageType(),
-    TemplateType.PYTHON_UV: PythonPackageType(),
-    TemplateType.GO: GoPackageType(),
-    TemplateType.NPM: NpmPackageType(),
-    TemplateType.PNPM: NpmPackageType(),
-    TemplateType.DART: DartPackageType(),
-    TemplateType.FLUTTER: FlutterPackageType(),
-    TemplateType.ZIG: ZigPackageType(),
-    TemplateType.GENERIC: GenericPackageType(),
-}
-
-
 @log_function_call("search_related_packages")
 def search_related_packages(template_type: TemplateType, nixpkgs_search_func: Any, project_page: str, dependencies: str = None) -> str:
     """Search for related packages in nixpkgs using semantic similarity, filtered by builder type.
@@ -201,8 +51,6 @@ def search_related_packages(template_type: TemplateType, nixpkgs_search_func: An
         A formatted string with semantically similar packages that use the same builders
     """
     print(f"📞 Function called: search_related_packages for template: {template_type.value}")
-    
-    package_type = TEMPLATE_TO_PACKAGE_TYPE.get(template_type, GenericPackageType())
     
     # Get path to pre-computed embeddings
     embeddings_path = os.environ.get('NIXPKGS_EMBEDDINGS')
@@ -301,8 +149,8 @@ def search_related_packages(template_type: TemplateType, nixpkgs_search_func: An
     
     return '\n'.join(result_lines)
 
-@log_function_call("get_dependency_files")
-def get_dependency_files(template_type: TemplateType, project_search_file_func: Any = None) -> List[str]:
+
+def get_dependency_files(project_info: str, project_search_file_func: Any = None) -> List[str]:
     """Find common dependency files in the project source.
     
     Args:
@@ -313,8 +161,6 @@ def get_dependency_files(template_type: TemplateType, project_search_file_func: 
         A formatted string with related packages found in nixpkgs
     """
     print(f"📞 Function called: search_related_packages for template: {template_type.value}")
-
-    package_type = TEMPLATE_TO_PACKAGE_TYPE.get(template_type, GenericPackageType())
 
     found_dependency_files = []
     if project_search_file_func:
