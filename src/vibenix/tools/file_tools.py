@@ -54,6 +54,9 @@ def create_source_function_calls(store_path: str, prefix: str = "") -> List[Call
         print(f"📞 Function called: {prefix}list_directory_contents with path: ", relative_path)
         try:
             _validate_path(relative_path)
+            # Verify that we aren't trying to list a "/doc" directory in nixpkgs, if so advise to use the appropriate tool
+            if prefix == "nixpkgs_" and "doc/languages-frameworks" in relative_path:
+                return "For viewing language and framework documentation in nixpkgs, use the `list_language_frameworks` and `get_language_framework_overview` tool."
             # Use command ls -lha to list directory contents
             cmd = f'ls -lha {store_path}/{relative_path}'
             result = subprocess.run(cmd, shell=True, text=True, capture_output=True)
@@ -69,6 +72,9 @@ def create_source_function_calls(store_path: str, prefix: str = "") -> List[Call
         print(f"📞 Function called: {prefix}read_file_content with path: ", relative_path)
         try:
             path = _validate_path(relative_path)
+            # Verify that we aren't trying to read a "/doc" directory in nixpkgs, if so advise to use the appropriate tool
+            if prefix == "nixpkgs_" and "doc/languages-frameworks" in relative_path:
+                return "For viewing language and framework documentation in nixpkgs, use the `list_language_frameworks` and `get_language_framework_overview` tool."
             if not _is_text_file(path):
                 return f"File '{relative_path}' is not a text file. {detect_file_type_and_size(relative_path)}."
 
@@ -129,39 +135,6 @@ def create_source_function_calls(store_path: str, prefix: str = "") -> List[Call
             size_bytes /= 1024.0
         return f"{size_bytes:.2f} PB"
 
-    def search_for_files(pattern: str, relative_path: str = ".") -> str:
-        f"""Search for files following a pattern within {source_description}, using the "find" command.
-
-        Args:
-            pattern: The search pattern (can be a regex or literal string)
-            relative_path: The relative path to search in (default: current directory)
-            custom_args: Optional custom find arguments to override defaults
-        """
-        print(f"📞 Function called: {prefix}search_for_file with pattern: '{pattern}', path: '{relative_path}'")
-        try:
-            path = _validate_path(relative_path)
-            
-            cmd = ["find", path, "-maxdepth", "10", "-name", pattern]
-            
-            result = subprocess.run(cmd, text=True, capture_output=True)
-            
-            if result.returncode == 0 and result.stdout.strip():
-                # Limit total output to 50 lines
-                lines = result.stdout.strip().split('\n')
-                # remove everything before "-source/" in each line
-                lines = [line.split("-source/")[-1] for line in lines]
-                if len(lines) > 50:
-                    return '\n'.join(lines[:50]) + f"\n... (showing first 50 of {len(lines)} matches)"
-                return '\n'.join(lines)
-            elif result.returncode == 1:
-                return f"No matches found for pattern '{pattern}' in {relative_path}"
-            else:
-                error_msg = result.stderr.strip() if result.stderr else "Unknown error"
-                return f"Error searching files: {error_msg}"
-                
-        except Exception as e:
-            return f"Error in search_for_file: {str(e)}"
-    
     def search_in_files(pattern: str, relative_path: str = ".", custom_args: str = None) -> str:
         f"""Search for a pattern in files within the {source_description} using ripgrep.
         
@@ -191,7 +164,7 @@ def create_source_function_calls(store_path: str, prefix: str = "") -> List[Call
                 # Limit total output to 50 lines
                 lines = result.stdout.strip().split('\n')
                 # replace all instances of the store path with "source"
-                lines = [line.replace(str(root_dir), f"{prefix}source") for line in lines]
+                lines = [line.split("-source/")[-1] for line in lines]
                 if len(lines) > 50:
                     return '\n'.join(lines[:50]) + f"\n... (showing first 50 of {len(lines)} matches)"
                 return result.stdout
@@ -203,39 +176,17 @@ def create_source_function_calls(store_path: str, prefix: str = "") -> List[Call
                 
         except Exception as e:
             return f"Error in search_in_files: {str(e)}"
-
-    def list_file_tree(relative_path: str = ".") -> str:
-        """List the file tree of a directory within the source."""
-        print(f"📞 Function called: {prefix}list_file_tree with path: ", relative_path)
-        try:
-            depth = 2 if prefix else 3
-            path = _validate_path(relative_path)
-            cmd = f'tree -L {depth} --filesfirst {path}'
-            result = subprocess.run(cmd, shell=True, text=True, capture_output=True)
-            if result.returncode == 0 and result.stdout.strip():
-                lines = result.stdout.strip().split('\n')
-                if len(lines) > 100:
-                    return '\n'.join(lines[:100]) + f"\n... (showing first 100 of {len(lines)} lines)"
-                return result.stdout
-            else:
-                return f"Failed to list file tree for '{relative_path}' in {source_description}."
-        except Exception as e:
-            return f"Error listing file tree: {str(e)}"
     
     # Apply logging decorator with the actual prefix value
     list_directory_contents = log_function_call(f"{prefix}list_directory_contents")(list_directory_contents)
     read_file_content = log_function_call(f"{prefix}read_file_content")(read_file_content)
     detect_file_type_and_size = log_function_call(f"{prefix}detect_file_type_and_size")(detect_file_type_and_size)
-    search_for_files = log_function_call(f"{prefix}search_for_files")(search_for_files)
     search_in_files = log_function_call(f"{prefix}search_in_files")(search_in_files)
-    list_file_tree = log_function_call(f"{prefix}list_file_tree")(list_file_tree)
     
     # Set function names with prefix
     list_directory_contents.__name__ = f"{prefix}list_directory_contents"
     read_file_content.__name__ = f"{prefix}read_file_content"
     detect_file_type_and_size.__name__ = f"{prefix}detect_file_type_and_size"
-    search_for_files.__name__ = f"{prefix}search_for_files"
     search_in_files.__name__ = f"{prefix}search_in_files"
-    list_file_tree.__name__ = f"{prefix}list_file_tree"
     
-    return [list_directory_contents, read_file_content, detect_file_type_and_size, search_for_files, search_in_files, list_file_tree]
+    return [list_directory_contents, read_file_content, detect_file_type_and_size, search_in_files]

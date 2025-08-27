@@ -12,8 +12,8 @@ from vibenix.nix import eval_progress, execute_build_and_add_to_stack
 from vibenix.packaging_flow.model_prompts import (
     pick_template, summarize_github, fix_build_error, fix_hash_mismatch,
     evaluate_code, refine_code, get_feedback, analyze_package_failure,
-    classify_packaging_failure, PackagingFailure, identify_dependency_files,
-    get_project_dependencies, choose_builders
+    classify_packaging_failure, PackagingFailure, choose_builders,
+    compare_template_builders
 )
 from vibenix.packaging_flow.user_prompts import get_project_url
 from vibenix import config
@@ -269,32 +269,21 @@ def package_project(output_dir=None, project_url=None, revision=None, fetcher=No
     project_functions = create_source_function_calls(store_path, "project_")
     nixpkgs_path = get_nixpkgs_source_path()
     nixpkgs_functions = create_source_function_calls(nixpkgs_path, "nixpkgs_")
-    additional_functions = project_functions + nixpkgs_functions
 
-    from vibenix.tools.search_nixpkgs_manual import list_available_language_frameworks, find_builder_functions, get_builder_combinations
-    available_langs = list_available_language_frameworks()
+    from vibenix.tools.search_nixpkgs_manual import list_language_frameworks, get_language_framework_overview, find_builder_functions, get_builder_combinations
+    additional_functions = project_functions + nixpkgs_functions + [list_language_frameworks, get_language_framework_overview]
+
+    available_langs = list_language_frameworks()
     available_builders = find_builder_functions(available_langs)
     builders = choose_builders(available_builders, summary, additional_functions)
     print(f"Chosen builders: {builders}")
+    # Get builder combinations and random set of packages for each
     builder_combinations = get_builder_combinations(builders)
     print(builder_combinations)
-
-    ## Extra logic to get dependency list, takes quite a bit to find everything
-    ##  Because it is specified to verify each package name exists in nixpkgs, which isn't necessarily great
-    project_file_tree_func = next(f for f in project_functions if f.__name__.endswith('list_file_tree'))
-    project_read_file_func = next(f for f in project_functions if f.__name__.endswith('read_file_content'))
-    dependency_files = identify_dependency_files(template_type, project_file_tree_func(), additional_functions)[:3]
-    print(f"Identified dependency files: {dependency_files}")
-    dependency_files = {f: project_read_file_func(f, 0, 500) for f in dependency_files}
-    dependencies = {}
-    for f, file_content in dependency_files.items():
-        dependencies[f] = get_project_dependencies(
-            file_name=f,
-            file_content=file_content,
-            project_page=project_page,
-            additional_functions=additional_functions
-        )
-    exit(0)
+    # Let model analyse and make changes
+    response = compare_template_builders(initial_code, builder_combinations, summary, additional_functions)
+    print(f"Builder comparison response:\n{response}")
+    initial_code = extract_updated_code(response)
     
     # Step 7: Agentic loop
     coordinator_progress("Testing the initial build...")

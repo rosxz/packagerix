@@ -155,30 +155,20 @@ def analyze_package_failure(
     """Analyze why packaging failed."""
     ...
 
-@ask_model_prompt('identify_dependency_files.md', functions=SEARCH_FUNCTIONS)
-def identify_dependency_files(
-    project_page: Optional[str] = None,
-    project_file_tree: Optional[str] = None,
-    additional_functions: List = []
-) -> List[str]:
-    """Identify files with relevant information regarding dependencies for packaging the project."""
-    ...
-
-@ask_model_prompt('get_project_dependencies.md', functions=SEARCH_FUNCTIONS)
-def get_project_dependencies(
-    file_name: str,
-    file_content: str,
-    project_page: Optional[str] = None,
-    additional_functions: List = []
-) -> List[str]:
-    """Given project info and a relevant project file, identify dependencies needed for packaging."""
-    ...
-
 @ask_model_prompt('choose_builders.md', functions=SEARCH_FUNCTIONS)
 def choose_builders(
     available_builders: List[str],
     project_page: Optional[str] = None,
     additional_functions: List = []) -> List[str]:
+    """Identify the Nix builder to use for packaging the project."""
+    ...
+
+@ask_model_prompt('compare_template_builders.md', functions=SEARCH_FUNCTIONS)
+def compare_template_builders(
+    initial_code: str,
+    builder_combinations_info: str,
+    project_page: Optional[str] = None,
+    additional_functions: List = []) -> str:
     """Identify the Nix builder to use for packaging the project."""
     ...
 

@@ -23,12 +23,12 @@ def get_nixpkgs_source_path() -> str:
         raise RuntimeError(f"Failed to get nixpkgs source path: {e}")
 
 
-@log_function_call("list_available_language_frameworks")
-def list_available_language_frameworks() -> List[str]:
-    """List all available language and framework documentation files.
+@log_function_call("list_language_frameworks")
+def list_language_frameworks() -> List[str]:
+    """View list of all available language and frameworks with documentation files in nixpkgs.
     
     Returns:
-        List of language/framework names (without .section.md extension)
+        List of language/framework names
         
     Raises:
         RuntimeError: If nixpkgs source path cannot be determined
@@ -67,27 +67,19 @@ def list_available_language_frameworks() -> List[str]:
 
 
 @log_function_call("get_language_framework_overview")
-def get_language_framework_overview(framework: str, section_name: str = None) -> str:
+def get_language_framework_overview(framework: str) -> str: # , section_name: str = None
     """Get the overview content of a specific language/framework documentation file.
+    To obtain a list of available frameworks, use the list_available_language_frameworks tool.
     
-    Returns the content with each section and subsection truncated to only show
-    the first paragraph, providing a quick overview of the documentation structure.
-    If section_name is provided, that specific section is shown in full.
-    
+    Returns the available documentation in nixpkgs on the specified framework or language.
+
     Args:
         framework: The framework name (e.g., "go", "python", "rust")
-        section_name: Optional section name to read in full (e.g., "agda-maintaining-packages")
         
     Returns:
-        Truncated markdown content showing only the first paragraph of each section,
-        or full content for the specified section
-        
-    Raises:
-        RuntimeError: If nixpkgs source path cannot be determined
-        FileNotFoundError: If the framework documentation file doesn't exist
-        PermissionError: If file access is denied
+        Markdown content on the requested framework or language.
     """
-    print(f"📞 Function called: get_language_framework_overview with framework: {framework}, section_name: {section_name}")
+    print(f"📞 Function called: get_language_framework_overview with framework: {framework}") # , section_name: {section_name}
     
     try:
         nixpkgs_path = get_nixpkgs_source_path()
@@ -110,10 +102,11 @@ def get_language_framework_overview(framework: str, section_name: str = None) ->
             content = f.read()
         
         # Process content
-        if section_name:
-            return _extract_specific_section(content, section_name)
-        else:
-            return _truncate_all_sections(content)
+        return content
+        #if section_name:
+        #    return _extract_specific_section(content, section_name)
+        #else:
+        #    return _truncate_all_sections(content)
         
     except PermissionError:
         raise PermissionError(f"Permission denied reading file: {framework_file}")
@@ -199,7 +192,8 @@ def _truncate_all_sections(content: str) -> str:
             
             # Process previous section
             if current_section_lines:
-                result_lines.extend(_get_first_paragraph(current_section_lines) + ["(continues...)\n"])
+                first_paragraph = _get_first_paragraph(current_section_lines)
+                result_lines.extend(first_paragraph + (["(continues...)\n"] if len(first_paragraph) > 0 else []))
                 current_section_lines = []
             
             # Add heading
