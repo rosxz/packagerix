@@ -335,11 +335,10 @@ def find_builder_functions(langs: List[str]) -> List[str]:
     
     # Check for cached results first
     import json
-    import tempfile, pathlib
     
-    temp_dir = pathlib.Path(tempfile.gettempdir())
-    cache_filename = "cache_vibenix_builder_functions.json"
-    cache_file = temp_dir / cache_filename
+    cache_dir = Path("cachedir")
+    cache_dir.mkdir(exist_ok=True)
+    cache_file = cache_dir / "builder_functions.json"
     
     if cache_file.exists():
         try:
@@ -383,7 +382,8 @@ def find_builder_functions(langs: List[str]) -> List[str]:
             'mkRenamedOptionModule',
         ]
         # Hardcoded mappings
-        helper = { "rust":  "rustPlatform", "dprint": "dprint-plugins", "open": "openmodelica"}
+        helper = { "rust":  "rustPlatform", "dprint": "dprint-plugins", "open": "openmodelica",
+                   "derivation": "stdenv", "shell": "stdenv" }
         
         # Generate regex patterns automatically
         prefixes = ['build', 'mk']
@@ -462,7 +462,7 @@ def find_builder_functions(langs: List[str]) -> List[str]:
             }
             with open(cache_file, 'w') as f:
                 json.dump(cache_data, f, indent=2)
-            print(f"💾 Cached {len(sorted_functions)} builder functions to {cache_file}")
+            print(f"💾 Cached {len(sorted_functions)} builder functions")
         except Exception as e:
             print(f"⚠️ Failed to cache results: {e}")
         
@@ -496,7 +496,7 @@ def _find_qualified_path(function_name: str, helper_map: dict, langs: List[str],
     if not match:
         print(f"Could not extract language from function name: '{function_name}'")
         return None
-    l = match.group().lower()  # e.g., "Go" -> "go"
+    l = match.group().lower()
     if l in helper_map:
         l = helper_map[l]
 
@@ -523,18 +523,19 @@ def _find_qualified_path(function_name: str, helper_map: dict, langs: List[str],
             result = subprocess.run(cmd, capture_output=True, text=True, check=True)
             if result.returncode == 0 and result.stdout.strip() != 'false':
                 print(f"Found qualified path: {result.stdout.strip()}.{function_name}")
-                return f"{result.stdout.strip()}.{function_name}"
+                return f"{result.stdout.strip().strip('"')}.{function_name}"
         except (subprocess.TimeoutExpired, subprocess.CalledProcessError) as e:
             continue # Try next path/lang
     return None
 
 
-def analyze_builder_usage_patterns(chosen_builders: List[str]) -> str:
+def get_builder_combinations(chosen_builders: List[str], keyword: str = None) -> str:
     """
     Analyze nixpkgs for builder function usage patterns.
     
     Args:
-        chosen_builders: List of builder functions to search for
+        chosen_builders: List of builder functions to search for (in their fully qualified form)
+        keyword: Optional keyword to filter results by file content
         
     Returns:
         A formatted string showing builder combination analysis
@@ -550,7 +551,7 @@ def analyze_builder_usage_patterns(chosen_builders: List[str]) -> str:
         raise RuntimeError(f"Failed to get nixpkgs source path: {e}")
     
     # Ensure mkDerivation is included
-    all_builders = list(set(chosen_builders + ["pkgs.stdenv.mkDerivation"]))
+    all_builders = list(set(chosen_builders)) #  + ["pkgs.stdenv.mkDerivation"]
     
     print(f"Analyzing nixpkgs for builder usage: {all_builders}")
     
@@ -562,22 +563,32 @@ def analyze_builder_usage_patterns(chosen_builders: List[str]) -> str:
     # Search for each builder function in .nix files
     for builder in all_builders:
         print(f"Searching for {builder}...")
+        function_name = builder.split('.')[-1]  # e.g., mkDerivation
+        # TODO consider searching for the rest of the qualified path too?
         
         try:
-            # Use ripgrep to find .nix files containing the builder function
             import subprocess
-            result = subprocess.run([
-                "rg",
-                "--type", "nix",
-                "--files-with-matches",
-                rf"\b{builder}\b",
-                nixpkgs_path
-            ], capture_output=True, text=True, check=True)
+            
+            if keyword:
+                cmd = [
+                    "bash", "-c",
+                    f"rg --type nix --files-with-matches '\\b{function_name}\\b' '{nixpkgs_path}' | xargs -r -I {{}} rg -l '\\b{keyword}\\b' '{{}}'"
+                ]
+                result = subprocess.run(
+                    cmd,
+                    capture_output=True,
+                    text=True
+                )
+            else:
+                result = subprocess.run([
+                    "rg",
+                    "--type", "nix",
+                    "--files-with-matches",
+                    rf"\b{function_name}\b",
+                    nixpkgs_path
+                ], capture_output=True, text=True, check=True)
             
             files = result.stdout.strip().split('\n') if result.stdout.strip() else []
-            
-            print(f"Found {len(files)} files using {builder}")
-            
             for file_path in files:
                 # Convert to relative path from nixpkgs
                 rel_path = str(Path(file_path).relative_to(nixpkgs_path))
@@ -601,7 +612,7 @@ def analyze_builder_usage_patterns(chosen_builders: List[str]) -> str:
     sorted_combinations = sorted(
         combination_counts.items(),
         key=lambda x: len(x[1]),
-        reverse=True
+        reverse=True # Descending order
     )
     
     # Format results
@@ -614,26 +625,15 @@ def analyze_builder_usage_patterns(chosen_builders: List[str]) -> str:
         result_lines.append(f"\n{combination} ({len(packages)} packages):")
         result_lines.append("-" * (len(combination) + 20))
         
-        # Sort packages alphabetically and limit to first 20 for readability
-        sorted_packages = sorted(packages)
-        for i, package in enumerate(sorted_packages[:20]):
+        # Randomize package order and limit to first 20 for readability
+        import random
+        randomized_packages = list(packages)
+        PACKAGE_LIMIT = 10
+        random.shuffle(randomized_packages)
+        for i, package in enumerate(randomized_packages[:10]):
             result_lines.append(f"  {package}")
         
-        if len(sorted_packages) > 20:
-            result_lines.append(f"  ... and {len(sorted_packages) - 20} more packages")
-    
-    # Summary statistics
-    result_lines.append("\n" + "="*80)
-    result_lines.append("SUMMARY STATISTICS")
-    result_lines.append("="*80)
-    
-    total_packages = len(package_to_builders)
-    result_lines.append(f"Total packages analyzed: {total_packages}")
-    result_lines.append(f"Total unique combinations: {len(combination_counts)}")
-    
-    for builder in all_builders:
-        count = len(builder_to_packages[builder])
-        percentage = (count / total_packages * 100) if total_packages > 0 else 0
-        result_lines.append(f"{builder}: {count} packages ({percentage:.1f}%)")
+        if len(randomized_packages) > PACKAGE_LIMIT:
+            result_lines.append(f"  ... and {len(randomized_packages) - PACKAGE_LIMIT} more packages")
     
     return "\n".join(result_lines)

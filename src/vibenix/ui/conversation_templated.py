@@ -141,25 +141,7 @@ def ask_model_prompt(template_path: str, functions: Optional[List[Callable]] = N
                                 response_chunk_num += 1
                                 continue
                             
-                            # Handle iterable content (mixed FunctionCall and results)
-                            if hasattr(content, '__iter__') and not isinstance(content, (str, bytes)):
-                                has_function_calls = False
-                                result = None
-                                for item in content:
-                                    if isinstance(item, FunctionCall):
-                                        current_chat = _handle_function_call(item, response_chunk_num, current_chat)
-                                        has_function_calls = True
-                                    else:
-                                        result = item
-                                
-                                if has_function_calls:
-                                    current_chat = _retry_with_rate_limit(current_chat.submit)
-                                    response_chunk_num += 1
-                                    continue
-                                elif result is not None:
-                                    content = result
-                            
-                            # At this point, content should be our final structured result
+                            # Content should be the final structured result
                             if is_pydantic:
                                 display_text = f"[{content.__class__.__name__}] {content}"
                             elif is_basic_type and get_origin(return_type) is list:

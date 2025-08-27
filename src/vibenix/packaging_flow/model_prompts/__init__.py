@@ -155,21 +155,23 @@ def analyze_package_failure(
     """Analyze why packaging failed."""
     ...
 
-
-@ask_model_prompt('identify_dependencies.md', functions=SEARCH_FUNCTIONS)
-def identify_project_dependencies(
+@ask_model_prompt('identify_dependency_files.md', functions=SEARCH_FUNCTIONS)
+def identify_dependency_files(
     project_page: Optional[str] = None,
-    common_dependency_files: Optional[List[str]] = None,
     project_file_tree: Optional[str] = None,
     additional_functions: List = []
-) -> StreamedStr:
-    """Identify relevant dependencies for packaging the project with Nix."""
+) -> List[str]:
+    """Identify files with relevant information regarding dependencies for packaging the project."""
     ...
 
-
-@ask_model_prompt('get_project_dependencies.md')
-def get_project_dependencies(model_answer: str) -> List[str]:
-    """Extract project dependencies from the model's answer."""
+@ask_model_prompt('get_project_dependencies.md', functions=SEARCH_FUNCTIONS)
+def get_project_dependencies(
+    file_name: str,
+    file_content: str,
+    project_page: Optional[str] = None,
+    additional_functions: List = []
+) -> List[str]:
+    """Given project info and a relevant project file, identify dependencies needed for packaging."""
     ...
 
 @ask_model_prompt('choose_builders.md', functions=SEARCH_FUNCTIONS)
@@ -177,7 +179,7 @@ def choose_builders(
     available_builders: List[str],
     project_page: Optional[str] = None,
     additional_functions: List = []) -> List[str]:
-    """Extract project dependencies from the model's answer."""
+    """Identify the Nix builder to use for packaging the project."""
     ...
 
 # Import logger callbacks - use the global instance
