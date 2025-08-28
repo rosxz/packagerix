@@ -23,4 +23,4 @@ Your response should be a valid Nix expression similar in structure to the templ
 ...
 ```
 Do not change the version, rev, and hash attributes or other details that are otherwise unrelated to the packaging template or builder choice.
-In case you change or add new builders, keep to the minimal set of attributes required. Keep it barebones so it to raise the least amount of errors.
+Do not add dependencies or otherwise modify the package beyond what is necessary for the template structure or builder change.

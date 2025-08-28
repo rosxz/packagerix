@@ -167,7 +167,7 @@ def create_source_function_calls(store_path: str, prefix: str = "") -> List[Call
                 lines = [line.split("-source/")[-1] for line in lines]
                 if len(lines) > 50:
                     return '\n'.join(lines[:50]) + f"\n... (showing first 50 of {len(lines)} matches)"
-                return result.stdout
+                return '\n'.join(lines)
             elif result.returncode == 1:
                 return f"No matches found for pattern '{pattern}' in {relative_path}"
             else:
