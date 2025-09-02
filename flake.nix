@@ -14,7 +14,7 @@
       inputs.nixpkgs.follows = "nixpkgs";
     };
     nix-index-database.url = "github:nix-community/nix-index-database/2025-06-08-034427";
-    noogle.url = github:nix-community/noogle;
+    noogle.url = "github:nix-community/noogle";
   };
 
   outputs = { self, nixpkgs, flake-utils, pyproject-nix, uv2nix, noogle, nix-index-database }:
@@ -23,17 +23,17 @@
         pkgs = nixpkgs.legacyPackages.${system};
         python = pkgs.python312;
 
-        
+
         # Preprocessed noogle function names
         noogleFunctionNames = pkgs.runCommand "noogle-function-names" {
           buildInputs = [ pkgs.jq ];
         } ''
           ${pkgs.jq}/bin/jq -r '.[].meta.title' ${noogle.packages.${system}.data-json} > $out
         '';
-        
+
         # Pre-computed package embeddings
         packageEmbeddings = pkgs.callPackage ./nix/package-embeddings.nix { inherit nixpkgs; };
-        
+
         # Load the workspace
         workspace = uv2nix.lib.workspace.loadWorkspace { workspaceRoot = ./.; };
 
@@ -55,10 +55,23 @@
         ]);
 
         cli-dependencies = with pkgs; [ ripgrep fzf jq nurl nix-index-database.packages.${system}.nix-index-with-db ];
+
+        # Build the vibenix package
+        vibenixPackage = pythonSet.vibenix.overrideAttrs (old: {
+          makeWrapperArgs = (old.makeWrapperArgs or []) ++ [
+            "--prefix" "PATH" ":" (pkgs.lib.makeBinPath cli-dependencies)
+            "--set" "NOOGLE_FUNCTION_NAMES" "${noogleFunctionNames}"
+            "--set" "NIXPKGS_EMBEDDINGS" "${packageEmbeddings}/embeddings.pkl"
+          ];
+        });
+
+        # Create a virtual environment with vibenix
+        vibenixVenv = pythonSet.mkVirtualEnv "vibenix-env" workspace.deps.default;
       in
       {
         packages = {
-          default = pythonSet.vibenix;
+          default = vibenixPackage;
+          vibenix = vibenixPackage;
           noogle-function-names = noogleFunctionNames;
         };
 
@@ -69,10 +82,10 @@
 
             # Path to preprocessed noogle function names
             NOOGLE_FUNCTION_NAMES = "${noogleFunctionNames}";
-            
+
             # Path to pre-computed package embeddings
             NIXPKGS_EMBEDDINGS = "${packageEmbeddings}/embeddings.pkl";
-            
+
             # Use only dependencies environment, not the built package, plus torch
             packages = [
               python
@@ -83,7 +96,7 @@
 
             # Point to source files for development
             PYTHONPATH = "src";
-            
+
             # Ensure CLI tools are on PATH
             shellHook = ''
               export PATH="${pkgs.lib.makeBinPath cli-dependencies}:$PATH"
