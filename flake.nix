@@ -73,6 +73,52 @@
           default = vibenixPackage;
           vibenix = vibenixPackage;
           noogle-function-names = noogleFunctionNames;
+          
+          dockerImage = pkgs.dockerTools.buildLayeredImage {
+            name = "vibenix";
+            tag = "latest";
+            
+            contents = with pkgs; [
+              bashInteractive
+              coreutils
+              which
+              nix
+              git
+              cacert
+              
+              vibenixVenv
+              
+            ] ++ cli-dependencies;
+            
+            config = {
+              Cmd = [ "${vibenixVenv}/bin/vibenix" ];
+              Env = [
+                "PATH=${vibenixVenv}/bin:${pkgs.lib.makeBinPath (cli-dependencies ++ [ pkgs.nix pkgs.git pkgs.bashInteractive pkgs.coreutils ])}"
+                "NOOGLE_FUNCTION_NAMES=${noogleFunctionNames}"
+                "NIXPKGS_EMBEDDINGS=${packageEmbeddings}/embeddings.pkl"
+                "SSL_CERT_FILE=${pkgs.cacert}/etc/ssl/certs/ca-bundle.crt"
+                "NIX_SSL_CERT_FILE=${pkgs.cacert}/etc/ssl/certs/ca-bundle.crt"
+                "MAGENTIC_BACKEND=litellm"
+              ];
+              WorkingDir = "/workspace";
+            };
+            
+            # Extra configuration for Nix to work in container
+            # I think we would would need 
+            # echo "sandbox = false" > etc/nix/nix.conf
+            # to make this run in an unprivileged container,
+            # which I think would defeat the point.
+            # So for deployment this should be connected with a remote builder
+            # that has a proper sandbox.
+            extraCommands = ''
+              mkdir -p etc/nix
+              echo "experimental-features = nix-command flakes" >> etc/nix/nix.conf
+              
+              # Create workspace directory
+              mkdir -p workspace
+              chmod 755 workspace
+            '';
+          };
         };
 
         devShells = {
