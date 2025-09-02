@@ -189,23 +189,6 @@
         "type": "github"
       }
     },
-    "magentic": {
-      "flake": false,
-      "locked": {
-        "lastModified": 1744005485,
-        "narHash": "sha256-sVtUaOD0pzUj1D3bhuZ94WfUXHCA5u8m/C81aV8M12o=",
-        "owner": "jackmpcollins",
-        "repo": "magentic",
-        "rev": "50c7aeef41b4c500698043ae5d634c2b3e4d0a7c",
-        "type": "github"
-      },
-      "original": {
-        "owner": "jackmpcollins",
-        "ref": "v0.39.3",
-        "repo": "magentic",
-        "type": "github"
-      }
-    },
     "nix-index-database": {
       "inputs": {
         "nixpkgs": "nixpkgs"
@@ -448,7 +431,6 @@
     "root": {
       "inputs": {
         "flake-utils": "flake-utils",
-        "magentic": "magentic",
         "nix-index-database": "nix-index-database",
         "nixpkgs": "nixpkgs_2",
         "noogle": "noogle",

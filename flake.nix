@@ -13,15 +13,11 @@
       inputs.pyproject-nix.follows = "pyproject-nix";
       inputs.nixpkgs.follows = "nixpkgs";
     };
-    magentic = {
-     url = "github:jackmpcollins/magentic/v0.39.3";
-     flake = false;
-    };
     nix-index-database.url = "github:nix-community/nix-index-database/2025-06-08-034427";
-    noogle.url = github:nix-community/noogle;
+    noogle.url = "github:nix-community/noogle";
   };
 
-  outputs = { self, nixpkgs, flake-utils, pyproject-nix, uv2nix, magentic, noogle, nix-index-database }:
+  outputs = { self, nixpkgs, flake-utils, pyproject-nix, uv2nix, noogle, nix-index-database }:
     flake-utils.lib.eachDefaultSystem (system:
       let
         pkgs = nixpkgs.legacyPackages.${system};
@@ -74,9 +70,23 @@
         ]);
 
         cli-dependencies = with pkgs; [ ripgrep fzf jq nurl nix-index-database.packages.${system}.nix-index-with-db ];
+
+        # Build the vibenix package
+        vibenixPackage = pythonSet.vibenix.overrideAttrs (old: {
+          makeWrapperArgs = (old.makeWrapperArgs or []) ++ [
+            "--prefix" "PATH" ":" (pkgs.lib.makeBinPath cli-dependencies)
+            "--set" "NOOGLE_FUNCTION_NAMES" "${noogleFunctionNames}"
+            "--set" "NIXPKGS_EMBEDDINGS" "${packageEmbeddings}/embeddings.pkl"
+          ];
+        });
+        
+        # Create a virtual environment with vibenix
+        vibenixVenv = pythonSet.mkVirtualEnv "vibenix-env" workspace.deps.default;
       in
       {
         packages = {
+          default = vibenixPackage;
+          vibenix = vibenixPackage;
           noogle-function-names = noogleFunctionNames;
         };
 
