@@ -73,7 +73,7 @@
           (final: prev: { torch = python.pkgs.torchWithoutCuda; })
         ]);
 
-        cli-dependencies = with pkgs; [ ripgrep fzf jq nurl tree findutils nix-index-database.packages.${system}.nix-index-with-db ];
+        cli-dependencies = with pkgs; [ ripgrep fzf jq nurl nix-index-database.packages.${system}.nix-index-with-db ];
       in
       {
         packages = {

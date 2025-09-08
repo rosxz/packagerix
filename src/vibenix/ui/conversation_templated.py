@@ -46,12 +46,7 @@ def ask_model_prompt(template_path: str, functions: Optional[List[Callable]] = N
         type_hints = get_type_hints(func)
         return_type = type_hints.get('return', type(None))
         
-        # Determine the return type category for different handling strategies
         is_streaming = return_type == StreamedStr
-        is_enum = inspect.isclass(return_type) and issubclass(return_type, Enum)
-        is_pydantic = inspect.isclass(return_type) and issubclass(return_type, BaseModel)
-        is_basic_type = return_type in (str, int, float, bool) or get_origin(return_type) is list
-        is_structured_type = is_enum or is_pydantic or is_basic_type
         
         @wraps(func)
         def wrapper(*args, **kwargs) -> T:
@@ -142,16 +137,12 @@ def ask_model_prompt(template_path: str, functions: Optional[List[Callable]] = N
                                 continue
                             
                             # Content should be the final structured result
-                            if is_pydantic:
-                                display_text = f"[{content.__class__.__name__}] {content}"
-                            elif is_basic_type and get_origin(return_type) is list:
-                                display_text = f"[List] {content}"
-                            else:
-                                display_text = str(content)
+                            typed = str(content.__class__.__name__) if content is not None else None
+                            display_text = f"[{typed}] {str(content)}"
                             
                             adapter.show_message(Message(Actor.MODEL, display_text))
-                            #get_logger().reply_chunk_enum(0, content, 4)
-                            #get_logger().prompt_end(2)
+                            get_logger().reply_chunk_typed(response_chunk_num, content, typed, 4)
+                            get_logger().prompt_end(2)
                             return content
                     
                     # Use retry wrapper for the entire structured result function

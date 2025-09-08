@@ -8,7 +8,6 @@ from typing import List, Optional
 
 from magentic import StreamedStr
 from vibenix.template.template_types import TemplateType
-from vibenix.template.runtime_types import RuntimeType
 from vibenix.ui.conversation_templated import ask_model_prompt
 from vibenix.tools import (
     search_nixpkgs_for_package_semantic,
@@ -33,12 +32,6 @@ SEARCH_FUNCTIONS = [
 @ask_model_prompt('pick_template.md')
 def pick_template(project_page: str) -> TemplateType:
     """Select the appropriate template for a project."""
-    ...
-
-
-@ask_model_prompt('pick_template.md')
-def pick_runtime_template(project_page: str) -> RuntimeType:
-    """Select the appropriate template for validating runtime execution of a project."""
     ...
 
 

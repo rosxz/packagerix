@@ -5,6 +5,7 @@ import subprocess
 from pathlib import Path
 from pydantic import BaseModel
 
+from vibenix.tools.search_related_packages import find_builder_functions
 from vibenix.ui.conversation import ask_user,  coordinator_message, coordinator_error, coordinator_progress
 from vibenix.parsing import fetch_github_release_data, scrape_and_process, extract_updated_code, fetch_combined_project_data, fill_src_attributes
 from vibenix.flake import init_flake
@@ -140,8 +141,6 @@ def refine_package(curr: Solution, project_page: str, additional_functions: list
     ccl_logger = get_logger()
     ccl_logger.enter_attribute("refine_package", log_start=True)
 
-    template = pick_template(project_page)
-    ccl_logger.write_kv("runtime_template", template.value)
     for iteration in range(max_iterations):
         ccl_logger.log_iteration_start(iteration)
         ccl_logger.write_kv("code", curr.code)
@@ -270,16 +269,15 @@ def package_project(output_dir=None, project_url=None, revision=None, fetcher=No
     nixpkgs_path = get_nixpkgs_source_path()
     nixpkgs_functions = create_source_function_calls(nixpkgs_path, "nixpkgs_")
 
-    from vibenix.tools.search_nixpkgs_manual import list_language_frameworks, get_language_framework_overview, find_builder_functions, get_builder_combinations
+    from vibenix.tools.search_nixpkgs_manual import list_language_frameworks, get_language_framework_overview
+    from vibenix.tools.search_related_packages import find_builder_functions, get_builder_combinations
     additional_functions = project_functions + nixpkgs_functions + [list_language_frameworks, get_language_framework_overview]
 
     available_langs = list_language_frameworks()
     available_builders = find_builder_functions(available_langs)
     builders = choose_builders(available_builders, summary, additional_functions)
-    print(f"Chosen builders: {builders}")
     # Get builder combinations and random set of packages for each
     builder_combinations = get_builder_combinations(builders)
-    print(builder_combinations)
     # Let model analyse and make changes
     response = compare_template_builders(initial_code, builder_combinations, summary, additional_functions)
     print(f"Builder comparison response:\n{response}")
