@@ -67,7 +67,7 @@ def list_language_frameworks() -> List[str]:
 
 
 @log_function_call("get_language_framework_overview")
-def get_language_framework_overview(framework: str) -> str: # , section_name: str = None
+def get_language_framework_overview(framework: str, page: int = 1) -> str: # , section_name: str = None
     """Get the overview content of a specific language/framework documentation file.
     To obtain a list of available frameworks, use the list_available_language_frameworks tool.
     
@@ -75,6 +75,7 @@ def get_language_framework_overview(framework: str) -> str: # , section_name: st
 
     Args:
         framework: The framework name (e.g., "go", "python", "rust")
+        page: Page number for pagination. Each page shows 500 lines at most.
         
     Returns:
         Markdown content on the requested framework or language.
@@ -91,9 +92,10 @@ def get_language_framework_overview(framework: str) -> str: # , section_name: st
     framework_file = docs_dir / f"{framework}.section.md"
     
     if not framework_file.exists():
-        raise FileNotFoundError(f"Framework documentation not found: {framework_file}")
+        return (f"Framework documentation not found: {framework_file}. Verify frameworks available with list_language_frameworks() tool.")
     
     if not framework_file.is_file():
+        # Should not happen? no directories here :think:
         raise FileNotFoundError(f"Expected file but found directory at: {framework_file}")
     
     try:
@@ -102,7 +104,15 @@ def get_language_framework_overview(framework: str) -> str: # , section_name: st
             content = f.read()
         
         # Process content
-        return content
+        lines = content.split('\n')
+        max_lines_per_page = 500
+        total_pages = (len(lines) + max_lines_per_page - 1) // max_lines_per_page
+        if page < 1 or page > total_pages:
+            raise ValueError(f"Page number out of range. Total pages: {total_pages}")
+        start_line = (page-1) * max_lines_per_page
+        end_line = start_line + max_lines_per_page
+        paginated_content = '\n'.join(lines[start_line:end_line])
+        return paginated_content + f"\n\n(Page {page} of {total_pages})"
         #if section_name:
         #    return _extract_specific_section(content, section_name)
         #else:
