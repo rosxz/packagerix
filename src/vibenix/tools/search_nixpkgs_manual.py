@@ -25,18 +25,18 @@ def get_nixpkgs_source_path() -> str:
 
 @log_function_call("list_language_frameworks")
 def list_language_frameworks() -> List[str]:
-    """View list of all available language and frameworks with documentation files in nixpkgs.
-    
+    """List all available language and frameworks with documentation files in nixpkgs.
+
     Returns:
         List of language/framework names
         
     Raises:
         RuntimeError: If nixpkgs source path cannot be determined
         FileNotFoundError: If the doc/languages-frameworks directory doesn't exist
-        PermissionError: If directory access is denied
-    """
-    print("📞 Function called: list_available_language_frameworks")
-    
+        PermissionError: If directory access is denied."""
+    return _list_language_frameworks()
+
+def _list_language_frameworks() -> List[str]:
     try:
         nixpkgs_path = get_nixpkgs_source_path()
     except Exception as e:
@@ -92,7 +92,7 @@ def get_language_framework_overview(framework: str, page: int = 1) -> str: # , s
     framework_file = docs_dir / f"{framework}.section.md"
     
     if not framework_file.exists():
-        return (f"Framework documentation not found: {framework_file}. Verify frameworks available with list_language_frameworks() tool.")
+        return (f"Framework documentation not available for {framework_file}. The available are:\n [" + ", ".join(_list_language_frameworks()) + "]")
     
     if not framework_file.is_file():
         # Should not happen? no directories here :think:
@@ -265,8 +265,8 @@ def _get_first_paragraph(section_lines: List[str]) -> List[str]:
     return paragraph_lines
 
 
-@log_function_call("search_across_language_frameworks")
-def search_across_language_frameworks(keyword: str) -> str:
+@log_function_call("search_keyword_in_documentation")
+def search_keyword_in_documentation(keyword: str) -> str:
     """Search for a keyword across all language framework documentation files.
     
     Args:
@@ -279,8 +279,10 @@ def search_across_language_frameworks(keyword: str) -> str:
         RuntimeError: If nixpkgs source path cannot be determined
         FileNotFoundError: If the doc/languages-frameworks directory doesn't exist
     """
-    print(f"📞 Function called: search_across_language_frameworks with keyword: {keyword}")
-    
+    print(f"📞 Function called: search_keyword_in_documentation with keyword: {keyword}")
+    return _search_keyword_in_documentation(keyword)
+
+def _search_keyword_in_documentation(keyword: str) -> str:
     try:
         nixpkgs_path = get_nixpkgs_source_path()
     except Exception as e:
@@ -317,9 +319,9 @@ def search_across_language_frameworks(keyword: str) -> str:
         # Format results
         if matching_frameworks:
             frameworks_list = ', '.join(sorted(matching_frameworks))
-            return f"Keyword '{keyword}' found in: {frameworks_list} framework documentation."
+            return f"Keyword '{keyword}' found in: {frameworks_list} documentation."
         else:
-            return f"Keyword '{keyword}' not found in any language framework documentation."
+            return f"Keyword '{keyword}' not found in any language documentation."
             
     except Exception as e:
         raise RuntimeError(f"Error searching language frameworks: {str(e)}")

@@ -7,5 +7,5 @@ stdenv.mkDerivation rec {
   pname = "{{ pname }}";
   version = "{{ version }}";
 
-  src = {{ src_fetcher }};
+  src = {{ src_fetcher | indent(2) }};
 }

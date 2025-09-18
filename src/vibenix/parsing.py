@@ -100,6 +100,21 @@ def extract_src_attributes(src_attr, release=None):
 
     return version, repo, hash, src_attr
 
+
+def get_store_path_from_hash(hash: str):
+    """Get the Nix store path for a given hash."""
+    try:
+        result = subprocess.run(
+            ["nix-store", "--print-fixed-path", "sha256", "--recursive", hash, "source"],
+            capture_output=True, text=True, check=True
+        )
+        store_path = result.stdout.strip()
+        return store_path
+    except subprocess.CalledProcessError as e:
+        logger.error(f"Error getting store path: {e.stderr}")
+        raise RuntimeError("Failed to get store path from hash") from e
+
+
 def fill_src_attributes(template, pname, version, src_fetcher):
     """Fill the pname, version and src attributes in a given template."""
     # Extract hash from the fetcher to compute store path
@@ -109,12 +124,7 @@ def fill_src_attributes(template, pname, version, src_fetcher):
         raise ValueError("Could not extract hash from fetcher")
     
     hash = hash_match.group(1)
-    
-    # Get the store path
-    store_path = subprocess.run(["nix-store", "--print-fixed-path", "sha256",
-                                 "--recursive", hash, "source"],
-                                 capture_output=True, text=True)
-    store_path = str(store_path.stdout).strip()
+    store_path = get_store_path_from_hash(hash)
 
     jinja_template = Template(template)
     filled_template = jinja_template.render(

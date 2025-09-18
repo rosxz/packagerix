@@ -1,9 +1,13 @@
 {% include 'snippets/prompt_intro.md' %}
 
-Compare the chosen Nix packaging template with the builder helper combinations available and their packages.
-Replace or keep the template builder and related options in accordance with your findings.
-
 {% include 'snippets/project_info_section.md' %}
+
+Your primary goal is to modify the structure of the Nix packaging template provided below. Your modifications should be strictly limited to the following actions:
+*   **Modify:** Change the existing builder function, if the main package requires a different builder.
+*   **Add:** Add more builder functions and respective derivations.
+*   **No Change:** Leave the template as is if the existing structure is already appropriate.
+
+Focus exclusively on these structural changes.
 
 Here is the chosen Nix packaging template:
 ```nix
@@ -15,12 +19,12 @@ Here is information regarding builder combinations and packages using them:
 {{ builder_combinations_info }}
 ```
 
-Consult the documentation for the main package builder considered, and especially so if the template's builder differs.
+Strictly adhere to the following constraints:
+*   Do NOT add, remove, or modify any package dependencies (e.g., `buildInputs`, `nativeBuildInputs`). The model should not add any new packages to the build.
+*   Do NOT alter the `src`, `pname`, `version`, or any other metadata attributes.
+*   Do NOT make any stylistic changes, add comments, or refactor the code unnecessarily. Your changes must be purely functional and directly related to the builder logic.
 
-Use your available tools to analyze the project source and builder combinations packages.
-Your response should be a valid Nix expression similar in structure to the template provided, wrapped like so:
+Your response should only be a valid Nix expression, wrapped like so:
 ```nix
 ...
 ```
-Do not change the version, rev, and hash attributes or other details that are otherwise unrelated to the packaging template or builder choice.
-Do not add dependencies or otherwise modify the package beyond what is necessary for the template structure or builder change.

@@ -286,7 +286,6 @@ class CCLLogger:
             self.enter_list()
         else:
             self.next_list_item()
-        print("reply chunk typed", typed, content)
         self.write_kv(typed, handle_typed(content, typed))
 
     def prompt_end(self, indent_level: int):

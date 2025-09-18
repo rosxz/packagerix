@@ -148,7 +148,7 @@ def analyze_package_failure(
     """Analyze why packaging failed."""
     ...
 
-@ask_model_prompt('choose_builders.md', functions=SEARCH_FUNCTIONS)
+@ask_model_prompt('choose_builders.md', functions=[])
 def choose_builders(
     available_builders: List[str],
     project_page: Optional[str] = None,
@@ -156,12 +156,12 @@ def choose_builders(
     """Identify the Nix builder to use for packaging the project."""
     ...
 
-@ask_model_prompt('compare_template_builders.md', functions=SEARCH_FUNCTIONS)
+@ask_model_prompt('compare_template_builders.md', functions=[search_nix_functions])
 def compare_template_builders(
     initial_code: str,
     builder_combinations_info: str,
     project_page: Optional[str] = None,
-    additional_functions: List = []) -> str:
+    additional_functions: List = []) -> StreamedStr:
     """Identify the Nix builder to use for packaging the project."""
     ...
 

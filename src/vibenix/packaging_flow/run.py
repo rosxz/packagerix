@@ -5,9 +5,8 @@ import subprocess
 from pathlib import Path
 from pydantic import BaseModel
 
-from vibenix.tools.search_related_packages import find_builder_functions
 from vibenix.ui.conversation import ask_user,  coordinator_message, coordinator_error, coordinator_progress
-from vibenix.parsing import fetch_github_release_data, scrape_and_process, extract_updated_code, fetch_combined_project_data, fill_src_attributes
+from vibenix.parsing import fetch_github_release_data, scrape_and_process, extract_updated_code, fill_src_attributes
 from vibenix.flake import init_flake
 from vibenix.nix import eval_progress, execute_build_and_add_to_stack
 from vibenix.packaging_flow.model_prompts import (
@@ -97,7 +96,7 @@ def run_nurl(url, rev=None):
 
         # Format fetcher with version
         if version:
-            fetcher = fetcher.replace(rev, f"v${version}" if rev.startswith('v') else "${version}")
+            fetcher = fetcher.replace(version, "${version}")
         else:
             version = "unstable-${src.rev}"
         
@@ -261,28 +260,30 @@ def package_project(output_dir=None, project_url=None, revision=None, fetcher=No
     if not repo_match:
         raise ValueError("Could not extract repo name from fetcher")
     pname = repo_match.group(1)
-    
     initial_code, store_path = fill_src_attributes(starting_template, pname, version, fetcher)
+    nixpkgs_path = get_nixpkgs_source_path()
 
     # Create functions for both the project source and nixpkgs
     project_functions = create_source_function_calls(store_path, "project_")
-    nixpkgs_path = get_nixpkgs_source_path()
     nixpkgs_functions = create_source_function_calls(nixpkgs_path, "nixpkgs_")
 
-    from vibenix.tools.search_nixpkgs_manual import list_language_frameworks, get_language_framework_overview
-    from vibenix.tools.search_related_packages import find_builder_functions, get_builder_combinations
-    additional_functions = project_functions + nixpkgs_functions + [list_language_frameworks, get_language_framework_overview]
+    # Compare chosen template with builders from model response
+    from vibenix.tools.search_nixpkgs_manual import get_language_framework_overview, search_keyword_in_documentation
+    from vibenix.tools.search_related_packages import get_builder_functions, get_related_packages
+    additional_functions = project_functions + nixpkgs_functions + [get_language_framework_overview, search_keyword_in_documentation,
+     get_builder_functions, get_related_packages]
 
-    available_langs = list_language_frameworks()
-    available_builders = find_builder_functions(available_langs)
-    builders = choose_builders(available_builders, summary, additional_functions)
-    # Get builder combinations and random set of packages for each
-    builder_combinations = get_builder_combinations(builders)
-    # Let model analyse and make changes
-    response = compare_template_builders(initial_code, builder_combinations, summary, additional_functions)
-    print(f"Builder comparison response:\n{response}")
-    initial_code = extract_updated_code(response)
-    
+    available_builders = get_builder_functions()
+    builders = choose_builders(available_builders, summary, project_functions+[get_language_framework_overview, search_keyword_in_documentation])  # Keep the model focused
+    if len(builders) > 0:
+        # Get builder combinations and random set of packages for each
+        builder_combinations = get_related_packages(builders)
+        coordinator_message(f"Builder combinations:\n{builder_combinations}")
+        # Let model analyse and make changes
+        response = compare_template_builders(initial_code, builder_combinations, summary, additional_functions)
+        coordinator_message(f"Builder comparison response:\n{response}")
+        initial_code = extract_updated_code(response)
+
     # Step 7: Agentic loop
     coordinator_progress("Testing the initial build...")
     initial_result = execute_build_and_add_to_stack(initial_code)
