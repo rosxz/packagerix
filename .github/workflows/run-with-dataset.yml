@@ -73,6 +73,20 @@ jobs:
       - name: Build vibenix environment
         run: |
           nix develop .# --command echo "Development environment ready"
+
+      - name: Generate vibenix cache
+        run: |
+          nix develop -c python -c '''
+          from vibenix.tools.search_related_packages import _get_builder_functions
+          from vibenix import config
+          config.init()
+          _get_builder_functions()'''
+
+      - name: Upload cache artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: vibenix-cache
+          path: cachedir/
         
       - name: Create matrix from CSV
         id: create-matrix
@@ -133,6 +147,10 @@ jobs:
       fail-fast: false
     steps:
       - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          name: vibenix-cache
+          path: cachedir/
       
       - name: Set provider
         id: provider
