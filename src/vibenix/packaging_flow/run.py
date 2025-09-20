@@ -279,7 +279,7 @@ def package_project(output_dir=None, project_url=None, revision=None, fetcher=No
     builders = choose_builders(available_builders, summary, project_functions+[get_language_framework_overview, search_keyword_in_documentation])  # Keep the model focused
     if len(builders) > 0:
         # Get builder combinations and random set of packages for each
-        builder_combinations = get_related_packages()
+        builder_combinations = get_related_packages(builders)
         coordinator_message(builder_combinations)
         # Let model analyse and make changes
         response = compare_template_builders(initial_code, builder_combinations, summary, additional_functions)
