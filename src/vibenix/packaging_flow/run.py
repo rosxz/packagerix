@@ -268,19 +268,19 @@ def package_project(output_dir=None, project_url=None, revision=None, fetcher=No
     nixpkgs_functions = create_source_function_calls(nixpkgs_path, "nixpkgs_")
 
     # Compare chosen template with builders from model response
-    from vibenix.tools.search_nixpkgs_manual import get_language_framework_overview, search_keyword_in_documentation
+    from vibenix.tools.search_nixpkgs_manual import search_manual_documentation
     from vibenix.tools.search_related_packages import get_builder_functions, _create_find_similar_builder_patterns, _extract_builders
 
     available_builders = get_builder_functions()
     find_similar_builder_patterns = _create_find_similar_builder_patterns(available_builders)
-    additional_functions = project_functions + nixpkgs_functions + [get_language_framework_overview, search_keyword_in_documentation,
+    additional_functions = project_functions + nixpkgs_functions + [search_manual_documentation,
      get_builder_functions, find_similar_builder_patterns]
 
     builders = choose_builders(available_builders, summary, additional_functions)
     template_builders = _extract_builders(starting_template, available_builders)
     if len(builders) > 0 and set(builders) != set(template_builders):
         # Get builder combinations and random set of packages for each
-        builder_combinations = get_related_packages(builders)
+        builder_combinations = find_similar_builder_patterns(builders)
         coordinator_message(builder_combinations)
         # Let model analyse and make changes
         response = compare_template_builders(initial_code, builder_combinations, summary, additional_functions)

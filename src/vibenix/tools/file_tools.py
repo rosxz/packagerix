@@ -56,7 +56,7 @@ def create_source_function_calls(store_path: str, prefix: str = "") -> List[Call
             _validate_path(relative_path)
             # Verify that we aren't trying to list a "/doc" directory in nixpkgs, if so advise to use the appropriate tool
             if prefix == "nixpkgs_" and "doc/languages-frameworks" in relative_path:
-                return "For viewing language and framework documentation in nixpkgs, use the `list_language_frameworks` and `get_language_framework_overview` tool."
+                return "For viewing language and framework documentation in nixpkgs, use the `search_manual_documentation` tool."
             # Use command ls -lha to list directory contents
             cmd = f'ls -lha {store_path}/{relative_path}'
             result = subprocess.run(cmd, shell=True, text=True, capture_output=True)
@@ -74,7 +74,7 @@ def create_source_function_calls(store_path: str, prefix: str = "") -> List[Call
             path = _validate_path(relative_path)
             # Verify that we aren't trying to read a "/doc" directory in nixpkgs, if so advise to use the appropriate tool
             if prefix == "nixpkgs_" and "doc/languages-frameworks" in relative_path:
-                return "For viewing language and framework documentation in nixpkgs, use the `list_language_frameworks` and `get_language_framework_overview` tool."
+                return "For viewing language and framework documentation in nixpkgs, use the `search_manual_documentation` tool."
             if not _is_text_file(path):
                 return f"File '{relative_path}' is not a text file. {detect_file_type_and_size(relative_path)}."
 
@@ -180,13 +180,13 @@ def create_source_function_calls(store_path: str, prefix: str = "") -> List[Call
     # Apply logging decorator with the actual prefix value
     list_directory_contents = log_function_call(f"{prefix}list_directory_contents")(list_directory_contents)
     read_file_content = log_function_call(f"{prefix}read_file_content")(read_file_content)
-    detect_file_type_and_size = log_function_call(f"{prefix}detect_file_type_and_size")(detect_file_type_and_size)
+    # detect_file_type_and_size = log_function_call(f"{prefix}detect_file_type_and_size")(detect_file_type_and_size)
     search_in_files = log_function_call(f"{prefix}search_in_files")(search_in_files)
     
     # Set function names with prefix
     list_directory_contents.__name__ = f"{prefix}list_directory_contents"
     read_file_content.__name__ = f"{prefix}read_file_content"
-    detect_file_type_and_size.__name__ = f"{prefix}detect_file_type_and_size"
+    # detect_file_type_and_size.__name__ = f"{prefix}detect_file_type_and_size"
     search_in_files.__name__ = f"{prefix}search_in_files"
     
-    return [list_directory_contents, read_file_content, detect_file_type_and_size, search_in_files]
+    return [list_directory_contents, read_file_content, search_in_files]

@@ -66,21 +66,17 @@ def _list_language_frameworks() -> List[str]:
         raise RuntimeError(f"Error reading language frameworks directory: {str(e)}")
 
 
-@log_function_call("get_language_framework_overview")
-def get_language_framework_overview(framework: str, page: int = 1) -> str: # , section_name: str = None
-    """Get the overview content of a specific language/framework documentation file.
-    To obtain a list of available frameworks, use the list_available_language_frameworks tool.
-    
-    Returns the available documentation in nixpkgs on the specified framework or language.
+@log_function_call("search_manual_documentation")
+def search_manual_documentation(framework_or_keyword: str, page: int = 1) -> str: # , section_name: str = None
+    """Get nixpkgs documentation on a specific language or framework.
+    The first argument is used to search for a matching documentation file name. In case none is found,
+    it is used as a keyword to search across all documentation files.
 
     Args:
-        framework: The framework name (e.g., "go", "python", "rust")
-        page: Page number for pagination. Each page shows 500 lines at most.
-        
-    Returns:
-        Markdown content on the requested framework or language.
+        framework_or_keyword: The framework name (e.g., "go", "python", "rust") or keyword to search for.
+        page: Page number for pagination. Each page shows 500 lines at most. (default: 1)
     """
-    print(f"📞 Function called: get_language_framework_overview with framework: {framework}") # , section_name: {section_name}
+    print(f"📞 Function called: search_manual_documentation with framework: {framework_or_keyword}") # , section_name: {section_name}
     
     try:
         nixpkgs_path = get_nixpkgs_source_path()
@@ -89,10 +85,20 @@ def get_language_framework_overview(framework: str, page: int = 1) -> str: # , s
     
     # Construct the file path
     docs_dir = Path(nixpkgs_path) / "doc" / "languages-frameworks"
-    framework_file = docs_dir / f"{framework}.section.md"
+    framework_file = docs_dir / f"{framework_or_keyword}.section.md"
     
     if not framework_file.exists():
-        return (f"Framework documentation not available for {framework_file}. The available are:\n [" + ", ".join(_list_language_frameworks()) + "]")
+        # If the file doesn't exist, treat the input as a keyword to search across all docs_dir
+        print(f"Documentation file '{framework_or_keyword}' not found, searching as keyword...")
+        result = _search_keyword_in_documentation(framework_or_keyword)
+        import re
+        match = re.search(r'found in: ([a-z]+(?:, [a-z]+)*) documentation.', result)
+        if match:
+            framework_or_keyword = match.group(1).split(',')[0].strip()  # First = most matches
+            print(f"Showing documentation for: '{framework_or_keyword}' (most matches for given keyword).")
+            framework_file = docs_dir / f"{framework_or_keyword}.section.md"
+        else:
+            return (f"No direct documentation file nor match for '{framework_file}'. There's documentation on: [" + ", ".join(_list_language_frameworks()) + "]")
     
     if not framework_file.is_file():
         # Should not happen? no directories here :think:
@@ -112,11 +118,7 @@ def get_language_framework_overview(framework: str, page: int = 1) -> str: # , s
         start_line = (page-1) * max_lines_per_page
         end_line = start_line + max_lines_per_page
         paginated_content = '\n'.join(lines[start_line:end_line])
-        return paginated_content + f"\n\n(Page {page} of {total_pages})"
-        #if section_name:
-        #    return _extract_specific_section(content, section_name)
-        #else:
-        #    return _truncate_all_sections(content)
+        return f"(Documentation for: '{framework_or_keyword}') (Page {page} of {total_pages}):\n\n"+ paginated_content + f"\n\n(Page {page} of {total_pages})"
         
     except PermissionError:
         raise PermissionError(f"Permission denied reading file: {framework_file}")
@@ -297,9 +299,7 @@ def _search_keyword_in_documentation(keyword: str) -> str:
     matching_frameworks = []
     
     try:
-        import re
-        # Create case-insensitive regex pattern
-        pattern = re.compile(re.escape(keyword), re.IGNORECASE)
+        ins_keyword = keyword.lower()
         
         for md_file in docs_dir.glob("*.section.md"):
             framework_name = md_file.stem.replace(".section", "")
@@ -308,17 +308,23 @@ def _search_keyword_in_documentation(keyword: str) -> str:
                 with open(md_file, 'r', encoding='utf-8') as f:
                     content = f.read()
                 
-                # Search for keyword using regex
-                if pattern.search(content):
-                    matching_frameworks.append(framework_name)
+                # Count occurrences (case-insensitive)
+                ins_content = content.lower()
+                count_keyword = ins_content.count(ins_keyword)
+                if count_keyword > 0:
+                    matching_frameworks.append([framework_name, count_keyword])
                     
             except (PermissionError, UnicodeDecodeError) as e:
                 # Skip files we can't read, but don't fail the whole search
                 continue
+
+        # Sort frameworks by number of occurrences (highest first)
+        matching_frameworks.sort(key=lambda x: x[1], reverse=True)
+        matching_frameworks = [fw[0] for fw in matching_frameworks]
         
         # Format results
         if matching_frameworks:
-            frameworks_list = ', '.join(sorted(matching_frameworks))
+            frameworks_list = ', '.join(matching_frameworks)
             return f"Keyword '{keyword}' found in: {frameworks_list} documentation."
         else:
             return f"Keyword '{keyword}' not found in any language documentation."

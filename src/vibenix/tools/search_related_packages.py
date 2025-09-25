@@ -36,19 +36,12 @@ def get_nixpkgs_source_path() -> str:
 
 @log_function_call("find_builder_functions")
 def get_builder_functions() -> List[str]:
-    """Get list of all builder functions in nixpkgs.
-
-    Returns:
-        A sorted list of all builder functions found in nixpkgs"""
+    """Returns the list of all builder functions in nixpkgs."""
     print("📞 Function called: get_builder_functions")
     return _get_builder_functions()
 
 def _get_builder_functions() -> List[str]:
-    """Get list of all builder functions in nixpkgs.
-
-    Returns:
-        A sorted list of all builder functions found in nixpkgs
-    """
+    """Returns the list of all builder functions in nixpkgs."""
     import json
     from pathlib import Path
     
@@ -394,9 +387,7 @@ def _get_builder_combinations(chosen_builders: List[str], keyword: str = None) -
     
     # Format results
     result_lines = []
-    result_lines.append("="*80)
-    result_lines.append("BUILDER COMBINATION ANALYSIS")
-    result_lines.append("="*80)
+    result_lines.append("= BUILDER FUNCTION COMBINATION ANALYSIS =")
     
     ccl_logger.enter_attribute("results")
     iter = 0
@@ -409,16 +400,17 @@ def _get_builder_combinations(chosen_builders: List[str], keyword: str = None) -
         # Randomize package order and limit to first 20 for readability
         import random
         randomized_packages = list(packages)
-        PACKAGE_LIMIT = 10
+        PACKAGE_LIMIT = 5
         random.shuffle(randomized_packages)
-        result_lines.extend([f"  {package}" for package in randomized_packages[:10]])
-        ccl_logger.write_kv("packages", str(randomized_packages[:10]))
+        result_lines.extend([f"  {package}" for package in randomized_packages[:PACKAGE_LIMIT]])
+        ccl_logger.write_kv("packages", str(randomized_packages[:PACKAGE_LIMIT]))
         
         if len(randomized_packages) > PACKAGE_LIMIT:
             result_lines.append(f"  ... and {len(randomized_packages) - PACKAGE_LIMIT} more packages")
         ccl_logger.write_kv("package_count", str(len(packages)))
         iter += 1
     ccl_logger.leave_list()
+    result_lines.append("\n" + "Use `nixpkgs_read_file_contents` to inspect any of the above packages.")
     ccl_logger.leave_attribute()
     ccl_logger.leave_attribute(log_end=True)
     
