@@ -1,13 +1,17 @@
 {% include 'snippets/prompt_intro.md' %}
 
-Taking into account the project description below, choose the package builder(s) that should be used for the following project.
-For multi-language projects or projects with multiple components, use the available tools to understand which language or framework builds the remaining components.
+Taking into account the project description below, choose the most specific package builder(s) for this project.
 
 {% include 'snippets/project_info_section.md' %}
 
-Here is the list of available builders:
+**Builder Selection Rules:**
+- Choose the **most specific builder** that matches the project's primary language/framework
+- Only use `mkDerivation` as a fallback when no specialized builder exists, or when both are needed for separate components
+- For mixed projects, choose all required builders and in order according to building sequence 
+
+Available builders:
 {% for builder in available_builders %}
 - {{ builder }}
 {% endfor %}
 
-Choose at least one of the available builders above.
+Use the tools at your disposal to construct your answer.

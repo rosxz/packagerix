@@ -1,7 +1,7 @@
 """Search for related packages in nixpkgs and other related methods.
 Includes:
     - get_builder_functions: Get list of all builder functions available in nixpkgs.
-    - get_related_packages: Find packages using specified builder functions and optional keyword.
+    - find_similar_builder_patterns: Find existing builder functions combinations in nixpkgs and packages for each.
         - created with a factory to capture builder function cache in closure.
 """
 
@@ -154,9 +154,10 @@ def _extract_builders(path: str, cache: List[str] = None) -> List[str]:
             tmp.write(path)
             tmp_path = tmp.name
         new_path = tmp_path
+        print("🔍 Searching for builder functions in expression.")
     else:
         new_path = _validate_path(path)
-    print("🔍 Searching for builder functions in:", new_path)
+        print("🔍 Searching for builder functions in:", new_path)
 
     builder_data = {}
     patterns = _generate_patterns() if not cache else [b.split(".")[-1] for b in cache]
@@ -293,28 +294,30 @@ def _find_qualified_path(function_name: str, helper_map: dict, langs: List[str])
     raise ValueError(f"Could not find qualified path for function: '{function_name}' ([{langs[0]}, {langs[1]}, ...])")
 
 
-def _create_get_related_packages(cache: List[str]):
-    """Factory function that returns get_related_packages with cache captured in closure."""
+def _create_find_similar_builder_patterns(cache: List[str]):
+    """Factory function that returns find_similar_builder_patterns with cache captured in closure."""
     from vibenix.flake import get_package_contents
-    @log_function_call("get_related_packages")
-    def get_related_packages(chosen_builders: List[str] = None, keyword: str = None) -> str:
+    @log_function_call("find_similar_builder_patterns")
+    def find_similar_builder_patterns(builders: List[str] = None, keyword: str = None) -> str:
         """
-        Analyze nixpkgs for packages using specified builder functions and which include optional keyword.
+        CRITICAL FOR MULTI-LANGUAGE PROJECTS. Searches nixpkgs for packages that use any combination (e.g. A, B, A+B) of builder functions given (e.g. `buildNpmPackage`, etc).
+        This is the primary tool to use when you are unsure how to structure a complex package that uses multiple builders. 
+        YOU SHOULD OMIT THE BUILDERS ARGUMENT TO USE THE CURRENTLY USED BUILDERS IN THE EXPRESSION AUTOMATICALLY.
         
         Args:
-            chosen_builders: List of builder functions to search for (in their fully qualified form)
-            keyword: Optional keyword to filter results by file content (e.g., a dependency name)
+            builders: (Optional) list of builder functions (in their fully qualified form)
+            keyword: (Optional) packaging keyword to filter packages by (e.g., a dependency name)
             
         Returns:
-            A formatted string showing combination analysis
+            Returns the existing builder combinations in nixpkgs and file paths to respective packages for inspection.
         """
-        if not chosen_builders:
-            chosen_builders = _extract_builders(get_package_contents(), cache)
-            if not chosen_builders:
+        if not builders:
+            builders = _extract_builders(get_package_contents(), cache)
+            if not builders:
                 return "Unable to determine currently used builder functions in packaging expression."
-        print(f"📞 Function called: get_related_packages with builders: {chosen_builders}{' and keyword: ' + keyword if keyword else ''}")
-        return _get_builder_combinations(chosen_builders, keyword)
-    return get_related_packages
+        print(f"📞 Function called: find_similar_builder_patterns with builders: {builders}{' and keyword: ' + keyword if keyword else ''}")
+        return _get_builder_combinations(builders, keyword)
+    return find_similar_builder_patterns
 
 def _get_builder_combinations(chosen_builders: List[str], keyword: str = None) -> str:
     ccl_logger = get_logger()
