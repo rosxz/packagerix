@@ -6,15 +6,15 @@ This module provides hardcoded model configurations for Ollama.
 import os
 from typing import Optional
 from pydantic_ai.models.openai import OpenAIModel
-from pydantic_ai.providers.ollama import OllamaProvider
+from pydantic_ai.providers.openai import OpenAIProvider
 
 
 def get_model_config() -> dict:
     """Get the hardcoded model configuration."""
     return {
-        "provider": "ollama",
-        "model_name": "qwen3:30b-a3b-instruct-2507-q4_K_M_32768ctx",
-        "base_url": os.getenv("OLLAMA_HOST", "https://hydralisk.van-duck.ts.net:11435") + "/v1"
+        "provider": "openai",
+        "model_name": "gpt-oss-120b",
+        "base_url": "http://llama.digidow.ins.jku.at:11434/v1/"
     }
 
 
@@ -22,7 +22,7 @@ def create_model():
     """Create a pydantic-ai model instance with Ollama provider."""
     config = get_model_config()
     
-    provider = OllamaProvider(base_url=config["base_url"])
+    provider = OpenAIProvider(base_url=config["base_url"], api_key="dummy")
     model = OpenAIModel(config["model_name"], provider=provider)
     
     return model
