@@ -293,12 +293,13 @@ def _create_find_similar_builder_patterns(cache: List[str]):
     @log_function_call("find_similar_builder_patterns")
     def find_similar_builder_patterns(builders: List[str] = None, keyword: str = None) -> str:
         """
-        CRITICAL FOR MULTI-LANGUAGE PROJECTS. Searches nixpkgs for packages that use any combination (e.g. A, B, A+B) of builder functions given (e.g. `buildNpmPackage`, etc).
-        This is the primary tool to use when you are unsure how to structure a complex package that uses multiple builders. 
-        YOU SHOULD OMIT THE BUILDERS ARGUMENT TO USE THE CURRENTLY USED BUILDERS IN THE EXPRESSION AUTOMATICALLY.
+        CRITICAL FOR MULTI-LANGUAGE PROJECTS AND CONSULTING SIMILAR PACKAGES ON KEYWORD USAGE.
+        Searches nixpkgs for packages that use any combination of builder functions (e.g. `buildNpmPackage`, `buildNpmPackage + buildPythonPackage`), and optionally that include the given keyword.
+        This is the primary tool to understand how to structure a complex package that uses multiple builders.
+        But also, to understand how similar packages use a specific keyword or attribute (e.g. `cargoLock`, `wrapQtAppsHook`).
         
         Args:
-            builders: (Optional) list of builder functions (in their fully qualified form)
+            builders: (Optional) list of builder functions (in their fully qualified form). By default, the builders used in the current packaging expression.
             keyword: (Optional) packaging keyword to filter packages by (e.g., a dependency name)
             
         Returns:

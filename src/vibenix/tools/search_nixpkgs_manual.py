@@ -68,15 +68,13 @@ def _list_language_frameworks() -> List[str]:
 
 @log_function_call("search_manual_documentation")
 def search_manual_documentation(framework_or_keyword: str, page: int = 1) -> str: # , section_name: str = None
-    """Get nixpkgs documentation on a specific language or framework.
-    The first argument is used to search for a matching documentation file name. In case none is found,
-    it is used as a keyword to search across all documentation files.
+    """Get nixpkgs' manual documentation on a specific language or framework.
 
     Args:
-        framework_or_keyword: The framework name (e.g., "go", "python", "rust") or keyword to search for.
+        framework_or_keyword: The language/framework name (e.g. "go", "python", "rust"), or keyword (e.g. "cargoLock") to search for.
         page: Page number for pagination. Each page shows 500 lines at most. (default: 1)
     """
-    print(f"📞 Function called: search_manual_documentation with framework: {framework_or_keyword}") # , section_name: {section_name}
+    print(f"📞 Function called: search_manual_documentation with framework_or_keyword: {framework_or_keyword}") # , section_name: {section_name}
     
     try:
         nixpkgs_path = get_nixpkgs_source_path()

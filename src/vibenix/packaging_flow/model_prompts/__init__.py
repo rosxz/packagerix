@@ -162,7 +162,7 @@ def compare_template_builders(
     builder_combinations_info: str,
     project_page: Optional[str] = None,
     additional_functions: List = []) -> StreamedStr:
-    """Identify the Nix builder to use for packaging the project."""
+    """Compare the template builders with ones from choose_builders."""
     ...
 
 # Import logger callbacks - use the global instance
