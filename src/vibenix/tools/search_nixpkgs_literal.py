@@ -6,16 +6,16 @@ from vibenix.ccl_log import get_logger, log_function_call
 
 
 @log_function_call("search_nixpkgs_for_package_literal")
-def search_nixpkgs_for_package_literal(query: str, package_set: str = None) -> str:
+def search_nixpkgs_for_package_literal(query: str, package_set_unique: str = None) -> str:
     """Search the nixpkgs repository of Nix code for the given package using fuzzy search.
     
     Args:
         query: The search term
-        package_set: Optional package set to search within (e.g. "python3Packages", "haskellPackages")
+        package_set_unique: Optional package set to search within (e.g. "python3Packages", "haskellPackages")
     
     Returns a Nix expression with matching packages grouped by package set.
     """
-    print(f"📞 Function called: search_nixpkgs_for_package_literal with query: {query}, package_set: {package_set}")
+    print(f"📞 Function called: search_nixpkgs_for_package_literal with query: {query}, package_set_unique: {package_set_unique}")
 
     
     # Get all packages (using ^ to match everything)
@@ -51,15 +51,29 @@ def search_nixpkgs_for_package_literal(query: str, package_set: str = None) -> s
     if jq_result.returncode != 0:
         return f"Failed to process package list: {jq_result.stderr}"
     
-    # Use fzf for fuzzy search
-    # --with-nth=1 tells fzf to only search on the first field (package name)
-    fzf_result = subprocess.run(
-        ["fzf", f"--filter={query}", "-i", "--delimiter=|", "--with-nth=1"],
+    # Try exact substring search first, then fuzzy as fallback
+    exact_result = subprocess.run(
+        ["fzf", f"--filter={query}", "-i", "--delimiter=|", "--with-nth=1", "--exact"],
         input=jq_result.stdout,
         stdout=subprocess.PIPE,
         stderr=subprocess.PIPE,
         text=True
     )
+    
+    # If exact search gives good results, use those; otherwise fall back to fuzzy
+    if exact_result.returncode == 0 and len(exact_result.stdout.strip().split('\n')) >= 3:
+        fzf_result = exact_result
+        print(f"Using exact search - found {len(exact_result.stdout.strip().split('\n'))} matches for query")
+    else:
+        # Fuzzy search as fallback, but keep sorted for best matches first  
+        fzf_result = subprocess.run(
+            ["fzf", f"--filter={query}", "-i", "--delimiter=|", "--with-nth=1"],
+            input=jq_result.stdout,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True
+        )
+        print(f"Using fuzzy search - found {len(fzf_result.stdout.strip().split('\n')) if fzf_result.stdout.strip() else 0} matches for query")
     
     # Parse fzf results
     fuzzy_matches = []
@@ -105,7 +119,7 @@ def search_nixpkgs_for_package_literal(query: str, package_set: str = None) -> s
     matches = fuzzy_matches + substring_matches
     
     if not matches:
-        return f"No packages found matching '{query}'"
+        return f"No packages found matching '{query}'. Might want to try the semantic search."
     
     # Categorize results while preserving fzf's ranking
     package_sets = {}  # package_set -> list of packages
@@ -122,19 +136,39 @@ def search_nixpkgs_for_package_literal(query: str, package_set: str = None) -> s
             package_sets[package_set].append(match)
         else:
             individual_packages.append(match)
-    
+   
+    nix_lines = []
     # Filter by package set if specified
-    if package_set:
-        package_sets = {k: v for k, v in package_sets.items() if k == package_set}
-        package_set_order = [s for s in package_set_order if s == package_set]
+    if package_set_unique:
+        package_sets_temp = {k: v for k, v in package_sets.items() if k == package_set_unique}
+        if package_sets_temp:
+            package_set_order = [s for s in package_set_order if s == package_set_unique]
+        else:
+            nix_lines.extend([f"# No packages found in set '{package_set_unique}' matching '{query}', showing all matches instead."])
+            package_set_unique = None  # Reset to show all
     
     # Determine limits based on whether package_set is specified
-    set_limit = 20 if package_set else 10
-    pkg_per_set_limit = 20 if package_set else 3
-    individual_limit = 20 if package_set else 5
+    set_limit = 20 if package_set_unique else 10
+    pkg_per_set_limit = 20 if package_set_unique else 3
+    individual_limit = 20 if package_set_unique else 5
     
     # Build Nix expression
-    nix_lines = ["{"]    
+    nix_lines.extend(["{"])
+
+    # Add individual packages
+    if individual_packages and not package_set_unique:
+        for i, pkg in enumerate(individual_packages[:individual_limit]):
+            nix_lines.append(f"  {pkg['name']} = {{")
+            nix_lines.append(f'    pname = "{pkg["name"]}";')
+            nix_lines.append(f'    version = "{pkg["version"]}";')
+            desc = pkg['description'].replace('"', '\\"')
+            nix_lines.append(f'    description = "{desc}";')
+            nix_lines.append("  };")
+        
+        if len(individual_packages) > individual_limit:
+            nix_lines.append(f"  # ... and {len(individual_packages) - individual_limit} more individual packages")
+        if package_sets:
+            nix_lines.append("")
     
     # Add package sets (preserving fzf ranking order)
     for set_idx, set_name in enumerate(package_set_order[:set_limit]):
@@ -143,12 +177,31 @@ def search_nixpkgs_for_package_literal(query: str, package_set: str = None) -> s
         
         nix_lines.append(f"  {set_name} = {{")
         
-        # Show more packages if searching within specific set
+        # Show more packages if searching within specific set, avoiding duplicates
         show_limit = min(count, pkg_per_set_limit)
-        for pkg in packages[:show_limit]:
-            pkg_attr = pkg['name'].split('.')[-1]
-            nix_lines.append(f"    {pkg_attr} = {{")
-            nix_lines.append(f'      pname = "{pkg_attr}";')
+        shown_attrs = set()
+        shown_count = 0
+        
+        for pkg in packages:
+            if shown_count >= show_limit:
+                break
+                
+            # Use everything after the package set name (e.g., vimPlugins.nvim-treesitter-parsers.meson -> nvim-treesitter-parsers.meson)
+            pkg_parts = pkg['name'].split('.', 1)  # Split on first dot only
+            if len(pkg_parts) > 1:
+                pkg_attr = pkg_parts[1]  # Everything after package set
+            else:
+                pkg_attr = pkg['name']  # Fallback to full name
+            
+            # Skip if we've already shown this attribute (shouldn't happen with full paths, but just in case)
+            if pkg_attr in shown_attrs:
+                continue
+                
+            shown_attrs.add(pkg_attr)
+            shown_count += 1
+            
+            nix_lines.append(f"    \"{pkg_attr}\" = {{")
+            nix_lines.append(f'      pname = "{pkg_attr.split(".")[-1]}";')
             nix_lines.append(f'      version = "{pkg["version"]}";')
             # Escape quotes in description
             desc = pkg['description'].replace('"', '\\"')
@@ -161,22 +214,6 @@ def search_nixpkgs_for_package_literal(query: str, package_set: str = None) -> s
         nix_lines.append("  };")
         if set_idx < len(package_set_order[:set_limit]) - 1 or individual_packages:
             nix_lines.append("")
-    
-    # Add individual packages
-    if individual_packages and not package_set:
-        if package_sets:
-            nix_lines.append("")
-        nix_lines.append("  # Individual packages")
-        for i, pkg in enumerate(individual_packages[:individual_limit]):
-            nix_lines.append(f"  {pkg['name']} = {{")
-            nix_lines.append(f'    pname = "{pkg["name"]}";')
-            nix_lines.append(f'    version = "{pkg["version"]}";')
-            desc = pkg['description'].replace('"', '\\"')
-            nix_lines.append(f'    description = "{desc}";')
-            nix_lines.append("  };")
-        
-        if len(individual_packages) > individual_limit:
-            nix_lines.append(f"  # ... and {len(individual_packages) - individual_limit} more individual packages")
     
     nix_lines.append("}")
     
