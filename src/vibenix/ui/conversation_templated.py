@@ -68,7 +68,7 @@ def ask_model_prompt(template_path: str, functions: Optional[List[Callable]] = N
             rendered_prompt = prompt_loader.load(template_path, **template_context)
             
             # Show coordinator message (first line or whole prompt if short)
-            first_line = rendered_prompt.split('\n')[0]
+            first_line = f"({template_path}): " + rendered_prompt.split('\n')[0]
             coordinator_msg = f"@model {first_line}" if len(rendered_prompt) > 100 else f"@model {rendered_prompt}"
             adapter.show_message(Message(Actor.COORDINATOR, coordinator_msg))
             
