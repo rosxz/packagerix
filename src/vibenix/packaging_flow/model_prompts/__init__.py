@@ -13,7 +13,8 @@ from vibenix.tools import (
     search_nixpkgs_for_package_semantic,
     search_nixpkgs_for_package_literal,
     search_nix_functions,
-    search_nixpkgs_for_file
+    search_nixpkgs_for_file,
+    search_nixpkgs_manual_documentation
 )
 from vibenix.errors import NixBuildErrorDiff, LogDiff, FullLogDiff, ProcessedLogDiff
 
@@ -25,7 +26,8 @@ SEARCH_FUNCTIONS = [
     search_nixpkgs_for_package_semantic,
     search_nixpkgs_for_package_literal,
     search_nix_functions,
-    search_nixpkgs_for_file
+    search_nixpkgs_for_file,
+    search_nixpkgs_manual_documentation
 ]
 
 
