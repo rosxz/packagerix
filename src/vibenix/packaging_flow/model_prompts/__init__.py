@@ -3,7 +3,6 @@
 This module contains all functions that interact with the AI model using template-based prompts.
 """
 
-from enum import Enum
 from typing import List, Optional
 
 from magentic import StreamedStr
@@ -146,6 +145,13 @@ def analyze_package_failure(
     additional_functions: List = []
 ) -> StreamedStr:
     """Analyze why packaging failed."""
+    ...
+
+@ask_model_prompt('summarize_build.md', functions=[])
+def summarize_build(
+    summary: Optional[str] = None,
+    additional_functions: List = []) -> StreamedStr:
+    """Summarize the build process and identify relations between the components."""
     ...
 
 @ask_model_prompt('choose_builders.md', functions=[])

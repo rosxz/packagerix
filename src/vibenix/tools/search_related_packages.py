@@ -309,6 +309,12 @@ def _create_find_similar_builder_patterns(cache: List[str]):
             builders = _extract_builders(get_package_contents(), cache)
             if not builders:
                 return "Unable to determine currently used builder functions in packaging expression."
+        else:
+            # Get the fully qualified names for the provided builders in case they are not (models might ignore this instruction)
+            qualified_builders = _get_builder_functions()
+            builder_map = {b.split('.')[-1]: b for b in qualified_builders}
+            builders = [builder_map[b] if b in builder_map else b for b in builders] # TODO ? else b ?
+
         print(f"📞 Function called: find_similar_builder_patterns with builders: {builders}{' and keyword: ' + keyword if keyword else ''}")
         return _get_builder_combinations(builders, keyword)
     return find_similar_builder_patterns
@@ -411,7 +417,7 @@ def _get_builder_combinations(chosen_builders: List[str], keyword: str = None) -
         ccl_logger.write_kv("package_count", str(len(packages)))
         iter += 1
     ccl_logger.leave_list()
-    result_lines.append("\n" + "Use `nixpkgs_read_file_contents` to inspect any of the above packages.")
+    result_lines.append("\n" + "Use `nixpkgs_read_file_contents` to inspect any of the above packages.\nNo other combinations between the chosen builders are present in nixpkgs.")
     ccl_logger.leave_attribute()
     ccl_logger.leave_attribute(log_end=True)
     

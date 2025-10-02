@@ -12,7 +12,7 @@ from vibenix.nix import eval_progress, execute_build_and_add_to_stack
 from vibenix.packaging_flow.model_prompts import (
     pick_template, summarize_github, fix_build_error, fix_hash_mismatch, analyze_package_failure,
     classify_packaging_failure, PackagingFailure, choose_builders,
-    compare_template_builders
+    compare_template_builders, summarize_build
 )
 from vibenix.packaging_flow.refine import refine_package
 from vibenix.packaging_flow.user_prompts import get_project_url
@@ -228,6 +228,8 @@ def package_project(output_dir=None, project_url=None, revision=None, fetcher=No
     additional_functions = project_functions + nixpkgs_functions + [search_manual_documentation,
      get_builder_functions, find_similar_builder_patterns]
 
+    build_summary = summarize_build(summary, additional_functions)
+    summary += f"\n\nBuild Summary:\n {build_summary}"
     builders = choose_builders(available_builders, summary, additional_functions)
     template_builders = _extract_builders(starting_template, available_builders)
     if len(builders) > 0 and set(builders) != set(template_builders):

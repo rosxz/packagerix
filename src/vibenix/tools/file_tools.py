@@ -86,7 +86,7 @@ def create_source_function_calls(store_path: str, prefix: str = "") -> List[Call
             return f"Error reading file content: {str(e)}"
     
     def detect_file_type_and_size(relative_path: str) -> str:
-        """Detect the type and size of a file within the {source_description} using magika given its relative path to the root directory."""
+        """Detect the type and size of a file within the {source_description} using `magika`, given its relative path to the root directory."""
         print(f"📞 Function called: {prefix}detect_file_type_and_size with path: ", relative_path)
         try:
             path = _validate_path(relative_path)
@@ -136,12 +136,12 @@ def create_source_function_calls(store_path: str, prefix: str = "") -> List[Call
         return f"{size_bytes:.2f} PB"
 
     def search_in_files(pattern: str, relative_path: str = ".", custom_args: str = None) -> str:
-        """Search for a pattern in files within the {source_description} using ripgrep.
+        """Search for a pattern in files within the {source_description} using `ripgrep`.
         
         Args:
             pattern: The search pattern (regex or literal string)
             relative_path: The relative path to search in (default: current directory)
-            custom_args: Optional custom ripgrep arguments to override defaults
+            custom_args: Optional custom `ripgrep` arguments to override defaults
         """
         print(f"📞 Function called: {prefix}search_in_files with pattern: '{pattern}', path: '{relative_path}'")
         try:
@@ -177,7 +177,7 @@ def create_source_function_calls(store_path: str, prefix: str = "") -> List[Call
         except Exception as e:
             return f"Error in search_in_files: {str(e)}"
     
-    funcs = [list_directory_contents, read_file_content, search_in_files] # detect_file_type_and_size
+    funcs = [list_directory_contents, read_file_content, search_in_files, detect_file_type_and_size]
     for i in range(len(funcs)):
         func = funcs[i]
         # Update name and docstring with prefix
