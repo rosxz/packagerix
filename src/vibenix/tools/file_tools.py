@@ -50,10 +50,13 @@ def create_source_function_calls(store_path: str, prefix: str = "") -> List[Call
     source_description = f"{prefix}source" if prefix else "project source"
     
     def list_directory_contents(relative_path: str) -> str:
-        f"""List contents of a relative directory within the {source_description} given its relative path to the root directory."""
+        """List contents of a relative directory within the {source_description} given its relative path to the root directory."""
         print(f"📞 Function called: {prefix}list_directory_contents with path: ", relative_path)
         try:
             _validate_path(relative_path)
+            # Verify that we aren't trying to list a "/doc" directory in nixpkgs, if so advise to use the appropriate tool
+            if prefix == "nixpkgs_" and "doc/languages-frameworks" in relative_path:
+                return "For viewing language and framework documentation in nixpkgs, use the `search_nixpkgs_manual_documentation` tool."
             # Use command ls -lha to list directory contents
             cmd = f'ls -lha {store_path}/{relative_path}'
             result = subprocess.run(cmd, shell=True, text=True, capture_output=True)
@@ -65,10 +68,13 @@ def create_source_function_calls(store_path: str, prefix: str = "") -> List[Call
             return f"Error listing directory contents: {str(e)}"
 
     def read_file_content(relative_path: str, line_offset: int = 0, number_lines_to_read: int = MAX_LINES_TO_READ) -> str:
-        f"""Read the content of a file within the {source_description} given its relative path to the root directory."""
+        """Read the content of a file within the {source_description} given its relative path to the root directory."""
         print(f"📞 Function called: {prefix}read_file_content with path: ", relative_path)
         try:
             path = _validate_path(relative_path)
+            # Verify that we aren't trying to read a "/doc" directory in nixpkgs, if so advise to use the appropriate tool
+            if prefix == "nixpkgs_" and "doc/languages-frameworks" in relative_path:
+                return "For viewing language and framework documentation in nixpkgs, use the `search_nixpkgs_manual_documentation` tool."
             if not _is_text_file(path):
                 return f"File '{relative_path}' is not a text file. {detect_file_type_and_size(relative_path)}."
 
@@ -80,7 +86,7 @@ def create_source_function_calls(store_path: str, prefix: str = "") -> List[Call
             return f"Error reading file content: {str(e)}"
     
     def detect_file_type_and_size(relative_path: str) -> str:
-        f"""Detect the type and size of a file within the {source_description} using magika given its relative path to the root directory."""
+        """Detect the type and size of a file within the {source_description} using `magika`, given its relative path to the root directory."""
         print(f"📞 Function called: {prefix}detect_file_type_and_size with path: ", relative_path)
         try:
             path = _validate_path(relative_path)
@@ -128,14 +134,14 @@ def create_source_function_calls(store_path: str, prefix: str = "") -> List[Call
                     return f"{size_bytes:.2f} {unit}"
             size_bytes /= 1024.0
         return f"{size_bytes:.2f} PB"
-    
+
     def search_in_files(pattern: str, relative_path: str = ".", custom_args: str = None) -> str:
-        f"""Search for a pattern in files within the {source_description} using ripgrep with sensible defaults for LLM usage.
+        """Search for a pattern in files within the {source_description} using `ripgrep`.
         
         Args:
             pattern: The search pattern (regex or literal string)
             relative_path: The relative path to search in (default: current directory)
-            custom_args: Optional custom ripgrep arguments to override defaults
+            custom_args: Optional custom `ripgrep` arguments to override defaults
         """
         print(f"📞 Function called: {prefix}search_in_files with pattern: '{pattern}', path: '{relative_path}'")
         try:
@@ -145,24 +151,23 @@ def create_source_function_calls(store_path: str, prefix: str = "") -> List[Call
                 # Use custom arguments provided by the user, need to parse them
                 import shlex as shlex_parse
                 args = shlex_parse.split(custom_args)
-                cmd = ["rg"] + args + ["--", pattern, relative_path]
+                cmd = ["rg"] + args + ["--", pattern, path]
             else:
-                # Sensible defaults for LLM usage:
                 # -n: Show line numbers
                 # -H: Show filenames
-                # --color=never: No color codes in output
                 # -m 5: Max 5 matches per file
-                # --max-filesize=10M: Skip files larger than 10MB
-                cmd = ["rg", "-n", "-H", "--color=never", "-m", "5", "--max-filesize=10M", "--", pattern, relative_path]
+                cmd = ["rg", "-n", "-H", "--color=never", "-m", "5", "--max-filesize=10M", "--", pattern, path]
             
             result = subprocess.run(cmd, text=True, capture_output=True, cwd=root_dir)
             
             if result.returncode == 0 and result.stdout.strip():
                 # Limit total output to 50 lines
                 lines = result.stdout.strip().split('\n')
+                # replace all instances of the store path with "source"
+                lines = [line.split("-source/")[-1] for line in lines]
                 if len(lines) > 50:
                     return '\n'.join(lines[:50]) + f"\n... (showing first 50 of {len(lines)} matches)"
-                return result.stdout
+                return '\n'.join(lines)
             elif result.returncode == 1:
                 return f"No matches found for pattern '{pattern}' in {relative_path}"
             else:
@@ -172,16 +177,14 @@ def create_source_function_calls(store_path: str, prefix: str = "") -> List[Call
         except Exception as e:
             return f"Error in search_in_files: {str(e)}"
     
-    # Apply logging decorator with the actual prefix value
-    list_directory_contents = log_function_call(f"{prefix}list_directory_contents")(list_directory_contents)
-    read_file_content = log_function_call(f"{prefix}read_file_content")(read_file_content)
-    detect_file_type_and_size = log_function_call(f"{prefix}detect_file_type_and_size")(detect_file_type_and_size)
-    search_in_files = log_function_call(f"{prefix}search_in_files")(search_in_files)
+    funcs = [list_directory_contents, read_file_content, search_in_files, detect_file_type_and_size]
+    for i in range(len(funcs)):
+        func = funcs[i]
+        # Update name and docstring with prefix
+        func.__name__ = f"{prefix}{func.__name__}"
+        func.__doc__ = func.__doc__.replace("{source_description}", source_description)
+        # Apply logging decorator
+        func = log_function_call(func.__name__)(func) 
+        funcs[i] = func
     
-    # Set function names with prefix
-    list_directory_contents.__name__ = f"{prefix}list_directory_contents"
-    read_file_content.__name__ = f"{prefix}read_file_content"
-    detect_file_type_and_size.__name__ = f"{prefix}detect_file_type_and_size"
-    search_in_files.__name__ = f"{prefix}search_in_files"
-    
-    return [list_directory_contents, read_file_content, detect_file_type_and_size, search_in_files]
+    return funcs
