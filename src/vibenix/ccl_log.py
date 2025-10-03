@@ -273,13 +273,20 @@ class CCLLogger:
         else:
             self.next_list_item()
 
-    def reply_chunk_enum(self, num: int, enum : Enum, indent_level: int):
+    def reply_chunk_typed(self, num: int, content: object, typed: str, indent_level: int):
         """Log one response chunk."""
+        def handle_typed(content: object, typed: str) -> str:
+            match typed:
+                case "enum":
+                    return enum_str(content)
+                case _:
+                    return str(content)
+
         if num == 0:
             self.enter_list()
         else:
             self.next_list_item()
-        self.write_kv("enum", enum_str(enum))
+        self.write_kv(typed, handle_typed(content, typed))
 
     def prompt_end(self, indent_level: int):
         """Log the end of a model prompt."""

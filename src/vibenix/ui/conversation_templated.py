@@ -1,13 +1,14 @@
 """Unified template-based decorator for model conversations using Chat API."""
 
 from functools import wraps
-from typing import Callable, TypeVar, Optional, List, Any, get_type_hints, Tuple
+from typing import Callable, TypeVar, Optional, List, Any, get_type_hints, Tuple, get_origin, get_args
 import os
 from pathlib import Path
 from enum import Enum
 import inspect
+from pydantic import BaseModel
 
-from magentic import Chat, UserMessage, StreamedResponse, StreamedStr
+from magentic import Chat, UserMessage, StreamedResponse, StreamedStr, FunctionCall, ToolResultMessage
 from magentic.chat_model.message import Usage
 from vibenix.ccl_log import get_logger
 from vibenix.ui.conversation import (
@@ -25,7 +26,7 @@ def ask_model_prompt(template_path: str, functions: Optional[List[Callable]] = N
     
     This decorator:
     - Loads prompts from template files
-    - Supports both streaming (StreamedStr) and enum returns
+    - Supports streaming (StreamedStr) and structured returns (Enum, Pydantic models, basic types)
     - Integrates with magentic's Chat API for function calling
     - Handles all return type conversions automatically
     - Returns a tuple of (result, usage) where usage contains token counts
@@ -39,9 +40,7 @@ def ask_model_prompt(template_path: str, functions: Optional[List[Callable]] = N
         type_hints = get_type_hints(func)
         return_type = type_hints.get('return', type(None))
         
-        # Determine if this returns StreamedStr or an Enum
         is_streaming = return_type == StreamedStr
-        is_enum = inspect.isclass(return_type) and issubclass(return_type, Enum)
         
         @wraps(func)
         def wrapper(*args, **kwargs) -> T:
@@ -83,11 +82,11 @@ def ask_model_prompt(template_path: str, functions: Optional[List[Callable]] = N
                     output_types=[StreamedResponse],
                 )
             else:
-                # For non-streaming (like enums), use the actual return type
+                # For structured types (enums, pydantic models, basic types), use the actual return type
                 chat = Chat(
                     messages=[UserMessage(rendered_prompt)],
                     functions=chat_functions,
-                    output_types=[return_type] if return_type != type(None) else None,
+                    output_types=[return_type, FunctionCall] if return_type != type(None) else None,
                 )
             
             def _execute_chat():
@@ -102,27 +101,46 @@ def ask_model_prompt(template_path: str, functions: Optional[List[Callable]] = N
               
                     return result
                 else:
-                    # For non-streaming (enum), we need to handle differently
-                    def _get_enum_result():
-                        # Submit the chat and get the new chat with response
-                        submitted_chat = chat.submit()
-                        
-                        # Get the assistant message and extract content
-                        assistant_message = submitted_chat.last_message
-                        result = assistant_message.content
-                        
-                        # Show the model's response in the UI
-                        if result is not None:
-                            adapter.show_message(Message(Actor.MODEL, str(result)))
-                        
-                        usage = assistant_message.usage
-                        get_logger().reply_chunk_enum(0, result, 4)
-                        get_logger().prompt_end(2)
+                    # For structured types (enums, pydantic models, basic types)
+                    def _handle_function_call(item, response_chunk_num, current_chat):
+                        """Execute a function call and return updated chat."""
+                        tool_call_collector = template_context.get('tool_call_collector')
+                        if tool_call_collector is not None:
+                            tool_call_collector.append({
+                                'function': item.function.__name__,
+                                'arguments': item.arguments
+                            })
 
-                        return result
-                    
-                    # Use retry wrapper for the entire enum result function
-                    return _retry_with_rate_limit(_get_enum_result)
+                        get_logger().reply_chunk_function_call(response_chunk_num, 4)
+                        function_result = item()
+                        adapter.show_message(Message(Actor.MODEL, str(function_result)))
+                        return current_chat.add_message(ToolResultMessage(function_result, item._unique_id))
+
+                    def _get_structured_result():
+                        current_chat = _retry_with_rate_limit(chat.submit)
+                        response_chunk_num = 0
+
+                        while True:
+                            content = current_chat.last_message.content
+
+                            # Handle single FunctionCall
+                            if isinstance(content, FunctionCall):
+                                current_chat = _handle_function_call(content, response_chunk_num, current_chat)
+                                current_chat = _retry_with_rate_limit(current_chat.submit)
+                                response_chunk_num += 1
+                                continue
+
+                            # Content should be the final structured result
+                            typed = str(content.__class__.__name__) if content is not None else None
+                            display_text = f"[{typed}] {str(content)}"
+
+                            adapter.show_message(Message(Actor.MODEL, display_text))
+                            get_logger().reply_chunk_typed(response_chunk_num, content, typed, 4)
+                            get_logger().prompt_end(2)
+                            return content
+
+                    # Use retry wrapper for the entire structured result function
+                    return _retry_with_rate_limit(_get_structured_result)
             
             try:
                 return _execute_chat()
