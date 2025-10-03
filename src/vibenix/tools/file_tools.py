@@ -61,6 +61,10 @@ def create_source_function_calls(store_path: str, prefix: str = "") -> List[Call
             cmd = f'ls -lha {store_path}/{relative_path}'
             result = subprocess.run(cmd, shell=True, text=True, capture_output=True)
             if result.returncode == 0 and result.stdout.strip():
+                # Limit to MAX_LINES_TO_READ lines
+                lines = result.stdout.strip().split('\n')
+                if len(lines) > MAX_LINES_TO_READ:
+                    return '\n'.join(lines[:MAX_LINES_TO_READ]) + f"\n... (showing first {MAX_LINES_TO_READ} of {len(lines)} lines)"
                 return str(result.stdout)
             else:
                 return f"Failed to list contents of directory '{relative_path}' in {source_description}."

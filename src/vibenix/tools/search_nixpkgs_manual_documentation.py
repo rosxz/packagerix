@@ -96,7 +96,7 @@ def search_nixpkgs_manual_documentation(framework_or_keyword: str, page: int = 1
             print(f"Showing documentation for: '{framework_or_keyword}' (most matches for given keyword).")
             framework_file = docs_dir / f"{framework_or_keyword}.section.md"
         else:
-            return (f"No direct documentation file nor match for '{framework_file}'. There's documentation on: [" + ", ".join(_list_language_frameworks()) + "]")
+            return (f"No direct documentation file nor match for '{framework_file}'.\nThere's documentation on: [" + ", ".join(_list_language_frameworks()) + "].")
     
     if not framework_file.is_file():
         # Should not happen? no directories here :think:
