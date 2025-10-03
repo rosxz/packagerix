@@ -20,7 +20,7 @@ flutter.buildFlutterApplication rec {
   pname = "{{ pname }}";
   version = "{{ version }}";
 
-  src = {{ src_fetcher }};
+  src = {{ src_fetcher | indent(2) }};
 
   # Required: pubspec.lock must be converted to JSON
   # Generate with: yq . pubspec.lock > pubspec.lock.json
@@ -66,7 +66,7 @@ flutter.buildFlutterApplication rec {
     ICO=$out/share/icons
 
     install -D $FAV $ICO/${pname}.png
-    
+
     # Generate multiple icon sizes
     for size in 16 24 32 48 64 128 256 512; do
       D=$ICO/hicolor/''${size}x''${size}/apps

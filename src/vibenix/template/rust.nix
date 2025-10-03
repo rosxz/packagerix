@@ -7,7 +7,7 @@ rustPlatform.buildRustPackage rec {
   pname = "{{ pname }}";
   version = "{{ version }}";
 
-  src = {{ src_fetcher }};
+  src = {{ src_fetcher | indent(2) }};
 
   cargoHash = lib.fakeHash;
 }
