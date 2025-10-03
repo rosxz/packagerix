@@ -3,6 +3,7 @@
 import os
 import subprocess
 from vibenix.ccl_log import get_logger, log_function_call
+from vibenix.tools.search_nixpkgs_manual_documentation import search_keyword_in_documentation
 
 
 @log_function_call("search_nix_functions")
@@ -42,7 +43,7 @@ def search_nix_functions(query: str) -> str:
                 result_text += f"\n\n... and {len(matches) - 50} more results"
             return result_text
         else:
-            return f"No Nix functions found matching '{query}'"
+            return f"No Nix functions found matching '{query}' from querying Noogle.\n" + search_keyword_in_documentation(query)
             
     except FileNotFoundError:
         return "Error: fzf not found. Please ensure fzf is available in the environment."
