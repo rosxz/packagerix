@@ -95,7 +95,7 @@ def run_nurl(url, rev=None):
 
         # Format fetcher with version
         if version:
-            fetcher = fetcher.replace(rev, f"v${version}" if rev.startswith('v') else "${version}")
+            fetcher = fetcher.replace(version, "${version}") 
         else:
             version = "unstable-${src.rev}"
         
