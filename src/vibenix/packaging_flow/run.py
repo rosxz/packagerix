@@ -12,7 +12,7 @@ from vibenix.nix import eval_progress, execute_build_and_add_to_stack
 from vibenix.packaging_flow.model_prompts import (
     pick_template, summarize_github, fix_build_error, fix_hash_mismatch,
     analyze_package_failure, classify_packaging_failure, PackagingFailure,
-    summarize_build
+    summarize_build, choose_builders, compare_template_builders
 )
 from vibenix.packaging_flow.refinement import refine_package
 from vibenix.packaging_flow.user_prompts import get_project_url
@@ -214,15 +214,33 @@ def package_project(output_dir=None, project_url=None, revision=None, fetcher=No
     pname = repo_match.group(1)
     
     initial_code, store_path = fill_src_attributes(starting_template, pname, version, fetcher)
-
+    nixpkgs_path = get_nixpkgs_source_path()
     # Create functions for both the project source and nixpkgs
     project_functions = create_source_function_calls(store_path, "project_")
-    nixpkgs_path = get_nixpkgs_source_path()
     nixpkgs_functions = create_source_function_calls(nixpkgs_path, "nixpkgs_")
-    additional_functions = project_functions + nixpkgs_functions
-    
+
+    # Compare chosen template with builders from model response
+    from vibenix.tools.search_related_packages import get_builder_functions, _create_find_similar_builder_patterns, _extract_builders
+    available_builders = get_builder_functions()
+    find_similar_builder_patterns = _create_find_similar_builder_patterns(available_builders)
+    additional_functions = project_functions + nixpkgs_functions + [get_builder_functions, find_similar_builder_patterns]
+
     build_summary = summarize_build(summary, additional_functions)
-    summary += f"\n\nBuild Summary:\n {build_summary}"
+    summary += f"\n\nBuild Summary:\n{build_summary}"
+
+    builders = choose_builders(available_builders, summary, additional_functions)
+    template_builders = _extract_builders(starting_template, available_builders)
+    if len(builders) > 0 and set(builders) != set(template_builders):
+        # Get builder combinations and random set of packages for each
+        builder_combinations = find_similar_builder_patterns(builders)
+        coordinator_message(builder_combinations)
+        # Let model analyse and make changes
+        response = compare_template_builders(initial_code, builder_combinations, summary, additional_functions)
+        coordinator_message(f"Builder comparison response:\n{response}")
+        initial_code = extract_updated_code(response)
+    else:
+        coordinator_message("Builders chosen by model match template. Skipping comparison step.")
+
     # Step 7: Agentic loop
     coordinator_progress("Testing the initial build...")
     initial_result = execute_build_and_add_to_stack(initial_code)

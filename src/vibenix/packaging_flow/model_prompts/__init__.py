@@ -158,5 +158,24 @@ def summarize_build(
     """Summarize the build process and identify relations between the components."""
     ...
 
+
+@ask_model_prompt('choose_builders.md', functions=[])
+def choose_builders(
+    available_builders: List[str],
+    project_page: Optional[str] = None,
+    additional_functions: List = []) -> List[str]:
+    """Identify the Nix builder to use for packaging the project."""
+    ...
+
+
+@ask_model_prompt('compare_template_builders.md', functions=[search_nix_functions])
+def compare_template_builders(
+    initial_code: str,
+    builder_combinations_info: str,
+    project_page: Optional[str] = None,
+    additional_functions: List = []) -> StreamedStr:
+    """Compare the template builders with ones from choose_builders."""
+    ...
+
 # Import logger callbacks - use the global instance
 from vibenix.packaging_flow.litellm_callbacks import end_stream_logger
