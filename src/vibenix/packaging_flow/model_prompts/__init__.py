@@ -149,4 +149,12 @@ def analyze_package_failure(
     """Analyze why packaging failed."""
     ...
 
+
+@ask_model_prompt('summarize_build.md', functions=[])
+def summarize_build(
+    summary: Optional[str] = None,
+    additional_functions: List = []) -> StreamedStr:
+    """Summarize the build process and identify relations between the components."""
+    ...
+
 # Import logger callbacks - use the global instance

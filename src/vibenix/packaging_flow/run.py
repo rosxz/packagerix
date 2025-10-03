@@ -11,7 +11,8 @@ from vibenix.flake import init_flake
 from vibenix.nix import eval_progress, execute_build_and_add_to_stack
 from vibenix.packaging_flow.model_prompts import (
     pick_template, summarize_github, fix_build_error, fix_hash_mismatch,
-    analyze_package_failure, classify_packaging_failure, PackagingFailure
+    analyze_package_failure, classify_packaging_failure, PackagingFailure,
+    summarize_build
 )
 from vibenix.packaging_flow.refinement import refine_package
 from vibenix.packaging_flow.user_prompts import get_project_url
@@ -220,6 +221,8 @@ def package_project(output_dir=None, project_url=None, revision=None, fetcher=No
     nixpkgs_functions = create_source_function_calls(nixpkgs_path, "nixpkgs_")
     additional_functions = project_functions + nixpkgs_functions
     
+    build_summary = summarize_build(summary, additional_functions)
+    summary += f"\n\nBuild Summary:\n {build_summary}"
     # Step 7: Agentic loop
     coordinator_progress("Testing the initial build...")
     initial_result = execute_build_and_add_to_stack(initial_code)
