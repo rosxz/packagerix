@@ -7,7 +7,7 @@ python3Packages.buildPythonApplication rec {
   pname = "{{ pname }}";
   version = "{{ version }}";
 
-  src = {{ src_fetcher }};
+  src = {{ src_fetcher | indent(2) }};
 
   # For pure Python packages, use format:
   # format = "setuptools";  # or "wheel", "pyproject", etc.

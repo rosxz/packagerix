@@ -7,7 +7,7 @@ buildDartApplication rec {
   pname = "{{ pname }}";
   version = "{{ version }}";
 
-  src = {{ src_fetcher }};
+  src = {{ src_fetcher | indent(2) }};
 
   # Required: pubspec.lock must be converted to JSON
   # 1. Build once with autoPubspecLock = ./path/to/pubspec.lock;
