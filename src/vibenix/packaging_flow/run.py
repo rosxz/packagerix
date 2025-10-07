@@ -76,6 +76,7 @@ def get_release_data_and_version(url, rev=None):
 
 def run_nurl(url, rev=None):
     """Run nurl command and return the version and fetcher."""
+    backoff_time = 5  # seconds
     try:
         from vibenix.ccl_log import get_logger
         ccl_logger = get_logger()
@@ -95,12 +96,13 @@ def run_nurl(url, rev=None):
         fetcher = result.stdout.strip()
 
         # Format fetcher with version
+        ccl_logger.write_kv("fetcher", fetcher)
         if version:
             fetcher = fetcher.replace(version, "${version}") 
         else:
             version = "unstable-${src.rev}"
+        ccl_logger.write_kv("version", version)
         
-        ccl_logger.write_kv("fetcher", fetcher)
         ccl_logger.leave_attribute(log_end=True)
         return version, fetcher
     except subprocess.CalledProcessError as e:
@@ -108,7 +110,12 @@ def run_nurl(url, rev=None):
         # Check for various rate limit indicators
         if any(indicator in error_output for indicator in ["rate limit", "429", "403", "forbidden"]):
             print(f"Rate limit/forbidden error for {url}")
-            return None, "RATE_LIMITED"
+            import time
+            time.sleep(backoff_time)
+            backoff_time *= 2  # Exponential backoff
+            if backoff_time >= 360:
+                coordinator_error("Exceeded maximum backoff time due to repeated rate limiting.")
+                return None, "RATE_LIMITED"
         print(f"Error running nurl for {url}: {e.stderr}")
         return None, None
     except FileNotFoundError:
