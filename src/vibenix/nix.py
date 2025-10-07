@@ -26,6 +26,12 @@ def invoke_build(is_src_attr_only: bool) -> NixBuildResult:
     )
     
     if eval_result.returncode != 0:
+        if "invalid SRI hash" in eval_result.stderr:
+            return NixBuildResult(
+                success=False,
+                is_src_attr_only=is_src_attr_only,
+                error=NixError(type=NixErrorKind.INVALID_HASH, error_message=eval_result.stderr)
+            )
         if "hash mismatch in fixed-output derivation" in eval_result.stderr:
             return NixBuildResult(
                 success=False,
