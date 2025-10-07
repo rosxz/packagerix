@@ -326,58 +326,62 @@ def _get_builder_combinations(chosen_builders: List[str], keyword: str = None) -
     
     print(f"Analyzing nixpkgs for builder usage: {all_builders}")
     
-    # Data structures
     from collections import defaultdict
-    package_to_builders = defaultdict(set)
-    builder_to_packages = defaultdict(set)
     
     import subprocess
     from pathlib import Path
     # Search for each builder function in .nix files
+    all_package_to_builders = defaultdict(set)
+    keyword_package_to_builders = defaultdict(set)
+    
     for builder in all_builders:
         function_name = builder.split('.')[-1]  # e.g., mkDerivation
         try:
+            # Get all packages with this builder
+            result = subprocess.run([
+                "rg",
+                "--type", "nix",
+                "--files-with-matches",
+                rf"\b{function_name}\b",
+                nixpkgs_path
+            ], capture_output=True, text=True, check=True)
+            
+            files = result.stdout.strip().split('\n') if result.stdout.strip() else []
+            for file_path in files:
+                rel_path = str(Path(file_path).relative_to(nixpkgs_path))
+                all_package_to_builders[rel_path].add(builder)
+            
             if keyword:
                 cmd = [
                     "bash", "-c",
                     f"rg --type nix --files-with-matches '\\b{function_name}\\b' '{nixpkgs_path}' | xargs -r -I {{}} rg -l '\\b{keyword}\\b' '{{}}'"
                 ]
-                result = subprocess.run(
-                    cmd,
-                    capture_output=True,
-                    text=True
-                )
-            else:
-                result = subprocess.run([
-                    "rg",
-                    "--type", "nix",
-                    "--files-with-matches",
-                    rf"\b{function_name}\b",
-                    nixpkgs_path
-                ], capture_output=True, text=True, check=True)
-            
-            files = result.stdout.strip().split('\n') if result.stdout.strip() else []
-            for file_path in files:
-                # Convert to relative path from nixpkgs
-                rel_path = str(Path(file_path).relative_to(nixpkgs_path))
-                package_to_builders[rel_path].add(builder)
-                builder_to_packages[builder].add(rel_path)
+                result = subprocess.run(cmd, capture_output=True, text=True)
+                filtered_files = result.stdout.strip().split('\n') if result.stdout.strip() else []
+                for file_path in filtered_files:
+                    rel_path = str(Path(file_path).relative_to(nixpkgs_path))
+                    keyword_package_to_builders[rel_path].add(builder)
                 
         except subprocess.CalledProcessError as e:
             raise RuntimeError(f"Error searching for builder '{builder}': {e}")
     
     # Generate combinations and their frequencies
-    combination_counts = defaultdict(set)
+    all_combination_counts = defaultdict(set)
+    keyword_combination_counts = defaultdict(set)
     
-    for package, builders in package_to_builders.items():
+    for package, builders in all_package_to_builders.items():
         if len(builders) > 0:
-            # Create a sorted combination name for consistency
             combination_name = " + ".join(sorted(builders))
-            combination_counts[combination_name].add(package)
+            all_combination_counts[combination_name].add(package)
     
-    # Sort combinations by frequency (descending)
+    if keyword:
+        for package, builders in keyword_package_to_builders.items():
+            if len(builders) > 0:
+                combination_name = " + ".join(sorted(builders))
+                keyword_combination_counts[combination_name].add(package)
+    
     sorted_combinations = sorted(
-        combination_counts.items(),
+        all_combination_counts.items(),
         key=lambda x: len(x[1]),
         reverse=True # Descending order
     )
@@ -392,23 +396,28 @@ def _get_builder_combinations(chosen_builders: List[str], keyword: str = None) -
     
     ccl_logger.enter_attribute("results")
     iter = 0
-    for combination, packages in sorted_combinations:
+    for combination, all_packages in sorted_combinations:
         ccl_logger.log_iteration_start(iter)
         ccl_logger.write_kv("combination", combination)
-        result_lines.append(f"\n{combination} ({len(packages)} packages):")
+        
+        if keyword:
+            packages_to_show = keyword_combination_counts.get(combination, set())
+        else:
+            packages_to_show = all_packages
+        result_lines.append(f"\n{combination} ({len(all_packages)} total packages){f" ({len(packages_to_show)} with keyword '{keyword}')" if keyword else ""}:")
         result_lines.append("-" * (len(combination) + 20))
         
-        # Randomize package order and limit to first 20 for readability
+        # Randomize package order and limit to first 5 for readability
         import random
-        randomized_packages = list(packages)
+        randomized_packages = list(packages_to_show)
         PACKAGE_LIMIT = 5
         random.shuffle(randomized_packages)
         result_lines.extend([f"  {package}" for package in randomized_packages[:PACKAGE_LIMIT]])
         ccl_logger.write_kv("packages", str(randomized_packages[:PACKAGE_LIMIT]))
         
-        if len(randomized_packages) > PACKAGE_LIMIT:
+        if len(randomized_packages) > PACKAGE_LIMIT and len(randomized_packages) - PACKAGE_LIMIT > 0:
             result_lines.append(f"  ... and {len(randomized_packages) - PACKAGE_LIMIT} more packages")
-        ccl_logger.write_kv("package_count", str(len(packages)))
+        ccl_logger.write_kv("package_count", str(len(randomized_packages)))
         iter += 1
     ccl_logger.leave_list()
     result_lines.append("\nUse `nixpkgs_read_file_contents` to inspect any of the above packages.")
