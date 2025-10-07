@@ -411,7 +411,9 @@ def _get_builder_combinations(chosen_builders: List[str], keyword: str = None) -
         ccl_logger.write_kv("package_count", str(len(packages)))
         iter += 1
     ccl_logger.leave_list()
-    result_lines.append("\n" + "Use `nixpkgs_read_file_contents` to inspect any of the above packages.\nNo other combinations between the chosen builders are present in nixpkgs.")
+    result_lines.append("\nUse `nixpkgs_read_file_contents` to inspect any of the above packages.")
+    if not keyword:
+        result_lines.append("No other combinations between the chosen builders are present in nixpkgs.")
     ccl_logger.leave_attribute()
     ccl_logger.leave_attribute(log_end=True)
     
