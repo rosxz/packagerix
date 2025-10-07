@@ -286,6 +286,16 @@ def package_project(output_dir=None, project_url=None, revision=None, fetcher=No
             coordinator_message(f"code:\n{candidate.code}\n")
             coordinator_message(f"error:\n{candidate.result.error.truncated()}\n")
             fixed_response = fix_hash_mismatch(candidate.code, candidate.result.error.truncated())
+        if candidate.result.error.type == NixErrorKind.INVALID_HASH:
+            coordinator_message("Invalid SRI hash detected, fixing...")
+            hash_match = re.search(r'SRI hash \'([a-zA-Z0-9+/=]+)\'', candidate.result.error.error_message)
+            if hash_match:
+                invalid_hash = hash_match.group(1)
+                coordinator_message(f"Invalid hash: {invalid_hash}")
+                fixed_code = re.sub(rf'"sha256-{invalid_hash}"', 'lib.fakeHash', candidate.code)
+                fixed_response = f"```nix\n{fixed_code}\n```"
+            else: # fallback if regex fails
+                fixed_response = fix_hash_mismatch(candidate.code, candidate.result.error.truncated())
         else:
             coordinator_message("Other error detected, fixing...")
             coordinator_message(f"code:\n{candidate.code}\n")
@@ -372,7 +382,7 @@ def package_project(output_dir=None, project_url=None, revision=None, fetcher=No
                     consecutive_rebuilds_without_progress += 1
                 consecutive_non_build_errors = 0
             else:
-                # Non-build errors (EVAL_ERROR, HASH_MISMATCH, DEPENDENCY_BUILD_ERROR)
+                # Non-build errors (EVAL_ERROR, INVALID_HASH, HASH_MISMATCH, DEPENDENCY_BUILD_ERROR)
                 coordinator_message(f"Non-build error: {new_result.error.type}")
                 consecutive_non_build_errors += 1          
                 if consecutive_non_build_errors >= MAX_CONSECUTIVE_NON_BUILD_ERRORS:
