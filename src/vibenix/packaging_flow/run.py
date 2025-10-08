@@ -139,6 +139,29 @@ def read_fetcher_file(fetcher: str) -> str:
         raise
 
 
+def compare_template(available_builders, initial_code,
+                     find_similar_builder_patterns, summary, additional_functions) -> str:
+    """Prompt LLM to compare template with set of builders it thinks are relevant,
+    present builder combinations to model, and let it make changes if needed."""
+    from vibenix.tools.search_related_packages import _extract_builders
+
+    builders = choose_builders(available_builders, summary, additional_functions)
+    builders_set = set(builder.split(".")[-1] for builder in builders)
+    template_builders = _extract_builders(initial_code, available_builders)
+    template_builders = set(builder.split(".")[-1] for builder in template_builders)
+    if len(builders) > 0 and builders_set != template_builders:
+        # Get builder combinations and random set of packages for each
+        builder_combinations = find_similar_builder_patterns(builders)
+        coordinator_message(builder_combinations)
+        # Let model analyse and make changes
+        response = compare_template_builders(initial_code, builder_combinations, summary, additional_functions)
+        initial_code = extract_updated_code(response)
+        coordinator_message(f"Finished comparing builders to template.")
+    else:
+        coordinator_message("Builders chosen by model match template. Skipping comparison step.")
+    return initial_code
+
+
 def package_project(output_dir=None, project_url=None, revision=None, fetcher=None):
     """Main coordinator function for packaging a project."""
     # Initialize CCL logger
@@ -227,7 +250,7 @@ def package_project(output_dir=None, project_url=None, revision=None, fetcher=No
     nixpkgs_functions = create_source_function_calls(nixpkgs_path, "nixpkgs_")
 
     # Compare chosen template with builders from model response
-    from vibenix.tools.search_related_packages import get_builder_functions, _create_find_similar_builder_patterns, _extract_builders
+    from vibenix.tools.search_related_packages import get_builder_functions, _create_find_similar_builder_patterns
     available_builders = get_builder_functions()
     find_similar_builder_patterns = _create_find_similar_builder_patterns(available_builders)
     additional_functions = project_functions + nixpkgs_functions + [get_builder_functions, find_similar_builder_patterns]
@@ -235,18 +258,8 @@ def package_project(output_dir=None, project_url=None, revision=None, fetcher=No
     build_summary = summarize_build(summary, additional_functions)
     summary += f"\n\nBuild Summary:\n{build_summary}"
 
-    builders = choose_builders(available_builders, summary, additional_functions)
-    template_builders = _extract_builders(starting_template, available_builders)
-    if len(builders) > 0 and set(builders) != set(template_builders):
-        # Get builder combinations and random set of packages for each
-        builder_combinations = find_similar_builder_patterns(builders)
-        coordinator_message(builder_combinations)
-        # Let model analyse and make changes
-        response = compare_template_builders(initial_code, builder_combinations, summary, additional_functions)
-        coordinator_message(f"Builder comparison response:\n{response}")
-        initial_code = extract_updated_code(response)
-    else:
-        coordinator_message("Builders chosen by model match template. Skipping comparison step.")
+    initial_code = compare_template(available_builders, initial_code, find_similar_builder_patterns, summary, additional_functions)
+    coordinator_message(f"Initial package code:\n```nix\n{initial_code}\n```")
 
     # Step 7: Agentic loop
     coordinator_progress("Testing the initial build...")
