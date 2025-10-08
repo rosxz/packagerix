@@ -7,12 +7,8 @@ from vibenix.packaging_flow.model_prompts import (
 from vibenix.ccl_log import init_logger, get_logger, close_logger, enum_str
 from pydantic import BaseModel
 from vibenix.errors import NixBuildErrorDiff, NixErrorKind, NixBuildResult
+from vibenix.packaging_flow.Solution import Solution
 
-
-class Solution(BaseModel):
-    """Represents a solution candidate with its code and build result."""
-    code: str
-    result: NixBuildResult
 
 def refine_package(curr: Solution, project_page: str, additional_functions: list = None) -> Solution:
     """Refinement cycle to improve the packaging."""

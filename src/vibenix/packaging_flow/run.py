@@ -3,7 +3,6 @@
 import re
 import subprocess
 from pathlib import Path
-from pydantic import BaseModel
 
 from vibenix.ui.conversation import ask_user, coordinator_message, coordinator_error, coordinator_progress
 from vibenix.parsing import fetch_github_release_data, scrape_and_process, extract_updated_code, fetch_combined_project_data, fill_src_attributes
@@ -16,17 +15,13 @@ from vibenix.packaging_flow.model_prompts import (
 )
 from vibenix.packaging_flow.refinement import refine_package
 from vibenix.packaging_flow.user_prompts import get_project_url
+from vibenix.packaging_flow.Solution import Solution
 from vibenix import config
-from vibenix.errors import NixBuildErrorDiff, NixErrorKind, NixBuildResult
+from vibenix.errors import NixBuildErrorDiff, NixErrorKind
 from vibenix.tools.file_tools import create_source_function_calls
 from vibenix.ccl_log import init_logger, get_logger, close_logger, enum_str
 from vibenix.git_info import get_git_info
 import os
-
-class Solution(BaseModel):
-    """Represents a solution candidate with its code and build result."""
-    code: str
-    result: NixBuildResult
 
 
 def get_nixpkgs_source_path() -> str:
