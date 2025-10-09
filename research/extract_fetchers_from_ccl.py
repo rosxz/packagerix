@@ -46,8 +46,11 @@ def parse_directory_name(dir_name):
     # Format: <issue_number>-<repo_owner>-<repo>
     parts = dir_name.split('-', 2)
     if len(parts) >= 3:
-        repo_owner = parts[1]
-        repo_name = parts[2]
+        # ask user input to know from which part starts repo name
+        # TODO alternatively, get repo url from run.ccl file
+        name_idx = input(f"Enter the index (0-based) where repo name starts: [{", ".join(parts)}]: ")
+        repo_owner = parts[:int(name_idx)]
+        repo_name = parts[int(name_idx):]
         return repo_owner, repo_name
     return None, None
 
