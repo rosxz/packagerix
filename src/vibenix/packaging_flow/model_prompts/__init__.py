@@ -96,6 +96,12 @@ def fix_hash_mismatch(code: str, error: str) -> str:
     ...
 
 
+@ask_model_prompt('error_fixing/fix_syntax_error.md', functions=[str_replace])
+def fix_syntax_error(code: str, error: str) -> str:
+    """Fix syntax errors in Nix code."""
+    ...
+
+
 def evaluate_progress(log_diff: LogDiff) -> NixBuildErrorDiff:
     """Evaluate if the build made progress by comparing logs."""
     if isinstance(log_diff, FullLogDiff):
