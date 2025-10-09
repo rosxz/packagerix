@@ -64,6 +64,9 @@ Common causes for dependency build failures:
 If the error message does not give you enough information to make progress, and to verify your actions, look at relevant files in the proejct directory,
 and try to compare your approach with similar packages in nixpkgs.
 
+**IMPORTANT**: For each change to the code, use the `str_replace` tool.
+Your final reply should only contain a very brief explanation of all the changes made with the `str_replace` tool, NOT the fully updated code.
+
 Known errors:
 - `error: evaluation aborted with the following error message: 'lib.customisation.callPackageWith: Function called without required argument "package_name" at /nix/store/[...]`:
    This error indicates that one of the function arguments you specified at the top of the file was not found and is incorrect.
@@ -72,7 +75,6 @@ Known errors:
 Notes:
 - Nothing in the meta attribute of a derivation has any impact on its build output, so do not provide a meta attribute.
 - Do not access the project's online git repository, such as GitHub, and instead browse the local files in the Nix store.
-- Your reply should contain exactly one code block with the updated Nix code.
 - Do not the arguments of fetchFromGitHub or without good reason.
 - If you need to introduce a new hash, use lib.fakeHash as a placeholder, and automated process will replace this with the actual hash.
 - ONLY replace existing hashes with `lib.fakeHash`, if you need to add an argument to a fetcher, like `leaveDotGit` keep the git directory as part of the source code or `fetchSubmodule` to fetch submodules. In those cases you MUST change the hash to `lib.fakeHash` at the same time as well, or the fetched contents will not be updated.

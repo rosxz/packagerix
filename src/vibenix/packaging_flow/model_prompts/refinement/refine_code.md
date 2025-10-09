@@ -25,7 +25,9 @@ Among the tools at your disposal for the task, you can:
     - look at relevant files in the project directory in the Nix store;
     - search for nixpkgs packages names or functions in Noogle.
 
+**IMPORTANT**: For each change to the code, use the `str_replace` tool.
+Your final reply should only contain a very brief explanation of all the changes made with the `str_replace` tool, NOT the fully updated code.
+
 Note: The meta attribute is irrelevant, do not include it.
 Note: Do not change any other arguments of fetchFromGitHub or another fetcher if it has an actual hash already.
-Note: Your reply should contain exactly one code block with the updated Nix code.
 Note: If you need to introduce a new hash, use lib.fakeHash as a placeholder, and automated process will replace this with the actual hash."""

@@ -13,7 +13,8 @@ from vibenix.tools import (
     search_nixpkgs_for_package_literal,
     search_nix_functions,
     search_nixpkgs_for_file,
-    search_nixpkgs_manual_documentation
+    search_nixpkgs_manual_documentation,
+    str_replace
 )
 from vibenix.errors import NixBuildErrorDiff, LogDiff, FullLogDiff, ProcessedLogDiff
 
@@ -28,6 +29,7 @@ SEARCH_FUNCTIONS = [
     search_nixpkgs_for_file,
     search_nixpkgs_manual_documentation
 ]
+SEARCH_AND_REPLACE_FUNCTIONS = SEARCH_FUNCTIONS + [str_replace]
 
 
 @ask_model_prompt('pick_template.md')
@@ -60,7 +62,7 @@ def get_feedback(
     ...
 
 
-@ask_model_prompt('refinement/refine_code.md', functions=SEARCH_FUNCTIONS)
+@ask_model_prompt('refinement/refine_code.md', functions=SEARCH_AND_REPLACE_FUNCTIONS)
 def refine_code(
     code: str,
     feedback: str,
@@ -72,7 +74,7 @@ def refine_code(
     ...
 
 
-@ask_model_prompt('error_fixing/fix_build_error.md', functions=SEARCH_FUNCTIONS)
+@ask_model_prompt('error_fixing/fix_build_error.md', functions=SEARCH_AND_REPLACE_FUNCTIONS)
 def fix_build_error(
     code: str,
     error: str,
@@ -167,7 +169,7 @@ def choose_builders(
     ...
 
 
-@ask_model_prompt('compare_template_builders.md', functions=[search_nix_functions])
+@ask_model_prompt('compare_template_builders.md', functions=[search_nix_functions, str_replace])
 def compare_template_builders(
     initial_code: str,
     builder_combinations_info: str,

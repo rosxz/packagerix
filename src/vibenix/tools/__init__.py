@@ -6,6 +6,7 @@ from vibenix.tools.search_nixpkgs_semantic import search_nixpkgs_for_package_sem
 from vibenix.tools.search_nix_functions import search_nix_functions
 from vibenix.tools.search_nixpkgs_file import search_nixpkgs_for_file
 from vibenix.tools.search_nixpkgs_manual_documentation import search_nixpkgs_manual_documentation
+from vibenix.tools.str_replace import str_replace
 
 # Export all functions so they can be imported from this module
 __all__ = [
@@ -13,5 +14,6 @@ __all__ = [
     'search_nixpkgs_for_package_semantic',
     'search_nix_functions',
     'search_nixpkgs_for_file',
-    'search_nixpkgs_manual_documentation'
+    'search_nixpkgs_manual_documentation',
+    'str_replace'
 ]
