@@ -7,7 +7,7 @@ from pathlib import Path
 from vibenix.ui.conversation import ask_user, coordinator_message, coordinator_error, coordinator_progress
 from vibenix.parsing import fetch_github_release_data, scrape_and_process, extract_updated_code, fetch_combined_project_data, fill_src_attributes
 from vibenix.flake import init_flake
-from vibenix.nix import eval_progress, execute_build_and_add_to_stack
+from vibenix.nix import eval_progress, execute_build_and_add_to_stack, revert_packaging_to_solution
 from vibenix.packaging_flow.model_prompts import (
     pick_template, summarize_github, fix_build_error, fix_hash_mismatch,
     analyze_package_failure, classify_packaging_failure, PackagingFailure,
@@ -258,8 +258,8 @@ def package_project(output_dir=None, project_url=None, revision=None, fetcher=No
 
     # Step 7: Agentic loop
     coordinator_progress("Testing the initial build...")
-    initial_result = execute_build_and_add_to_stack(initial_code)
-    best = Solution(code=initial_code, result=initial_result)
+    initial_result, initial_hash = execute_build_and_add_to_stack(initial_code)
+    best = Solution(code=initial_code, result=initial_result, commit_hash=initial_hash)
 
     ccl_logger.log_initial_build(best.code, best.result)
     ccl_logger.enter_attribute("iterate")
@@ -334,8 +334,8 @@ def package_project(output_dir=None, project_url=None, revision=None, fetcher=No
             
         # Test the fix
         coordinator_progress(f"Iteration {iteration + 1}: Testing fix attempt {iteration + 1} of {MAX_ITERATIONS}...")
-        new_result = execute_build_and_add_to_stack(updated_code)
-        candidate = Solution(code=updated_code, result=new_result)
+        new_result, new_hash = execute_build_and_add_to_stack(updated_code)
+        candidate = Solution(code=updated_code, result=new_result, commit_hash=new_hash)
         
         # Log the build result
         ccl_logger.enter_attribute("build", log_start=True)
@@ -383,10 +383,12 @@ def package_project(output_dir=None, project_url=None, revision=None, fetcher=No
                     else:
                         coordinator_message(f"Iteration {iteration + 1} stagnated...")
                         candidate = best
+                        revert_packaging_to_solution(best)
                         consecutive_rebuilds_without_progress += 1
                 else:  # REGRESS
                     coordinator_message(f"Iteration {iteration + 1} regressed...")
                     candidate = best
+                    revert_packaging_to_solution(best)
                     consecutive_rebuilds_without_progress += 1
                 consecutive_non_build_errors = 0
             else:
@@ -395,6 +397,7 @@ def package_project(output_dir=None, project_url=None, revision=None, fetcher=No
                 consecutive_non_build_errors += 1          
                 if consecutive_non_build_errors >= MAX_CONSECUTIVE_NON_BUILD_ERRORS:
                     candidate = best
+                    revert_packaging_to_solution(best)
                     consecutive_non_build_errors = 0
         
         # TODO: Log iteration cost and token usage from pydantic-ai
