@@ -237,7 +237,7 @@ jobs:
 
           # Prepare fetcher argument if use_cached_fetchers is true
           fetcher_arg=""
-          if [ "${{ github.event.inputs.use_cached_fetchers }}" = "true" ]; then
+          if [ "${{ github.event.inputs.use_cached_fetchers || 'true' }}" = "true" ]; then
             # Extract repo owner and name from URL (e.g., https://github.com/owner/repo -> owner,repo)
             repo_path=$(echo "${{ matrix.repo_url }}" | sed 's|https://github.com/||')
             repo_owner=$(echo "$repo_path" | cut -d'/' -f1)
