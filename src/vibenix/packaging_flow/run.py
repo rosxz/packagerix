@@ -128,6 +128,24 @@ def read_fetcher_file(fetcher: str) -> tuple[str, str]:
             # Ignore comments and empty lines
             content = "".join(line for line in f if line.strip() and not line.startswith("#"))
         ccl_logger.write_kv("fetcher", content)
+
+        # Instantiate fetcher to pull contents to nix store
+        cmd = [
+            'nix',
+            'build',
+            '--impure',
+            '--expr',
+            f"let pkgs = (builtins.getFlake (toString ./.)).inputs.nixpkgs.legacyPackages.${{builtins.currentSystem}}; in\nwith pkgs; {content}"
+        ]
+        try:
+            result = subprocess.run(cmd, cwd=config.template_dir, capture_output=True, text=True, check=True)
+            if result.returncode != 0:
+                ccl_logger.write_kv("nix_eval_error", result.stderr)
+                ccl_logger.leave_attribute(log_end=True)
+                raise RuntimeError(f"{result.stderr}")
+        except (subprocess.TimeoutExpired, subprocess.CalledProcessError) as e:
+            raise RuntimeError(f"Failed to evaluate project fetcher: {e}")
+
         # Extract version from the fetcher if present
         version_match = re.search(r'version\s*=\s*"([^"]+)"', content)
         version = version_match.group(1) if version_match else "unstable-${src.rev}"
