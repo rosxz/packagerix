@@ -122,6 +122,8 @@ def fill_src_attributes(template, pname, version, src_fetcher):
         version=version,
         src_fetcher=src_fetcher
     )
+    from vibenix.flake import update_flake
+    update_flake(filled_template)
     
     logger.info(f"Filled template: \n{filled_template}")
     

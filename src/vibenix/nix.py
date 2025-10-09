@@ -2,6 +2,7 @@ import subprocess
 
 from vibenix import config
 from vibenix.packaging_flow.model_prompts import evaluate_progress
+from vibenix.packaging_flow.Solution import Solution
 from vibenix.errors import NixBuildResult, NixError, NixErrorKind, NixBuildErrorDiff, FullLogDiff, ProcessedLogDiff, LogDiff
 
 import git
@@ -217,11 +218,17 @@ def eval_progress(previous_result: NixBuildResult, current_result: NixBuildResul
     
     return evaluate_progress(log_comparison)
 
-def execute_build_and_add_to_stack(updated_code: str) -> NixBuildResult:
+def execute_build_and_add_to_stack(updated_code: str) -> tuple[NixBuildResult, str]:
     """Update flake with new code, build it, and add result to error stack."""
-    update_flake(updated_code)
+    commit_hash = update_flake(updated_code)
     result = invoke_build(True)
     if result.success:
         result = invoke_build(False)
     config.error_stack.append(result)
-    return result
+    return result, commit_hash
+
+def revert_packaging_to_solution(solution: Solution) -> None:
+    """Revert the flake to a known good solution."""
+    repo = git.Repo(config.flake_dir.as_posix())
+    repo.git.reset('--hard', solution.commit_hash)
+    logger.info(f"Reverted to commit {solution.commit_hash}.")

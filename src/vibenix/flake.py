@@ -32,9 +32,22 @@ def update_flake(new_content):
 
     repo = git.Repo(config.flake_dir.as_posix())
     repo.git.add('-A')
-    repo.index.commit("build step")
+    commit = repo.index.commit("build step")
+    return commit.hexsha
 
 def get_package_contents() -> str:
     file_path = config.flake_dir / "package.nix"
     with open(file_path, 'r') as file:
         return file.read()
+
+
+def revert_to_commit(commit_hash: str) -> None:
+    """
+    Revert the packaging files to a previous commit.
+    Used to sync package.nix with the best known solution during rollbacks.
+    
+    Args:
+        commit_hash: The commit hash to revert to
+    """
+    repo = git.Repo(config.flake_dir.as_posix())
+    repo.git.reset('--hard', commit_hash)

@@ -5,4 +5,5 @@ from vibenix.errors import NixBuildResult
 class Solution(BaseModel):
     """Represents a solution candidate with its code and build result."""
     code: str
+    commit_hash: str
     result: NixBuildResult
