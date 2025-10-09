@@ -116,14 +116,25 @@ def run_nurl(url, rev=None):
         return None, None
 
 
-def read_fetcher_file(fetcher: str) -> str:
+def read_fetcher_file(fetcher: str) -> tuple[str, str]:
     """Read the fetcher file content."""
     from pathlib import Path
     try:
+        ccl_logger = get_logger()
+        ccl_logger.enter_attribute("load_fetcher", log_start=True)
+        ccl_logger.write_kv("path", fetcher)
+
         path = Path(fetcher)
         with open(path, 'r') as f:
             # Ignore comments and empty lines
-            return "".join(line for line in f if line.strip() and not line.startswith("#"))
+            content = "".join(line for line in f if line.strip() and not line.startswith("#"))
+        ccl_logger.write_kv("fetcher", content)
+        # Extract version from the fetcher if present
+        version_match = re.search(r'version\s*=\s*"([^"]+)"', content)
+        version = version_match.group(1) if version_match else "unstable-${src.rev}"
+        ccl_logger.write_kv("version", version)
+        ccl_logger.leave_attribute(log_end=True)
+        return version, content
     except FileNotFoundError:
         coordinator_error(f"Fetcher file '{fetcher}' not found.")
         raise
@@ -162,10 +173,7 @@ def package_project(output_dir=None, project_url=None, revision=None, fetcher=No
     # Obtain the project fetcher
     if fetcher: 
         coordinator_progress(f"Using provided fetcher: {fetcher}")
-        fetcher = read_fetcher_file(fetcher)
-        # Extract version from the fetcher if present
-        version_match = re.search(r'version\s*=\s*"([^"]+)"', fetcher)
-        version = version_match.group(1) if version_match else "unstable-${src.rev}"
+        version, fetcher = read_fetcher_file(fetcher)
         if revision:
             coordinator_error("Ignoring revision parameter in favor of provided fetcher.")
     else:

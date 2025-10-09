@@ -8,6 +8,11 @@ on:
         required: false
         default: '5'
         type: number
+      use_cached_fetchers:
+        description: 'Use cached fetchers for package requests'
+        required: false
+        default: true
+        type: boolean
       randomize:
         description: 'Randomize package selection'
         required: false
@@ -227,11 +232,30 @@ jobs:
           # Create output directory for this run
           mkdir -p output
           
+          # Prepare fetcher argument if use_cached_fetchers is true
+          fetcher_arg=""
+          if [ "${{ github.event.inputs.use_cached_fetchers }}" = "true" ]; then
+            # Extract repo owner and name from URL (e.g., https://github.com/owner/repo -> owner,repo)
+            repo_path=$(echo "${{ matrix.repo_url }}" | sed 's|https://github.com/||')
+            repo_owner=$(echo "$repo_path" | cut -d'/' -f1)
+            repo_name=$(echo "$repo_path" | cut -d'/' -f2)
+            fetcher_file="research/packaging_requests/fetchers/${repo_owner},${repo_name}.nix"
+            
+            # Check if fetcher file exists
+            if [ -f "$fetcher_file" ]; then
+              fetcher_arg="--fetcher $fetcher_file"
+              echo "Using cached fetcher: $fetcher_file"
+            else
+              echo "Cached fetcher not found: $fetcher_file"
+            fi
+          fi
+          
           # Run vibenix with raw output and save results
           set -o pipefail
           nix develop .# -c python -m vibenix \
             --raw \
             --output-dir output \
+            $fetcher_arg \
             "${{ matrix.repo_url }}" \
             2>&1 | tee "${{ matrix.issue_number }}.log"
           exit_code=$?
