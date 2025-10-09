@@ -16,7 +16,9 @@ Error:
 {{ error }}
 ```
            
-Note: Your reply should contain exactly one code block with the updated Nix code.
+**IMPORTANT**: For each change to the code, use the `str_replace` tool.
+Your final reply should only contain a very brief explanation of all the changes made with the `str_replace` tool, NOT the fully updated code.
+
 Note: Never replace more than one instance of lib.fakeHash.
 Note: Never put sha256-AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA= in the code.
 Note: You can assume that we do not need to specify the same hash twice,

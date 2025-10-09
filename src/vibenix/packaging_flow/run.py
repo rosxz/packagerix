@@ -5,8 +5,8 @@ import subprocess
 from pathlib import Path
 
 from vibenix.ui.conversation import ask_user, coordinator_message, coordinator_error, coordinator_progress
-from vibenix.parsing import fetch_github_release_data, scrape_and_process, extract_updated_code, fetch_combined_project_data, fill_src_attributes
-from vibenix.flake import init_flake
+from vibenix.parsing import fetch_github_release_data, scrape_and_process, fetch_combined_project_data, fill_src_attributes
+from vibenix.flake import init_flake, get_package_contents
 from vibenix.nix import eval_progress, execute_build_and_add_to_stack, revert_packaging_to_solution
 from vibenix.packaging_flow.model_prompts import (
     pick_template, summarize_github, fix_build_error, fix_hash_mismatch,
@@ -150,7 +150,7 @@ def compare_template(available_builders, initial_code,
         coordinator_message(builder_combinations)
         # Let model analyse and make changes
         response = compare_template_builders(initial_code, builder_combinations, summary, additional_functions)
-        initial_code = extract_updated_code(response)
+        initial_code = get_package_contents()
         coordinator_message(f"Finished comparing builders to template.")
     else:
         coordinator_message("Builders chosen by model match template. Skipping comparison step.")
@@ -327,7 +327,7 @@ def package_project(output_dir=None, project_url=None, revision=None, fetcher=No
             # Add this iteration's tool calls to the attempted list
             attempted_tool_calls.extend(iteration_tool_calls)
         
-        updated_code = extract_updated_code(fixed_response)
+        updated_code = get_package_contents()
         
         # Log the updated code
         ccl_logger.write_kv("updated_code", updated_code)

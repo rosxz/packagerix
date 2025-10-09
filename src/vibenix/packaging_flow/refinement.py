@@ -1,5 +1,5 @@
+from vibenix.flake import get_package_contents
 from vibenix.ui.conversation import ask_user,  coordinator_message, coordinator_error, coordinator_progress
-from vibenix.parsing import extract_updated_code
 from vibenix.nix import eval_progress, execute_build_and_add_to_stack
 from vibenix.packaging_flow.model_prompts import (
     refine_code, get_feedback
@@ -30,7 +30,7 @@ def refine_package(curr: Solution, project_page: str, additional_functions: list
 
         # Pass the feedback to the generator (refine_code)
         response = refine_code(curr.code, feedback, project_page)
-        updated_code = extract_updated_code(response)
+        updated_code = get_package_contents()
         ccl_logger.write_kv("refined_code", updated_code)
         updated_res, updated_hash = execute_build_and_add_to_stack(updated_code)
         attempt = Solution(code=updated_code, result=updated_res, commit_hash=updated_hash)
