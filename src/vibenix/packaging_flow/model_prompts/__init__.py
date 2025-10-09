@@ -91,9 +91,15 @@ def fix_build_error(
     ...
 
 
-@ask_model_prompt('error_fixing/fix_hash_mismatch.md')
+@ask_model_prompt('error_fixing/fix_hash_mismatch.md', functions=[str_replace])
 def fix_hash_mismatch(code: str, error: str) -> StreamedStr:
     """Fix hash mismatch errors in Nix code."""
+    ...
+
+
+@ask_model_prompt('error_fixing/fix_syntax_error.md', functions=[str_replace])
+def fix_syntax_error(code: str, error: str) -> StreamedStr:
+    """Fix syntax errors in Nix code."""
     ...
 
 
