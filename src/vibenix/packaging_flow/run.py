@@ -164,12 +164,12 @@ def refine_package(curr: Solution, project_page: str, additional_functions: list
             coordinator_message("Refined packaging code successfuly builds, continuing...")
             curr = attempt
 
-        from vibenix.packaging_flow.model_prompts import end_stream_logger
+        # TODO: Implement cost tracking with pydantic-ai
         ccl_logger.log_iteration_cost(
             iteration=iteration,
-            iteration_cost=end_stream_logger.total_cost,
-            input_tokens=end_stream_logger.total_input_tokens,
-            output_tokens=end_stream_logger.total_output_tokens
+            iteration_cost=0.0,
+            input_tokens=0,
+            output_tokens=0
         )
     # Close the iteration list and refine_package attribute
     ccl_logger.leave_list()
@@ -421,8 +421,8 @@ def package_project(output_dir=None, project_url=None, revision=None, fetcher=No
         ccl_logger.write_kv("refined_package", candidate.code)
         
         # Always log success and return, regardless of refinement outcome
-        from vibenix.packaging_flow.model_prompts import end_stream_logger
-        ccl_logger.log_session_end(signal=None, total_cost=end_stream_logger.total_cost)
+        # TODO: Implement cost tracking with pydantic-ai
+        ccl_logger.log_session_end(signal=None, total_cost=0.0)
         close_logger()
         if output_dir:
             save_package_output(candidate.code, project_url, output_dir)
@@ -442,8 +442,8 @@ def package_project(output_dir=None, project_url=None, revision=None, fetcher=No
     ccl_logger.leave_attribute()
     if isinstance(packaging_failure, PackagingFailure):
         coordinator_message(f"Packaging failure type: {packaging_failure}\nDetails:\n{details}\n")
-    from vibenix.packaging_flow.model_prompts import end_stream_logger
-    ccl_logger.log_session_end(signal=None, total_cost=end_stream_logger.total_cost)
+    # TODO: Implement cost tracking with pydantic-ai
+    ccl_logger.log_session_end(signal=None, total_cost=0.0)
     close_logger()
     return None
 
@@ -482,15 +482,15 @@ def run_packaging_flow(output_dir=None, project_url=None, revision=None, fetcher
             coordinator_message("Packaging completed successfully!")
             coordinator_message(f"Final package code:\n```nix\n{result}\n```")
             # Print total API cost
-            from vibenix.packaging_flow.model_prompts import end_stream_logger
-            if end_stream_logger.total_cost > 0:
-                coordinator_message(f"\n💰 Total API cost: ${end_stream_logger.total_cost:.6f}")
+            # TODO: Implement cost tracking with pydantic-ai
+            # Cost tracking is not yet implemented with pydantic-ai
+            pass
         else:
             coordinator_message("Packaging failed. Please check the errors above.")
             # Print total API cost even on failure
-            from vibenix.packaging_flow.model_prompts import end_stream_logger
-            if end_stream_logger.total_cost > 0:
-                coordinator_message(f"\n💰 Total API cost: ${end_stream_logger.total_cost:.6f}")
+            # TODO: Implement cost tracking with pydantic-ai
+            # Cost tracking is not yet implemented with pydantic-ai
+            pass
     except Exception as e:
         coordinator_error(f"Unexpected error: {e}")
         raise
