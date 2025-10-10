@@ -75,24 +75,17 @@ class VibenixAgent:
         adapter = get_ui_adapter()
         full_response = ""
         
-        async with self.agent.run_stream(prompt) as result:
-            # Check if this is a text response or structured output
-            if self._output_type is None:
-                # Text response - can use stream_text
-                async for delta in result.stream_text(delta=True):
-                    full_response += delta
-                    # TODO: Update UI adapter to handle streaming
-                    # For now, we'll just print each chunk
-                    print(delta, end="", flush=True)
-            else:
-                # Structured output - can't use stream_text
-                # Just get the result without streaming
-                pass
+        # For text output, we use regular run method to avoid streaming issues
+        # We can get rid of this by switching away from text output to structured output for the updated code
+        if self._output_type is None:
+            result = await self.agent.run(prompt)
             
-            # For structured output, get the result
-            if self._output_type is not None:
-                output = await result.get_output()
+            # Get the text output
+            output = result.output
+            if output:
                 full_response = str(output)
+                # Show the complete response in the UI
+                adapter.show_message(Message(Actor.MODEL, full_response))
                 print(full_response)
             
             # Get usage data
@@ -102,8 +95,21 @@ class VibenixAgent:
                 completion_tokens=usage_data.output_tokens if usage_data else 0,
                 total_tokens=usage_data.total_tokens if usage_data else 0
             )
+        else:
+            # For structured output, use streaming
+            async with self.agent.run_stream(prompt) as result:
+                output = await result.get_output()
+                full_response = str(output)
+                print(full_response)
+                
+                # Get usage data
+                usage_data = result.usage() if hasattr(result, 'usage') else None
+                usage = Usage(
+                    prompt_tokens=usage_data.input_tokens if usage_data else 0,
+                    completion_tokens=usage_data.output_tokens if usage_data else 0,
+                    total_tokens=usage_data.total_tokens if usage_data else 0
+                )
         
-        print()  # newline after streaming
         return full_response, usage
     
     def run_stream(self, prompt: str) -> tuple[str, Usage]:
