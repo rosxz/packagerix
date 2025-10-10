@@ -7,7 +7,7 @@ import asyncio
 from typing import Optional, List, Callable, Any
 from pydantic import BaseModel
 from pydantic_ai import Agent
-from vibenix.model_config import create_model
+from vibenix.model_config import get_model
 from vibenix.ui.conversation import get_ui_adapter, Message, Actor, Usage
 from vibenix.ccl_log import get_logger
 
@@ -17,7 +17,7 @@ class VibenixAgent:
     
     def __init__(self, instructions: str = None, output_type: type = None):
         """Initialize the agent with optional custom instructions and output type."""
-        self.model = create_model()
+        self.model = get_model()
         default_instructions = "You are a software packaging expert who can build any project using the Nix programming language."
         
         # Only pass output_type if it's not None

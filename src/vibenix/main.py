@@ -117,11 +117,22 @@ def run_terminal_ui(output_dir=None, project_url=None, revision=None, fetcher=No
     
     # If project URL is provided, skip interactive configuration
     if project_url:
-        # TODO: Use hardcoded model configuration
-        logger.info("Using hardcoded model configuration")
+        from vibenix.model_config import load_saved_configuration, initialize_model_config
+        saved_config = load_saved_configuration()
+        if not saved_config:
+            logger.error("No saved model configuration found. Please run interactively first to configure.")
+            sys.exit(1)
+        # Initialize and log configuration once
+        initialize_model_config()
     else:
-        # TODO: Use hardcoded model configuration
-        logger.info("Using hardcoded model configuration")
+        # Interactive mode - prompt for configuration if needed
+        from vibenix.ui.raw_terminal.terminal_model_config import ensure_model_configured
+        if not ensure_model_configured():
+            logger.error("Model configuration required to continue")
+            sys.exit(1)
+        # Initialize after configuration is complete
+        from vibenix.model_config import initialize_model_config
+        initialize_model_config()
     
     # Run the packaging flow in background thread (like textual UI)
     import threading
