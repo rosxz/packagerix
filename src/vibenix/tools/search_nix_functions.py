@@ -9,8 +9,7 @@ from vibenix.tools.search_nixpkgs_manual_documentation import search_keyword_in_
 @log_function_call("search_nix_functions")
 def search_nix_functions(query: str) -> str:
     """
-    Search for Nix builtin and library functions by name.
-    Can be used to search for package sets or packages by their full name, or a part of their name.
+    Search for Nix builtin and library **FUNCTIONS** by name. Not useful for searching dependencies.
     Invoke multiple times to find different spellings, because search is not fuzzy.
     """
     

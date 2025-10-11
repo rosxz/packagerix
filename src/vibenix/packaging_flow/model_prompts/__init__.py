@@ -15,7 +15,9 @@ from vibenix.tools import (
     search_nix_functions,
     search_nixpkgs_for_file,
     search_nixpkgs_manual_documentation,
-    str_replace
+    str_replace,
+    insert,
+    view
 )
 from vibenix.errors import NixBuildErrorDiff, LogDiff, FullLogDiff, ProcessedLogDiff
 
@@ -30,7 +32,7 @@ SEARCH_FUNCTIONS = [
     search_nixpkgs_for_file,
     search_nixpkgs_manual_documentation
 ]
-SEARCH_AND_REPLACE_FUNCTIONS = SEARCH_FUNCTIONS + [str_replace]
+SEARCH_AND_EDIT_FUNCTIONS = SEARCH_FUNCTIONS + [str_replace, insert, view]
 
 
 @ask_model_prompt('pick_template.md')
@@ -63,7 +65,7 @@ def get_feedback(
     ...
 
 
-@ask_model_prompt('refinement/refine_code.md', functions=SEARCH_AND_REPLACE_FUNCTIONS)
+@ask_model_prompt('refinement/refine_code.md', functions=SEARCH_AND_EDIT_FUNCTIONS)
 def refine_code(
     code: str,
     feedback: str,
@@ -75,7 +77,7 @@ def refine_code(
     ...
 
 
-@ask_model_prompt('error_fixing/fix_build_error.md', functions=SEARCH_AND_REPLACE_FUNCTIONS)
+@ask_model_prompt('error_fixing/fix_build_error.md', functions=SEARCH_AND_EDIT_FUNCTIONS)
 def fix_build_error(
     code: str,
     error: str,
@@ -84,6 +86,7 @@ def fix_build_error(
     additional_functions: List = [],
     is_broken_log_output: bool = False,
     is_dependency_build_error: bool = False,
+    is_syntax_error: bool = False,
     attempted_tool_calls: List = [],
     tool_call_collector: List = None
 ) -> StreamedStr:

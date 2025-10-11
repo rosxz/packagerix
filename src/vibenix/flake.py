@@ -23,7 +23,7 @@ def init_flake():
     repo.git.add('-A')
     repo.index.commit("add empty template")
 
-def update_flake(new_content):
+def update_flake(new_content, do_commit: bool = False) -> str:
     file_path = config.flake_dir / "package.nix"
 
     # Open the file in write mode and overwrite it with new_content
@@ -32,6 +32,8 @@ def update_flake(new_content):
 
     repo = git.Repo(config.flake_dir.as_posix())
     repo.git.add('-A')
+    if not do_commit:
+        return None
     commit = repo.index.commit("build step")
     return commit.hexsha
 
