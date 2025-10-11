@@ -16,8 +16,7 @@ Error:
 {{ error }}
 ```
            
-**IMPORTANT**: For each change to the code, use the `str_replace` tool.
-Your final reply should only contain a very brief explanation of all the changes made with the `str_replace` tool, NOT the fully updated code.
+**IMPORTANT**: To perform each change to the code, use the text editor tools: `str_replace`, `insert`, `view`. Finally, reply with a very brief summary of the changes made.
 
 Note: Never replace more than one instance of lib.fakeHash.
 Note: Never put sha256-AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA= in the code.

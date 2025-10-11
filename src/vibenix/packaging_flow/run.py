@@ -7,7 +7,7 @@ from pathlib import Path
 from vibenix.ui.conversation import ask_user, coordinator_message, coordinator_error, coordinator_progress
 from vibenix.parsing import fetch_github_release_data, scrape_and_process, fetch_combined_project_data, fill_src_attributes
 from vibenix.flake import init_flake, get_package_contents
-from vibenix.nix import eval_progress, execute_build_and_add_to_stack, revert_packaging_to_solution, check_syntax
+from vibenix.nix import eval_progress, execute_build_and_add_to_stack, revert_packaging_to_solution
 from vibenix.packaging_flow.model_prompts import (
     pick_template, summarize_github, fix_build_error, fix_hash_mismatch, fix_syntax_error,
     analyze_package_failure, classify_packaging_failure, PackagingFailure,
@@ -21,6 +21,7 @@ from vibenix.errors import NixBuildErrorDiff, NixErrorKind
 from vibenix.tools.file_tools import create_source_function_calls
 from vibenix.ccl_log import init_logger, get_logger, close_logger, enum_str
 from vibenix.git_info import get_git_info
+from vibenix.tools.view import _view as view_package_contents
 import os
 
 
@@ -178,7 +179,7 @@ def compare_template(available_builders, initial_code,
         builder_combinations = find_similar_builder_patterns(builders)
         coordinator_message(builder_combinations)
         # Let model analyse and make changes
-        response = compare_template_builders(initial_code, builder_combinations, summary, additional_functions)
+        compare_template_builders(view_package_contents(), builder_combinations, summary, additional_functions)
         initial_code = get_package_contents()
         coordinator_message(f"Finished comparing builders to template.")
     else:
@@ -274,12 +275,13 @@ def package_project(output_dir=None, project_url=None, revision=None, fetcher=No
     from vibenix.tools.search_related_packages import get_builder_functions, _create_find_similar_builder_patterns
     available_builders = get_builder_functions()
     find_similar_builder_patterns = _create_find_similar_builder_patterns(available_builders)
-    additional_functions = project_functions + nixpkgs_functions + [get_builder_functions, find_similar_builder_patterns]
+    additional_functions = project_functions + nixpkgs_functions
 
     build_summary = summarize_build(summary, additional_functions)
     summary += f"\n\nBuild Summary:\n{build_summary}"
 
     initial_code = compare_template(available_builders, initial_code, find_similar_builder_patterns, summary, additional_functions)
+    additional_functions += [get_builder_functions, find_similar_builder_patterns]
     coordinator_message(f"Initial package code:\n```nix\n{initial_code}\n```")
 
     # Step 7: Agentic loop
@@ -319,7 +321,7 @@ def package_project(output_dir=None, project_url=None, revision=None, fetcher=No
             coordinator_message("Hash mismatch detected, fixing...")
             coordinator_message(f"code:\n{candidate.code}\n")
             coordinator_message(f"error:\n{candidate.result.error.truncated()}\n")
-            fixed_response = fix_hash_mismatch(candidate.code, candidate.result.error.truncated())
+            fix_hash_mismatch(view_package_contents(), candidate.result.error.truncated())
         if candidate.result.error.type == NixErrorKind.INVALID_HASH:
             coordinator_message("Invalid SRI hash detected, fixing...")
             hash_match = re.search(r'SRI hash \'([a-zA-Z0-9+/=]+)\'', candidate.result.error.truncated())
@@ -327,12 +329,10 @@ def package_project(output_dir=None, project_url=None, revision=None, fetcher=No
                 invalid_hash = hash_match.group(1)
                 coordinator_message(f"Invalid hash: {invalid_hash}")
                 fixed_code = re.sub(rf'"sha256-{invalid_hash}"', 'lib.fakeHash', candidate.code)
-                fixed_response = f"```nix\n{fixed_code}\n```"
+                from vibenix.flake import update_flake
+                update_flake(fixed_code)
             else: # fallback if regex fails
-                fixed_response = fix_hash_mismatch(candidate.code, candidate.result.error.truncated())
-        if candidate.result.error.type == NixErrorKind.EVAL_ERROR and check_syntax(candidate.code):
-            coordinator_message("Evaluation error due to parse issue (syntatical problem), fixing...")
-            fixed_response = fix_syntax_error(candidate.code, candidate.result.error.truncated())
+                fix_hash_mismatch(view_package_contents(), candidate.result.error.truncated())
         else:
             coordinator_message("Other error detected, fixing...")
             coordinator_message(f"code:\n{candidate.code}\n")
@@ -340,15 +340,21 @@ def package_project(output_dir=None, project_url=None, revision=None, fetcher=No
             
             # Create a collector for this iteration's tool calls
             iteration_tool_calls = []
+            error_truncated = candidate.result.error.truncated()
             is_dependency_error = candidate.result.error.type == NixErrorKind.DEPENDENCY_BUILD_ERROR
-            fixed_response = fix_build_error(
-                candidate.code, 
-                candidate.result.error.truncated(), 
+            is_syntax_error = candidate.result.error.type == NixErrorKind.EVAL_ERROR and "error: syntax error" in error_truncated
+            if is_syntax_error:
+                syntax_error_index = error_truncated.index("error: syntax error")
+                error_truncated = error_truncated[syntax_error_index:]
+            fix_build_error(
+                view_package_contents(),
+                error_truncated, 
                 summary, 
                 template_notes, 
                 additional_functions, 
                 has_broken_log_output,
                 is_dependency_error,
+                is_syntax_error,
                 attempted_tool_calls,
                 iteration_tool_calls
             )
@@ -357,6 +363,9 @@ def package_project(output_dir=None, project_url=None, revision=None, fetcher=No
             attempted_tool_calls.extend(iteration_tool_calls)
         
         updated_code = get_package_contents()
+        if updated_code == candidate.code:
+            coordinator_message("No changes made by the model, skipping iteration.")
+            continue
         
         # Log the updated code
         ccl_logger.write_kv("updated_code", updated_code)
@@ -467,7 +476,8 @@ def package_project(output_dir=None, project_url=None, revision=None, fetcher=No
             coordinator_error(f"Reached MAX_ITERATIONS build iteration limit of {MAX_ITERATIONS}.")
     
     ccl_logger.enter_attribute("analyze_failure")
-    details = analyze_package_failure(best.code, best.result.error.truncated(), summary, template_notes, additional_functions)
+    revert_packaging_to_solution(best) # TODO do this differently later, not just best
+    details = analyze_package_failure(best.code, best.result.error.truncated(), summary, template_notes, additional_functions) # TODO best.code
     ccl_logger.write_kv("description", str(details))
     packaging_failure = classify_packaging_failure(details)
     ccl_logger.write_kv("failure_type", enum_str(packaging_failure))

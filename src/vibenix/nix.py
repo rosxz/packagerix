@@ -220,7 +220,7 @@ def eval_progress(previous_result: NixBuildResult, current_result: NixBuildResul
 
 def execute_build_and_add_to_stack(updated_code: str) -> tuple[NixBuildResult, str]:
     """Update flake with new code, build it, and add result to error stack."""
-    commit_hash = update_flake(updated_code)
+    commit_hash = update_flake(updated_code, do_commit=True)
     result = invoke_build(True)
     if result.success:
         result = invoke_build(False)
@@ -232,18 +232,3 @@ def revert_packaging_to_solution(solution: Solution) -> None:
     repo = git.Repo(config.flake_dir.as_posix())
     repo.git.reset('--hard', solution.commit_hash)
     logger.info(f"Reverted to commit {solution.commit_hash}.")
-
-
-def check_syntax(code: str) -> Optional[str]:
-    """Try to parse the Nix code to check for syntax errors."""
-    parse_result = subprocess.run(
-        ["nix-instantiate", "--parse-only", "-"],
-        input=code,
-        text=True,
-        capture_output=True
-    )
-    
-    if parse_result.returncode != 0:
-        return parse_result.stderr.strip()
-    
-    return None

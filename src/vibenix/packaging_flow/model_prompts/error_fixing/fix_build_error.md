@@ -44,6 +44,18 @@ Common causes for dependency build failures:
 - Get distracted from building the main project
 {% endif %}
 
+{% if is_syntax_error %}
+**IMPORTANT: This appears to be an evaluation error, derived from syntactical mistakes.**
+
+Remember that:
+- Strings are ONLY defined with quotation marks (")
+- Multi-line strings are ONLY defined with double apostrophes ('')
+- Double apostrophes ('') in multi-line strings are escaped with a single apostrophe ('), e.g. ''test\n'''var'' is a single multi-line string with an escaped apostrophe.
+- In multi-line strings, dollar signs ($), dollar-curly (${), line-feed (\n), and carriage-return (\n) must be escaped with double apostrophes (''). For example, ''test\n''$var'' is a single multi-line string with escaped dollar.
+- For the remaining cases, special characters are usually escaped with a backslash (\).
+- If you need packages or attributes from a package set like `python3Packages` or `qt6`, only add the package set at the top of the file and not the full path to the attribute. Then, use `python3Packages.package_name` or `with python3Packages; [ package_name ]` to add the package.
+{% endif %}
+
 {% if attempted_tool_calls %}
 **The following tool calls have already been attempted without making progress. Consider trying different approaches:**
 {% for call in attempted_tool_calls %}
@@ -64,8 +76,7 @@ Common causes for dependency build failures:
 If the error message does not give you enough information to make progress, and to verify your actions, look at relevant files in the proejct directory,
 and try to compare your approach with similar packages in nixpkgs.
 
-**IMPORTANT**: For each change to the code, use the `str_replace` tool.
-Your final reply should only contain a very brief explanation of all the changes made with the `str_replace` tool, NOT the fully updated code.
+**IMPORTANT**: To perform each change to the code, use the text editor tools: `str_replace`, `insert`, `view`. Finally, reply with a very brief summary of the changes made.
 
 Known errors:
 - `error: evaluation aborted with the following error message: 'lib.customisation.callPackageWith: Function called without required argument "package_name" at /nix/store/[...]`:

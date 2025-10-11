@@ -8,7 +8,8 @@ from difflib import unified_diff
 @log_function_call("str_replace")
 def str_replace(old_str: str, new_str: str) -> str:
     """
-    Replace text in the current packaging expression. In case of ambiguous matches, select a bit more to ensure specificity.
+    Replace text in the current packaging expression. Will only work if there's exactly one match for `old_str`.
+    Do not include or consider line number prefixes e.g. "1: ".
     
     Args:
         old_str: The text to find and replace
@@ -29,21 +30,20 @@ def _str_replace(old_str: str, new_str: str) -> str:
         previous_content = current_content  # Store previous content for comparison
         
         # Check if old_str exists in content
-        if old_str not in current_content:
-            error_msg = f"Text to replace not found in packaging expression: '{old_str}'.\n Current packaging expression:\n{current_content}\n"
+        count = current_content.count(old_str)
+        if count == 0:
+            error_msg = f"Error: `old_str` not found in packaging expression.\nTry replacing a smaller section of text, or analyzing the packaging code again with the `view` tool.\n"
+            ccl_logger.write_kv("error", error_msg)
+            ccl_logger.leave_attribute(log_end=True)
+            return error_msg
+        if count > 1:
+            error_msg = f"Error: `old_str` is ambiguous and found {count} times in packaging expression.\n"
             ccl_logger.write_kv("error", error_msg)
             ccl_logger.leave_attribute(log_end=True)
             return error_msg
         
         # Perform replacement
         updated_content = current_content.replace(old_str, new_str)
-        
-        # Check if replacement actually changed something
-        if updated_content == current_content:
-            error_msg = "Replacement resulted in no changes"
-            ccl_logger.write_kv("error", error_msg)
-            ccl_logger.leave_attribute(log_end=True)
-            return error_msg
         
         # Update the flake with new content
         update_flake(updated_content)
@@ -57,7 +57,8 @@ def _str_replace(old_str: str, new_str: str) -> str:
             lineterm=''
         ))
         ccl_logger.leave_attribute(log_end=True)
-        return "String replacement successful. Diff:\n" + diff
+        from vibenix.tools.view import _view
+        return f"Successfully replaced text. Diff:```\n{diff}```\n"
         
     except Exception as e:
         error_msg = f"Error during string replacement: {str(e)}"

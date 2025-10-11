@@ -1,6 +1,6 @@
 from vibenix.flake import get_package_contents
 from vibenix.ui.conversation import ask_user,  coordinator_message, coordinator_error, coordinator_progress
-from vibenix.nix import eval_progress, execute_build_and_add_to_stack
+from vibenix.nix import eval_progress, execute_build_and_add_to_stack, revert_packaging_to_solution
 from vibenix.packaging_flow.model_prompts import (
     refine_code, get_feedback
 )
@@ -8,6 +8,7 @@ from vibenix.ccl_log import init_logger, get_logger, close_logger, enum_str
 from pydantic import BaseModel
 from vibenix.errors import NixBuildErrorDiff, NixErrorKind, NixBuildResult
 from vibenix.packaging_flow.Solution import Solution
+from vibenix.tools.view import _view as view_package_contents, view
 
 
 def refine_package(curr: Solution, project_page: str, additional_functions: list = None) -> Solution:
@@ -23,13 +24,14 @@ def refine_package(curr: Solution, project_page: str, additional_functions: list
         ccl_logger.write_kv("code", curr.code)
         # Get feedback for current code
         # TODO BUILD LOG IS NOT BEING PASSED!
-        feedback = get_feedback(curr.code, project_page, iteration+1, max_iterations, additional_functions)
+        code_lines = view_package_contents()
+        feedback = get_feedback(code_lines, project_page, iteration+1, max_iterations, additional_functions)
         coordinator_message(f"Refining package (iteration {iteration+1}/{max_iterations})...")
         coordinator_message(f"Received feedback: {feedback}")
         ccl_logger.write_kv("feedback", str(feedback))
 
         # Pass the feedback to the generator (refine_code)
-        response = refine_code(curr.code, feedback, project_page)
+        refine_code(code_lines, feedback, project_page)
         updated_code = get_package_contents()
         ccl_logger.write_kv("refined_code", updated_code)
         updated_res, updated_hash = execute_build_and_add_to_stack(updated_code)
@@ -38,6 +40,7 @@ def refine_package(curr: Solution, project_page: str, additional_functions: list
         # Verify the updated code still builds
         if not attempt.result.success:
             coordinator_error(f"Refinement caused a regression ({attempt.result.error.type}), reverting to last successful solution.")
+            revert_packaging_to_solution(curr)
             ccl_logger.write_kv("type", attempt.result.error.type)
             ccl_logger.write_kv("error", attempt.result.error.truncated())
         else:
