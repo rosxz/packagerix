@@ -164,7 +164,7 @@ def analyze_package_failure(
 @ask_model_prompt('summarize_build.md', functions=[])
 def summarize_build(
     summary: Optional[str] = None,
-    additional_functions: List = []) -> StreamedStr:
+    additional_functions: List = []) -> str:
     """Summarize the build process and identify relations between the components."""
     ...
 
@@ -183,7 +183,7 @@ def compare_template_builders(
     initial_code: str,
     builder_combinations_info: str,
     project_page: Optional[str] = None,
-    additional_functions: List = []) -> StreamedStr:
+    additional_functions: List = []) -> str:
     """Compare the template builders with ones from choose_builders."""
     ...
 
