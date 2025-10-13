@@ -27,6 +27,7 @@ dependencies = [
     "pytest>=8.4.1",
     "magika>=0.6.2",
     "scikit-learn>=1.7.0",
+    "tokenizers>=0.21,<0.22",
 ]
 
 [project.scripts]
