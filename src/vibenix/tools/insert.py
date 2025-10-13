@@ -9,6 +9,7 @@ from difflib import unified_diff
 def insert(insert_line: int, new_str: str) -> str:
     """Insert text at a specific location in the current packaging expression.
     Do not include or consider line number prefixes e.g. "1: ".
+    The `insert_line` is the line where new_str will be starting from (0 for beginning of file). Contents previously on that line, are pushed ahead.
     
     Args:
         insert_line: The line number after which to insert the text (0 for beginning of file)
@@ -20,8 +21,6 @@ def insert(insert_line: int, new_str: str) -> str:
 
 def _insert(insert_line: int, new_str: str) -> str:
     """Insert text at a specific location in the current packaging expression."""
-    ccl_logger = get_logger()
-    ccl_logger.enter_attribute("insert", log_start=True)
     
     try:
         # Get current package contents
@@ -30,10 +29,8 @@ def _insert(insert_line: int, new_str: str) -> str:
         
         # Check if insert_line is valid
         lines = current_content.splitlines()
-        if insert_line < 0 or insert_line > len(lines):
-            error_msg = f"Invalid `insert_line`: {insert_line}. Currently, must be between 0 and {len(lines)}."
-            ccl_logger.write_kv("error", error_msg)
-            ccl_logger.leave_attribute(log_end=True)
+        if insert_line < 0 or insert_line >= len(lines):
+            error_msg = f"Invalid `insert_line`: {insert_line}. Currently, there are {len(lines)-1} lines total (0-indexed, inclusive)."
             return error_msg
         
         # Insert the new string at the specified line
@@ -43,26 +40,19 @@ def _insert(insert_line: int, new_str: str) -> str:
         # Check if replacement actually changed something
         if updated_content == current_content:
             error_msg = "Replacement resulted in no changes"
-            ccl_logger.write_kv("error", error_msg)
-            ccl_logger.leave_attribute(log_end=True)
             return error_msg
         
         # Update the flake with new content
         update_flake(updated_content)
         
-        # Get Diff between previous and updated content (with line numbers)
-        diff = "\n".join(unified_diff(
-            previous_content.splitlines(), 
-            updated_content.splitlines(), 
-            fromfile='before', 
-            tofile='after', 
-            lineterm=''
-        ))
-        ccl_logger.leave_attribute(log_end=True)
-        return "Successfuly inserted text. Diff:\n```{diff}```".format(diff=diff)
+        # Show all lines starting from first changed line
+        start_line = insert_line
+        updated_lines = updated_content.splitlines()
+        diff = "\n".join([f"{i+1}: {line}" for i, line in enumerate(updated_lines[start_line:], start=start_line)])
+        return_msg = f"Lines starting from {insert_line}:\n```\n{diff}\n```"
+
+        return f"Successfuly inserted text. {return_msg}"
         
     except Exception as e:
         error_msg = f"Error inserting text: {str(e)}"
-        ccl_logger.write_kv("error", error_msg)
-        ccl_logger.leave_attribute(log_end=True)
         return error_msg

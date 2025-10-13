@@ -130,7 +130,7 @@ def read_fetcher_file(fetcher: str) -> tuple[str, str]:
         path = Path(fetcher)
         with open(path, 'r') as f:
             # Ignore comments and empty lines
-            content = "".join(line for line in f if line.strip() and not line.startswith("#"))
+            content = "".join(line for line in f if line.strip() and not line.startswith("#")).rstrip()
         ccl_logger.write_kv("fetcher", content)
 
         # Instantiate fetcher to pull contents to nix store

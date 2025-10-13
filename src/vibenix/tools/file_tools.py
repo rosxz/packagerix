@@ -72,7 +72,8 @@ def create_source_function_calls(store_path: str, prefix: str = "") -> List[Call
             return f"Error listing directory contents: {str(e)}"
 
     def read_file_content(relative_path: str, line_offset: int = 0, number_lines_to_read: int = MAX_LINES_TO_READ) -> str:
-        """Read the content of a file within the {source_description} given its relative path to the root directory."""
+        """Read the content of a file within the {source_description} given its relative path to the root directory.
+        This DOES NOT include viewing `package.nix` file, since it is outside the project source. Use the `view` tool instead. """
         print(f"📞 Function called: {prefix}read_file_content with path: ", relative_path)
         try:
             path = _validate_path(relative_path)
@@ -139,15 +140,15 @@ def create_source_function_calls(store_path: str, prefix: str = "") -> List[Call
             size_bytes /= 1024.0
         return f"{size_bytes:.2f} PB"
 
-    def search_in_files(pattern: str, relative_path: str = ".", custom_args: str = None) -> str:
-        """Search for a pattern in files within the {source_description} using `ripgrep`.
+    def search_inside_files(pattern: str, relative_path: str = ".", custom_args: str = None) -> str:
+        """Search for a pattern inside files within the {source_description} using `ripgrep`.
         
         Args:
             pattern: The search pattern (regex or literal string)
             relative_path: The relative path to search in (default: current directory)
             custom_args: Optional custom `ripgrep` arguments to override defaults
         """
-        print(f"📞 Function called: {prefix}search_in_files with pattern: '{pattern}', path: '{relative_path}'")
+        print(f"📞 Function called: {prefix}search_inside_files with pattern: '{pattern}', path: '{relative_path}'")
         try:
             path = _validate_path(relative_path)
             
@@ -179,9 +180,9 @@ def create_source_function_calls(store_path: str, prefix: str = "") -> List[Call
                 return f"Error searching files: {error_msg}"
                 
         except Exception as e:
-            return f"Error in search_in_files: {str(e)}"
+            return f"Error in search_inside_files: {str(e)}"
     
-    funcs = [list_directory_contents, read_file_content, search_in_files, detect_file_type_and_size]
+    funcs = [list_directory_contents, read_file_content, search_inside_files, detect_file_type_and_size]
     for i in range(len(funcs)):
         func = funcs[i]
         # Update name and docstring with prefix

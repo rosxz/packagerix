@@ -2,9 +2,10 @@ Important notes for packaging Rust applications:
 
 1. Use rustPlatform.buildRustPackage for all Rust projects
 2. Always set useFetchCargoVendor = true for modern nixpkgs
-3. cargoHash management:
+3. `cargoHash` management:
    - Set to lib.fakeHash initially, then update with correct hash from build error
    - This downloads and hashes all Cargo dependencies
+   - Change `sourceRoot` if Cargo.lock is in a unconventional location (e.g. sourceRoot = "${src.name}/rust/")
 4. Common native dependencies requiring pkg-config:
    - openssl (for TLS/HTTPS functionality)
    - zlib (for compression)

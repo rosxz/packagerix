@@ -48,6 +48,7 @@ Common causes for dependency build failures:
 **IMPORTANT: This appears to be an evaluation error, derived from syntactical mistakes.**
 
 Remember that:
+- **The causes for syntax errors are very often made before the location where the error is reported.**
 - Strings are ONLY defined with quotation marks (")
 - Multi-line strings are ONLY defined with double apostrophes ('')
 - Double apostrophes ('') in multi-line strings are escaped with a single apostrophe ('), e.g. ''test\n'''var'' is a single multi-line string with an escaped apostrophe.

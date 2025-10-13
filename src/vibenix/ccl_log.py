@@ -339,6 +339,7 @@ def log_function_call(function_name: str, indent_level: int = 2):
             logger._function_begin(function_name, indent_level, **kwargs)
             
             result = func(*args, **kwargs)
+            print(result)
             
             logger._function_end(function_name, result, indent_level)
             

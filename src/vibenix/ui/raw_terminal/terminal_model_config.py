@@ -6,6 +6,20 @@ from typing import Optional, Dict, Any, List
 from vibenix.ui.logging_config import logger
 
 
+# Default model settings for different providers
+DEFAULT_MODEL_SETTINGS = {
+    "gemini": {
+        "max_tokens": 32768,     # 32k tokens for complex packaging scenarios
+        "temperature": 0.1,      # Lower temperature for focused responses
+        "thinking_budget": 8192  # 8k tokens for reasoning about tool calls
+    },
+    "openai": {
+        "max_tokens": 32768,     # Match Gemini for consistency
+        "temperature": 0.1       # Lower temperature for focused responses
+    }
+}
+
+
 def get_available_models_from_endpoint(base_url: str, api_key: str = "dummy") -> List[str]:
     """Get available models from OpenAI-compatible endpoint."""
     try:
@@ -32,6 +46,146 @@ def get_available_models_from_endpoint(base_url: str, api_key: str = "dummy") ->
         return []
 
 
+def choose_provider_terminal() -> Optional[str]:
+    """Let user choose between providers."""
+    print("\n🔧 Choose AI Provider:")
+    print("1. OpenAI-compatible (local models, OpenAI, etc.)")
+    print("2. Google Gemini")
+    
+    while True:
+        choice = input("\nSelect provider (1-2) or 'q' to quit: ").strip().lower()
+        
+        if choice == 'q':
+            return None
+        elif choice == '1':
+            return "openai"
+        elif choice == '2':
+            return "gemini"
+        else:
+            print("❌ Please enter 1, 2, or 'q' to quit")
+
+
+def get_available_gemini_models(api_key: str) -> List[str]:
+    """Get available Gemini models from Google API."""
+    try:
+        url = "https://generativelanguage.googleapis.com/v1beta/models"
+        headers = {}
+        params = {"key": api_key}
+        
+        logger.info(f"Querying Google API for available models")
+        response = requests.get(url, headers=headers, params=params, timeout=10)
+        response.raise_for_status()
+        
+        data = response.json()
+        models = []
+        
+        # Filter models that support generateContent
+        for model_data in data.get("models", []):
+            model_name = model_data.get("name", "")
+            supported_actions = model_data.get("supportedGenerationMethods", [])
+            
+            if "generateContent" in supported_actions:
+                # Extract model ID from full name (e.g., "models/gemini-1.5-flash" -> "gemini-1.5-flash")
+                if "/" in model_name:
+                    model_id = model_name.split("/")[-1]
+                    models.append(model_id)
+        
+        logger.info(f"Retrieved {len(models)} Gemini models from Google API")
+        return models
+    except Exception as e:
+        logger.warning(f"Failed to query Google models API: {e}")
+        # Return fallback models if API fails
+        return [
+            "gemini-1.5-flash",
+            "gemini-1.5-pro", 
+            "gemini-2.5-flash",
+            "gemini-2.5-pro"
+        ]
+
+
+def configure_model_settings(provider: str) -> Dict[str, Any]:
+    """Allow user to configure model settings for the selected provider."""
+    defaults = DEFAULT_MODEL_SETTINGS.get(provider, DEFAULT_MODEL_SETTINGS["openai"])
+    
+    print(f"\n⚙️  Model Settings for {provider.title()}")
+    print("=" * 40)
+    
+    # Show current defaults
+    print("Default settings:")
+    for key, value in defaults.items():
+        print(f"  • {key}: {value}")
+    
+    use_defaults = input(f"\nUse defaults? (Y/n): ").strip().lower()
+    if use_defaults != 'n':
+        return defaults.copy()
+    
+    print("\n🔧 Customize Settings:")
+    custom_settings = {}
+    
+    # Configure each setting generically
+    for key, default_value in defaults.items():
+        while True:
+            try:
+                user_input = input(f"{key} (default {default_value}): ").strip()
+                if not user_input:
+                    custom_settings[key] = default_value
+                    break
+                
+                # Try to convert to the same type as default
+                if isinstance(default_value, bool):
+                    custom_settings[key] = user_input.lower() in ('true', 't', 'yes', 'y', '1')
+                elif isinstance(default_value, int):
+                    custom_settings[key] = int(user_input)
+                elif isinstance(default_value, float):
+                    custom_settings[key] = float(user_input)
+                else:
+                    custom_settings[key] = user_input
+                break
+            except ValueError:
+                print("❌ Invalid input, try again")
+    
+    return custom_settings
+
+
+def choose_gemini_model_terminal() -> Optional[str]:
+    """Let user choose a Gemini model."""
+    # Check if GOOGLE_API_KEY is set
+    api_key = os.environ.get("GOOGLE_API_KEY")
+    if not api_key:
+        print("\n⚠️  GOOGLE_API_KEY environment variable not found!")
+        print("Please set your Google API key:")
+        print("export GOOGLE_API_KEY=your_api_key_here")
+        print("\nGet your API key from: https://aistudio.google.com")
+        return None
+    
+    print("\n🤔 Fetching available Gemini models...")
+    gemini_models = get_available_gemini_models(api_key)
+    
+    if not gemini_models:
+        print("\n⚠️  No models found. Using manual entry:")
+        model = input("Enter Gemini model name (e.g., gemini-1.5-flash): ").strip()
+        return model if model else None
+    
+    print(f"\n🧠 Available Gemini Models ({len(gemini_models)}):")
+    for i, model in enumerate(gemini_models, 1):
+        print(f"{i}. {model}")
+    
+    while True:
+        choice = input(f"\nSelect model (1-{len(gemini_models)}) or 'q' to quit: ").strip().lower()
+        
+        if choice == 'q':
+            return None
+        
+        try:
+            idx = int(choice) - 1
+            if 0 <= idx < len(gemini_models):
+                return gemini_models[idx]
+            else:
+                print(f"❌ Please enter a number between 1 and {len(gemini_models)}")
+        except ValueError:
+            print("❌ Please enter a valid number or 'q' to quit")
+
+
 def show_model_config_terminal() -> Optional[Dict[str, str]]:
     """Show terminal-based model configuration dialog.
     
@@ -41,35 +195,58 @@ def show_model_config_terminal() -> Optional[Dict[str, str]]:
     print("\n🤖 Configure AI Model")
     print("=" * 50)
     
-    # For now, we only support OpenAI-compatible endpoints
-    provider = "openai"
-    print(f"\n✅ Using OpenAI-compatible API")
-    
-    # Get the base URL
-    openai_api_base = handle_openai_api_base_terminal()
-    if not openai_api_base:
-        # Use default if not provided
-        openai_api_base = "http://llama.digidow.ins.jku.at:11434/v1/"
-    
-    # Get API key from environment or use dummy
-    api_key = os.environ.get("OPENAI_API_KEY", "dummy")
-    
-    # Choose model
-    model = choose_model_terminal(openai_api_base, api_key)
-    if not model:
+    # Choose provider
+    provider = choose_provider_terminal()
+    if not provider:
         return None
     
-    # Save configuration
-    print(f"\n✅ Saving configuration: {model}")
-    
-    # Save to config file
-    save_configuration(provider, model, openai_api_base)
-    
-    return {
-        "provider": provider,
-        "model": f"{provider}/{model}",
-        "openai_api_base": openai_api_base
-    }
+    if provider == "gemini":
+        # Handle Gemini configuration
+        model = choose_gemini_model_terminal()
+        if not model:
+            return None
+        
+        # Configure model settings
+        model_settings = configure_model_settings(provider)
+        
+        # Save configuration
+        print(f"\n✅ Saving configuration: {model}")
+        save_configuration(provider, model, None, model_settings)
+        
+        return {
+            "provider": provider,
+            "model": f"{provider}/{model}"
+        }
+    else:
+        # Handle OpenAI-compatible configuration
+        print(f"\n✅ Using OpenAI-compatible API")
+        
+        # Get the base URL
+        openai_api_base = handle_openai_api_base_terminal()
+        if not openai_api_base:
+            # Use default if not provided
+            openai_api_base = "http://llama.digidow.ins.jku.at:11434/v1/"
+        
+        # Get API key from environment or use dummy
+        api_key = os.environ.get("OPENAI_API_KEY", "dummy")
+        
+        # Choose model
+        model = choose_model_terminal(openai_api_base, api_key)
+        if not model:
+            return None
+        
+        # Configure model settings
+        model_settings = configure_model_settings(provider)
+        
+        # Save configuration
+        print(f"\n✅ Saving configuration: {model}")
+        save_configuration(provider, model, openai_api_base, model_settings)
+        
+        return {
+            "provider": provider,
+            "model": f"{provider}/{model}",
+            "openai_api_base": openai_api_base
+        }
 
 
 def handle_openai_api_base_terminal() -> Optional[str]:
@@ -106,7 +283,7 @@ def handle_openai_api_base_terminal() -> Optional[str]:
             print(f"❌ Failed to connect: {e}")
             retry = input("\nRetry with different URL? (y/N): ").strip().lower()
             if retry != 'y':
-                return None
+                return input
 
 
 def choose_model_terminal(base_url: str, api_key: str) -> Optional[str]:
@@ -140,14 +317,19 @@ def choose_model_terminal(base_url: str, api_key: str) -> Optional[str]:
             print("❌ Please enter a valid number or 'q' to quit")
 
 
-def save_configuration(provider: str, model: str, openai_api_base: str):
+def save_configuration(provider: str, model: str, openai_api_base: str, model_settings: Dict[str, Any] = None):
     """Save the configuration for future use."""
+    # Use default model settings if none provided
+    if model_settings is None:
+        model_settings = DEFAULT_MODEL_SETTINGS.get(provider, DEFAULT_MODEL_SETTINGS["openai"])
+    
     # Save to config file
     config_data = {
         "provider": provider,
         "model": f"{provider}/{model}",
         "backend": "pydantic-ai",
-        "openai_api_base": openai_api_base
+        "openai_api_base": openai_api_base,
+        "model_settings": model_settings
     }
     
     try:
@@ -174,7 +356,7 @@ def ensure_model_configured() -> bool:
     saved_config = load_saved_configuration()
     
     if saved_config:
-        provider_name, model, ollama_host, openai_api_base = saved_config
+        provider_name, model, ollama_host, openai_api_base, model_settings = saved_config
         print(f"\n✅ Found saved model configuration: {model}")
         
         # Ask if they want to use it or reconfigure

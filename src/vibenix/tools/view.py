@@ -37,8 +37,11 @@ def _view(view_range: list[int]=None, do_log: bool=False) -> str:
                     ccl_logger.leave_attribute(log_end=True)
                 return error_msg
             start, end = view_range
+            # if its trying to view a single line, make end one more than start (just to make life easier for the model)
+            if start == end:
+                end += 1
             if start < 0 or end > len(lines) or start >= end:
-                error_msg = f"Invalid `view_range`: {view_range}. Packaging code has lines between 0 and {len(lines)}, and start < end must hold."
+                error_msg = f"Invalid `view_range`: {view_range}. Packaging code has lines between 0 and {len(lines)-1} (0-indexed, inclusive), and start < end must hold."
                 if do_log:
                     ccl_logger.write_kv("error", error_msg)
                     ccl_logger.leave_attribute(log_end=True)

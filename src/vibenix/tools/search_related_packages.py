@@ -320,6 +320,11 @@ def _get_builder_combinations(chosen_builders: List[str], keyword: str = None) -
         nixpkgs_path = get_nixpkgs_source_path()
     except Exception as e:
         raise RuntimeError(f"Failed to get nixpkgs source path: {e}")
+
+    if len(chosen_builders) < 1:
+        return "At least one builder function must be specified."
+    elif len(chosen_builders) > 5:
+        return "A maximum of 5 builder functions can be specified."
     
     all_builders = list(set(chosen_builders))
     ccl_logger.write_kv("chosen_builders", str(all_builders))

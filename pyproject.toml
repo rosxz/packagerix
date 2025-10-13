@@ -19,6 +19,7 @@ dependencies = [
     "pydantic-ai",
     "httpx",
     "openai",
+    "google-genai",
     "loguru",
     "keyring",
     "keyrings.alt",
