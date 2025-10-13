@@ -42,3 +42,8 @@ Notes:
 <improvement description, detailing which tool and how it was used validate it. at most 3 sentences>
 (...)
 ```
+- If after using the available tools you cannot find any concrete improvements that you are highly confident about, respond with:
+```text
+# No improvements found
+The code appears to be well-structured and complete. No confident improvements identified.
+```
