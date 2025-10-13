@@ -6,12 +6,16 @@ This module provides model configuration compatible with the previous litellm-ba
 import os
 import json
 from typing import Optional, Dict, Any, Tuple
-from pydantic_ai.models.openai import OpenAIModel
+from pydantic_ai.models.openai import OpenAIModel, OpenAIModelSettings
 from pydantic_ai.providers.openai import OpenAIProvider
+from pydantic_ai.models.anthropic import AnthropicModel
+from pydantic_ai.providers.anthropic import AnthropicProvider
 from pydantic_ai.models.google import GoogleModel, GoogleModelSettings
 from pydantic_ai.providers.google import GoogleProvider
-from pydantic_ai.models.openai import OpenAIModelSettings
 from vibenix.ui.logging_config import logger
+
+# TODO: Add retry configuration for providers that support custom HTTP clients
+# For now, we'll use default retry behavior
 
 
 # Default model settings for different providers
@@ -167,34 +171,58 @@ def initialize_model_config():
     global _cached_model
     
     config = get_model_config()
+    provider_name = config.get("provider", "openai")
+    model_name = config.get("model_name")
     
-    # Log configuration details once
-    if config.get("provider") == "openai" and "OPENAI_BASE_URL" in os.environ:
-        logger.info(f"Set OPENAI_BASE_URL to {os.environ['OPENAI_BASE_URL']}")
-    
-    logger.info(f"Loaded configuration: {config.get('full_model', 'unknown')} from {config.get('provider', 'unknown')}")
+    logger.info(f"Loaded configuration: {config.get('full_model', 'unknown')} from {provider_name}")
     
     # Create model based on provider
-    if config.get("provider") == "gemini":
-        # Get API key from environment
-        api_key = os.environ.get("GOOGLE_API_KEY")
+    if provider_name == "anthropic":
+        # Get Anthropic API key - check environment first (as override), then secure storage
+        from vibenix.secure_keys import get_api_key
+        api_key = os.environ.get("ANTHROPIC_API_KEY")
         if not api_key:
-            raise RuntimeError("GOOGLE_API_KEY environment variable is required for Gemini models")
+            api_key = get_api_key("ANTHROPIC_API_KEY")
+            if not api_key:
+                raise ValueError("ANTHROPIC_API_KEY not found in environment or secure storage. Run interactively to configure.")
         
-        logger.info(f"Using Gemini model: {config['model_name']}")
+        logger.info(f"Using Anthropic model: {model_name}")
+        provider = AnthropicProvider(api_key=api_key)
+        _cached_model = AnthropicModel(model_name, provider=provider)
+    
+    elif provider_name == "gemini":
+        # Get Google API key - check environment first (as override), then secure storage
+        from vibenix.secure_keys import get_api_key
+        api_key = os.environ.get("GEMINI_API_KEY") or os.environ.get("GOOGLE_API_KEY")
+        if not api_key:
+            api_key = get_api_key("GEMINI_API_KEY")
+            if not api_key:
+                raise ValueError("GEMINI_API_KEY not found in environment or secure storage. Run interactively to configure.")
+        
+        logger.info(f"Using Gemini model: {model_name}")
         provider = GoogleProvider(api_key=api_key)
         
         # Create model settings
         model_settings = create_gemini_settings(config.get("model_settings", {}))
-        _cached_model = GoogleModel(config["model_name"], provider=provider, settings=model_settings)
-    else:
-        # Default to OpenAI-compatible models
+        _cached_model = GoogleModel(model_name, provider=provider, settings=model_settings)
+    
+    elif provider_name == "openai":
+        # OpenAI-compatible endpoints
+        base_url = config.get("base_url")
         api_key = os.environ.get("OPENAI_API_KEY", "dummy")
         
-        # Create and cache the model
-        logger.info(f"Using model: {config['model_name']} at {config['base_url']}")
-        provider = OpenAIProvider(base_url=config["base_url"], api_key=api_key)
+        # Log configuration details
+        if "OPENAI_BASE_URL" in os.environ:
+            logger.info(f"Set OPENAI_BASE_URL to {os.environ['OPENAI_BASE_URL']}")
+        
+        logger.info(f"Using OpenAI-compatible model: {model_name} at {base_url}")
+        provider = OpenAIProvider(base_url=base_url, api_key=api_key)
         
         # Create model settings
         model_settings = create_openai_settings(config.get("model_settings", {}))
-        _cached_model = OpenAIModel(config["model_name"], provider=provider, settings=model_settings)
+        _cached_model = OpenAIModel(model_name, provider=provider, settings=model_settings)
+    
+    else:
+        raise ValueError(f"Unknown provider: {provider_name}")
+    
+    logger.info(f"Model initialized successfully")
