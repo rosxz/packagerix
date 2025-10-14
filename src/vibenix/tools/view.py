@@ -5,14 +5,14 @@ from vibenix.flake import get_package_contents
 
 
 @log_function_call("view")
-def view(view_range: list[int] = None) -> str:
+def view() -> str:
     """Examine the contents of the current packaging expression.
 
     Args:
-        view_range: Optional(list[int]): A list of two integers specifying the start and end lines to view.
+        view_range: Optional(list[int]): A list of two integers specifying the start and end lines to view (0-indexed, inclusive).
     """
     print(f"📞 Function called: view")
-    return _view(view_range, do_log=True)
+    return _view(do_log=True)
 
 
 def _view(view_range: list[int]=None, do_log: bool=False) -> str:
@@ -28,7 +28,7 @@ def _view(view_range: list[int]=None, do_log: bool=False) -> str:
         # Check if view_range is valid
         lines = current_content.splitlines()
         # Add `<line_number>: ` prefix to each line
-        lines = [f"{i}: {line}" for i, line in enumerate(lines)]
+        lines = [f"{i:>3}: {line}" for i, line in enumerate(lines)]
         if view_range:
             if len(view_range) != 2:
                 error_msg = "Invalid `view_range`: must be a list of two integers."
@@ -40,7 +40,7 @@ def _view(view_range: list[int]=None, do_log: bool=False) -> str:
             # if its trying to view a single line, make end one more than start (just to make life easier for the model)
             if start == end:
                 end += 1
-            if start < 0 or end > len(lines) or start >= end:
+            if start < 0 or end >= len(lines) or start >= end:
                 error_msg = f"Invalid `view_range`: {view_range}. Packaging code has lines between 0 and {len(lines)-1} (0-indexed, inclusive), and start < end must hold."
                 if do_log:
                     ccl_logger.write_kv("error", error_msg)

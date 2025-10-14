@@ -71,44 +71,6 @@ def choose_provider_terminal() -> Optional[str]:
             print("❌ Please enter 1, 2, 3, or 'q' to quit")
 
 
-def get_available_gemini_models(api_key: str) -> List[str]:
-    """Get available Gemini models from Google API."""
-    try:
-        url = "https://generativelanguage.googleapis.com/v1beta/models"
-        headers = {}
-        params = {"key": api_key}
-        
-        logger.info(f"Querying Google API for available models")
-        response = requests.get(url, headers=headers, params=params, timeout=10)
-        response.raise_for_status()
-        
-        data = response.json()
-        models = []
-        
-        # Filter models that support generateContent
-        for model_data in data.get("models", []):
-            model_name = model_data.get("name", "")
-            supported_actions = model_data.get("supportedGenerationMethods", [])
-            
-            if "generateContent" in supported_actions:
-                # Extract model ID from full name (e.g., "models/gemini-1.5-flash" -> "gemini-1.5-flash")
-                if "/" in model_name:
-                    model_id = model_name.split("/")[-1]
-                    models.append(model_id)
-        
-        logger.info(f"Retrieved {len(models)} Gemini models from Google API")
-        return models
-    except Exception as e:
-        logger.warning(f"Failed to query Google models API: {e}")
-        # Return fallback models if API fails
-        return [
-            "gemini-1.5-flash",
-            "gemini-1.5-pro", 
-            "gemini-2.5-flash",
-            "gemini-2.5-pro"
-        ]
-
-
 def configure_model_settings(provider: str) -> Dict[str, Any]:
     """Allow user to configure model settings for the selected provider."""
     defaults = DEFAULT_MODEL_SETTINGS.get(provider, DEFAULT_MODEL_SETTINGS["openai"])
@@ -165,7 +127,7 @@ def choose_gemini_model_terminal() -> Optional[str]:
         return None
     
     print("\n🤔 Fetching available Gemini models...")
-    gemini_models = get_available_gemini_models(api_key)
+    gemini_models = get_gemini_models(api_key)
     
     if not gemini_models:
         print("\n⚠️  No models found. Using manual entry:")
@@ -421,40 +383,6 @@ def choose_anthropic_model_terminal(api_key: str) -> Optional[str]:
         return model if model else None
     
     print(f"\n📋 Available Anthropic models ({len(models)}):")
-    for i, model in enumerate(models, 1):
-        print(f"{i}. {model}")
-    print(f"{len(models) + 1}. Enter custom model name")
-    
-    while True:
-        choice = input(f"\nSelect model (1-{len(models)+1}) or 'q' to quit: ").strip().lower()
-        
-        if choice == 'q':
-            return None
-        
-        try:
-            idx = int(choice) - 1
-            if 0 <= idx < len(models):
-                return models[idx]
-            elif idx == len(models):
-                model = input("Enter model name: ").strip()
-                return model if model else None
-            else:
-                print(f"❌ Please enter a number between 1 and {len(models)+1}")
-        except ValueError:
-            print("❌ Please enter a valid number or 'q' to quit")
-
-
-def choose_gemini_model_terminal(api_key: str) -> Optional[str]:
-    """Let user choose a Gemini model."""
-    print("\n🔍 Fetching available Gemini models...")
-    models = get_gemini_models(api_key)
-    
-    if not models:
-        print("\n⚠️  Could not retrieve models. Enter model name manually:")
-        model = input("Model name: ").strip()
-        return model if model else None
-    
-    print(f"\n📋 Available Gemini models ({len(models)}):")
     for i, model in enumerate(models, 1):
         print(f"{i}. {model}")
     print(f"{len(models) + 1}. Enter custom model name")

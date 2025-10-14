@@ -51,8 +51,8 @@ def _str_replace(old_str: str, new_str: str, collision: int = None) -> str:
                 previous_lines = previous_content.splitlines()
                 updated_lines = updated_content.splitlines()
                 first_diff_index = next(i for i in range(min(len(previous_lines), len(updated_lines))) if previous_lines[i] != updated_lines[i])
-                diff = "\n".join([f"{i+1}: {line}" for i, line in enumerate(updated_lines[first_diff_index:], start=first_diff_index)])
-                return_msg = f"Lines starting from {first_diff_index + 1}:\n```\n{diff}\n```"
+                diff = "\n".join([f"{i:>3}: {line}" for i, line in enumerate(updated_lines[first_diff_index:], start=first_diff_index)])
+                return_msg = f"Lines starting from {first_diff_index}:\n```\n{diff}\n```"
                 
                 return f"Successfully replaced text. {return_msg}"
         
@@ -67,13 +67,13 @@ def _str_replace(old_str: str, new_str: str, collision: int = None) -> str:
         updated_lines = updated_content.splitlines()
         return_msg = None
         if len(previous_lines) == len(updated_lines):
-            diff_lines = [f"{i+1}: {updated_lines[i]}" for i in range(len(updated_lines)) if previous_lines[i] != updated_lines[i]]
+            diff_lines = [f"{i:>3}: {updated_lines[i]}" for i in range(len(updated_lines)) if previous_lines[i] != updated_lines[i]]
             diff = "\n".join(diff_lines)
             return_msg = f"Updated lines:\n```\n{diff}\n```"
         else:
             first_diff_index = next(i for i in range(min(len(previous_lines), len(updated_lines))) if previous_lines[i] != updated_lines[i])
-            diff = "\n".join([f"{i+1}: {line}" for i, line in enumerate(updated_lines[first_diff_index:], start=first_diff_index)])
-            return_msg = f"Lines starting from {first_diff_index + 1}:\n```\n{diff}\n```"
+            diff = "\n".join([f"{i:>3}: {line}" for i, line in enumerate(updated_lines[first_diff_index:], start=first_diff_index)])
+            return_msg = f"Lines starting from {first_diff_index}:\n```\n{diff}\n```"
 
         return f"Successfully replaced text. {return_msg}"
         
