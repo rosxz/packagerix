@@ -23,7 +23,7 @@ DEFAULT_MODEL_SETTINGS = {
     "gemini": {
         "max_tokens": 32768,     # 32k tokens for complex packaging scenarios
         "temperature": 0.1,      # Lower temperature for focused responses
-        "thinking_budget": 8192  # 8k tokens for reasoning about tool calls
+        "thinking_budget": 16384  # 8k tokens for reasoning about tool calls
     },
     "openai": {
         "max_tokens": 32768,     # Match Gemini for consistency
