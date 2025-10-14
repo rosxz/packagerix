@@ -19,7 +19,7 @@ DEFAULT_MODEL_SETTINGS = {
     "gemini": {
         "max_tokens": 32768,     # 32k tokens for complex packaging scenarios
         "temperature": 0.1,      # Lower temperature for focused responses
-        "thinking_budget": 8192  # 8k tokens for reasoning about tool calls
+        "thinking_budget": 16384  # 8k tokens for reasoning about tool calls
     },
     "openai": {
         "max_tokens": 32768,     # Match Gemini for consistency
@@ -177,9 +177,9 @@ def initialize_model_config():
     # Create model based on provider
     if config.get("provider") == "gemini":
         # Get API key from environment
-        api_key = os.environ.get("GOOGLE_API_KEY")
+        api_key = os.environ.get("GEMINI_API_KEY")
         if not api_key:
-            raise RuntimeError("GOOGLE_API_KEY environment variable is required for Gemini models")
+            raise RuntimeError("GEMINI_API_KEY environment variable is required for Gemini models")
         
         logger.info(f"Using Gemini model: {config['model_name']}")
         provider = GoogleProvider(api_key=api_key)
