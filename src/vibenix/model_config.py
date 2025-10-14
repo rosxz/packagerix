@@ -18,7 +18,7 @@ from vibenix.ui.logging_config import logger
 DEFAULT_MODEL_SETTINGS = {
     "gemini": {
         "max_tokens": 32768,     # 32k tokens for complex packaging scenarios
-        "temperature": 0.1,      # Lower temperature for focused responses
+        "temperature": 0.0,      # Lower temperature for focused responses
         "thinking_budget": 16384  # 8k tokens for reasoning about tool calls
     },
     "openai": {
@@ -136,6 +136,41 @@ def get_model_name() -> str:
     return config.get("full_model", f"{config['provider']}/{config['model_name']}")
 
 
+def load_model_settings_from_env(provider: str) -> Dict[str, Any]:
+    """Load model settings from environment variable or use defaults.
+    
+    Checks for VIBENIX_MODEL_SETTINGS environment variable containing JSON.
+    Falls back to defaults if not found or invalid.
+    
+    Example GitHub CI usage:
+    VIBENIX_MODEL_SETTINGS: '{"temperature": 0.0, "max_tokens": 16384}'
+    """
+    env_settings_json = os.environ.get("VIBENIX_MODEL_SETTINGS")
+    
+    if env_settings_json:
+        try:
+            env_settings = json.loads(env_settings_json)
+            logger.info(f"Loaded model settings from VIBENIX_MODEL_SETTINGS environment variable")
+            
+            # Merge with defaults to ensure all required keys exist
+            defaults = DEFAULT_MODEL_SETTINGS.get(provider, DEFAULT_MODEL_SETTINGS["openai"]).copy()
+            merged_settings = {**defaults, **env_settings}
+            
+            logger.info(f"Using environment model settings: {merged_settings}")
+            return merged_settings
+            
+        except json.JSONDecodeError as e:
+            logger.warning(f"Invalid JSON in VIBENIX_MODEL_SETTINGS environment variable: {e}")
+            logger.warning("Falling back to default settings")
+        except Exception as e:
+            logger.warning(f"Error parsing VIBENIX_MODEL_SETTINGS: {e}")
+            logger.warning("Falling back to default settings")
+    
+    # Return defaults
+    defaults = DEFAULT_MODEL_SETTINGS.get(provider, DEFAULT_MODEL_SETTINGS["openai"]).copy()
+    return defaults
+
+
 def create_gemini_settings(settings: Dict[str, Any]) -> GoogleModelSettings:
     """Create GoogleModelSettings from config dict."""
     # Use constants for defaults
@@ -184,8 +219,17 @@ def initialize_model_config():
         logger.info(f"Using Gemini model: {config['model_name']}")
         provider = GoogleProvider(api_key=api_key)
         
-        # Create model settings
-        model_settings = create_gemini_settings(config.get("model_settings", {}))
+        # Prioritize environment settings over saved config
+        env_settings = load_model_settings_from_env("gemini")
+        saved_settings = config.get("model_settings", {})
+        
+        # Environment variables take precedence
+        if os.environ.get("VIBENIX_MODEL_SETTINGS"):
+            final_settings = env_settings
+        else:
+            final_settings = saved_settings if saved_settings else env_settings
+        
+        model_settings = create_gemini_settings(final_settings)
         _cached_model = GoogleModel(config["model_name"], provider=provider, settings=model_settings)
     else:
         # Default to OpenAI-compatible models
@@ -195,6 +239,15 @@ def initialize_model_config():
         logger.info(f"Using model: {config['model_name']} at {config['base_url']}")
         provider = OpenAIProvider(base_url=config["base_url"], api_key=api_key)
         
-        # Create model settings
-        model_settings = create_openai_settings(config.get("model_settings", {}))
+        # Prioritize environment settings over saved config
+        env_settings = load_model_settings_from_env("openai")
+        saved_settings = config.get("model_settings", {})
+        
+        # Environment variables take precedence
+        if os.environ.get("VIBENIX_MODEL_SETTINGS"):
+            final_settings = env_settings
+        else:
+            final_settings = saved_settings if saved_settings else env_settings
+        
+        model_settings = create_openai_settings(final_settings)
         _cached_model = OpenAIModel(config["model_name"], provider=provider, settings=model_settings)

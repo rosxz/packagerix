@@ -33,6 +33,10 @@ on:
         required: false
         default: 'gemini/gemini-2.5-flash'
         type: string
+      model_settings:
+        description: 'Model settings as JSON (e.g., {"temperature": 0.0, "max_tokens": 32768})'
+        required: false
+        type: string
       ollama_host:
         description: 'Ollama host URL (e.g., http://your-host.tailnet:11434)'
         required: false
@@ -219,6 +223,11 @@ jobs:
             echo "OPENAI_API_KEY=dummy" >> $GITHUB_ENV
           elif [ "${{ steps.provider.outputs.provider }}" = "openai" ]; then
             echo "OPENAI_API_KEY=${{ secrets.OPENAI_API_KEY }}" >> $GITHUB_ENV
+          fi
+          
+          # Set model settings from input (only if provided)
+          if [ -n "${{ github.event.inputs.model_settings }}" ]; then
+            echo "VIBENIX_MODEL_SETTINGS='${{ github.event.inputs.model_settings }}'" >> $GITHUB_ENV
           fi
       
       - name: Process package request
