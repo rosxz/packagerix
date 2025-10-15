@@ -100,16 +100,8 @@ def configure_model_settings(provider: str) -> Dict[str, Any]:
     return custom_settings
 
 
-def choose_gemini_model_terminal() -> Optional[str]:
+def choose_gemini_model_terminal(api_key: str) -> Optional[str]:
     """Let user choose a Gemini model."""
-    # Check if GEMINI_API_KEY or GOOGLE_API_KEY is set
-    api_key = os.environ.get("GEMINI_API_KEY") or os.environ.get("GOOGLE_API_KEY")
-    if not api_key:
-        print("\n⚠️  GEMINI_API_KEY or GOOGLE_API_KEY environment variable not found!")
-        print("Please set your Google API key:")
-        print("export GEMINI_API_KEY=your_api_key_here")
-        print("\nGet your API key from: https://aistudio.google.com")
-        return None
     
     print("\n🤔 Fetching available Gemini models...")
     gemini_models = get_gemini_models(api_key)

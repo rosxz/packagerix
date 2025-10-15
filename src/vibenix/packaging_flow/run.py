@@ -322,7 +322,7 @@ def package_project(output_dir=None, project_url=None, revision=None, fetcher=No
             coordinator_message(f"code:\n{candidate.code}\n")
             coordinator_message(f"error:\n{candidate.result.error.truncated()}\n")
             fix_hash_mismatch(view_package_contents(), candidate.result.error.truncated())
-        if candidate.result.error.type == NixErrorKind.INVALID_HASH:
+        elif candidate.result.error.type == NixErrorKind.INVALID_HASH:
             coordinator_message("Invalid SRI hash detected, fixing...")
             hash_match = re.search(r'SRI hash \'([a-zA-Z0-9+/=]+)\'', candidate.result.error.truncated())
             if hash_match:
