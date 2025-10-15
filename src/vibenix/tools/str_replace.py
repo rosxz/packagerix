@@ -5,64 +5,77 @@ from vibenix.flake import update_flake, get_package_contents
 
 
 @log_function_call("str_replace")
-def str_replace(old_str: str, new_str: str, collision: int = None) -> str:
+def str_replace(old_str: str, new_str: str, occurrence: int = 1) -> str:
     """
-    Replace text in the current packaging expression (only a single text match).
-    Do not include or consider line number prefixes e.g. "1: ".
+    Replace text in the current packaging expression.
+    DO NOT include line numbers (`1: `), just the exact text to find and replace.
     
     Args:
-        old_str: The text to find and replace
+        old_str: The exact text to find and replace (must match exactly including whitespace)
         new_str: The replacement text
-        collision: If `old_str` is not unique, specify which occurrence to replace (1-based index)
+        occurrence: Which occurrence to replace if multiple matches exist (1-based, defaults to first)
+    
+    Example:
+        str_replace("buildInputs = [];", "buildInputs = [ cmake ];")
     """
     print(f"📞 Function called: str_replace")
-    return _str_replace(old_str, new_str, collision)
+    return _str_replace(old_str, new_str, occurrence)
 
 
-def _str_replace(old_str: str, new_str: str, collision: int = None) -> str:
+def _str_replace(old_str: str, new_str: str, occurrence: int = 1) -> str:
     """Replace text in the current packaging expression."""
     
     try:
         # Get current package contents
         current_content = get_package_contents()
-        previous_content = current_content  # Store previous content for comparison
+        previous_content = current_content
         
         # Check if old_str exists in content
         count = current_content.count(old_str)
         if count == 0:
-            error_msg = f"Error: `old_str` not found in packaging expression.\n"
+            lines = current_content.splitlines()
+            similar_lines = []
+            for i, line in enumerate(lines, start=1):
+                if old_str.strip() in line or any(word in line for word in old_str.split() if len(word) > 3):
+                    similar_lines.append(f"{i:>3}: {line}")
+            
+            error_msg = f"Error: Text not found in packaging expression."#\n Looked for: {repr(old_str)}"
+            #if similar_lines:
+            #    error_msg += f"\n\nSimilar lines found:\n" + "\n".join(similar_lines[:5])
             return error_msg
-        if count > 1:
-            if not collision or collision < 1 or collision > count:
-                error_msg = f"Error: `old_str` is ambiguous and found {count} times in packaging expression.\n"
-                error_msg += f"Matches in lines:\n"
-                for i, line in enumerate(current_content.splitlines(), start=1):
-                    if old_str in line:
-                        error_msg += f"{i}: {line}\n"
-                return error_msg
-            else:
-                # Replace only the specified occurrence
-                parts = current_content.split(old_str)
-                current_content = old_str.join(parts[:collision]) + new_str + old_str.join(parts[collision:])
-                updated_content = current_content
-                update_flake(updated_content)
-                
-                # Show updated code starting from first changed line
-                previous_lines = previous_content.splitlines()
-                updated_lines = updated_content.splitlines()
-                first_diff_index = next(i for i in range(min(len(previous_lines), len(updated_lines))) if previous_lines[i] != updated_lines[i])
-                diff = "\n".join([f"{i:>3}: {line}" for i, line in enumerate(updated_lines[first_diff_index:], start=first_diff_index)])
-                return_msg = f"Lines starting from {first_diff_index}:\n```\n{diff}\n```"
-                
-                return f"Successfully replaced text. {return_msg}"
+
+        # Validate occurrence parameter
+        if occurrence < 1:
+            error_msg = f"Error: `occurrence` must be >= 1, got {occurrence}"
+            return error_msg
+            
+        if occurrence > count:
+            error_msg = f"Error: Requested occurrence {occurrence} but only found {count} matches.\n"
+            error_msg += "All occurrences:\n"
+            for i, line in enumerate(current_content.splitlines(), start=1):
+                if old_str in line:
+                    error_msg += f"{i:>3}: {line}\n"
+            return error_msg
         
-        # Perform replacement
-        updated_content = current_content.replace(old_str, new_str)
-        
-        # Update the flake with new content
+        # Replace the specified occurrence
+        parts = current_content.split(old_str)
+        if len(parts) >= occurrence + 1:
+            updated_content = old_str.join(parts[:occurrence]) + new_str + old_str.join(parts[occurrence:])
+        else:
+            updated_content = current_content.replace(old_str, new_str)
+
+        # Test if it breaks syntax
+        #from vibenix.nix import check_syntax
+        #syntax_err = check_syntax(updated_content)
+        #if syntax_err and "attribute" not in syntax_err:
+        #    syntax_error_index = syntax_err.index("error: syntax error")
+        #    error_truncated = syntax_err[syntax_error_index:]
+        #    error_msg = f"Error: Insertion aborted, breaks syntax:\n{error_truncated}"
+        #    return error_msg
+
         update_flake(updated_content)
         
-        # Show updated code, logic: 1) if line count stays the same, show only changed lines; 2) if line count changes, show all lines starting from first changed line
+        # Show updated lines (and ones with changed line numbers)
         previous_lines = previous_content.splitlines()
         updated_lines = updated_content.splitlines()
         return_msg = None
@@ -73,7 +86,7 @@ def _str_replace(old_str: str, new_str: str, collision: int = None) -> str:
         else:
             first_diff_index = next(i for i in range(min(len(previous_lines), len(updated_lines))) if previous_lines[i] != updated_lines[i])
             diff = "\n".join([f"{i:>3}: {line}" for i, line in enumerate(updated_lines[first_diff_index:], start=first_diff_index)])
-            return_msg = f"Lines starting from {first_diff_index}:\n```\n{diff}\n```"
+            return_msg = f"Showing lines starting from {first_diff_index}:\n```\n{diff}\n```"
 
         return f"Successfully replaced text. {return_msg}"
         

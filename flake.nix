@@ -54,7 +54,7 @@
           })
         ]);
 
-        cli-dependencies = with pkgs; [ ripgrep fzf jq nurl nix-index-database.packages.${system}.nix-index-with-db ];
+        cli-dependencies = with pkgs; [ ripgrep fzf jq nurl nixfmt-rfc-style nix-index-database.packages.${system}.nix-index-with-db ];
 
         # Build the vibenix package
         vibenixPackage = pythonSet.vibenix.overrideAttrs (old: {
@@ -73,11 +73,11 @@
           default = vibenixPackage;
           vibenix = vibenixPackage;
           noogle-function-names = noogleFunctionNames;
-          
+
           dockerImage = pkgs.dockerTools.buildLayeredImage {
             name = "vibenix";
             tag = "latest";
-            
+
             contents = with pkgs; [
               bashInteractive
               coreutils
@@ -85,11 +85,11 @@
               nix
               git
               cacert
-              
+
               vibenixVenv
-              
+
             ] ++ cli-dependencies;
-            
+
             config = {
               Cmd = [ "${vibenixVenv}/bin/vibenix" ];
               Env = [
@@ -102,9 +102,9 @@
               ];
               WorkingDir = "/workspace";
             };
-            
+
             # Extra configuration for Nix to work in container
-            # I think we would would need 
+            # I think we would would need
             # echo "sandbox = false" > etc/nix/nix.conf
             # to make this run in an unprivileged container,
             # which I think would defeat the point.
@@ -113,7 +113,7 @@
             extraCommands = ''
               mkdir -p etc/nix
               echo "experimental-features = nix-command flakes" >> etc/nix/nix.conf
-              
+
               # Create workspace directory
               mkdir -p workspace
               chmod 755 workspace

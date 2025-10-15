@@ -18,7 +18,7 @@ from vibenix.ui.logging_config import logger
 DEFAULT_MODEL_SETTINGS = {
     "gemini": {
         "max_tokens": 32768,     # 32k tokens for complex packaging scenarios
-        "temperature": 0.0,      # Lower temperature for focused responses
+        "temperature": 0.1,      # Lower temperature for focused responses
         "thinking_budget": 16384  # 8k tokens for reasoning about tool calls
     },
     "openai": {
@@ -143,7 +143,7 @@ def load_model_settings_from_env(provider: str) -> Dict[str, Any]:
     Falls back to defaults if not found or invalid.
     
     Example GitHub CI usage:
-    VIBENIX_MODEL_SETTINGS: '{"temperature": 0.0, "max_tokens": 16384}'
+    VIBENIX_MODEL_SETTINGS: '{"temperature": 0.1, "max_tokens": 16384}'
     """
     env_settings_json = os.environ.get("VIBENIX_MODEL_SETTINGS")
     

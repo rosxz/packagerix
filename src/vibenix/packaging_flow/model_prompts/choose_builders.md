@@ -18,6 +18,6 @@ Available builders:
 - {{ builder }}
 {% endfor %}
 
-**Response Format**: You must return a JSON list of builder names only. Do not include explanations or reasoning.
+**Response Format**: You must return a list of builder names only. Do not include explanations or reasoning.
 
 Use the tools at your disposal to construct your answer.
