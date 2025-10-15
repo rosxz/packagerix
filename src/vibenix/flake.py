@@ -42,6 +42,9 @@ def get_package_contents() -> str:
     with open(file_path, 'r') as file:
         return file.read()
 
+def get_package_path() -> str:
+    file_path = config.flake_dir / "package.nix"
+    return file_path.as_posix()
 
 def revert_to_commit(commit_hash: str) -> None:
     """

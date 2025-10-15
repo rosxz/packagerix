@@ -5,23 +5,8 @@ import requests
 from typing import Optional, Dict, Any, List
 from vibenix.ui.logging_config import logger
 
-
-# Default model settings for different providers
-DEFAULT_MODEL_SETTINGS = {
-    "gemini": {
-        "max_tokens": 32768,     # 32k tokens for complex packaging scenarios
-        "temperature": 0.1,      # Lower temperature for focused responses
-        "thinking_budget": 8192  # 8k tokens for reasoning about tool calls
-    },
-    "openai": {
-        "max_tokens": 32768,     # Match Gemini for consistency
-        "temperature": 0.1       # Lower temperature for focused responses
-    }
-}
-
-# Available providers for pydantic-ai
-PROVIDERS = ["openai", "anthropic", "gemini"]
-
+from vibenix.model_config import DEFAULT_MODEL_SETTINGS
+PROVIDERS = DEFAULT_MODEL_SETTINGS.keys()
 
 def get_available_models_from_endpoint(base_url: str, api_key: str = "dummy") -> List[str]:
     """Get available models from OpenAI-compatible endpoint."""

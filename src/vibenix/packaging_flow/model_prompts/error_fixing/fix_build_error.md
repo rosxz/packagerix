@@ -42,8 +42,8 @@ Common causes for dependency build failures:
 - Try to write derivations for the failing dependencies
 - Attempt to patch or fix nixpkgs packages
 - Get distracted from building the main project
-{% endif %}
 
+{% endif %}
 {% if is_syntax_error %}
 **IMPORTANT: This appears to be an evaluation error, derived from syntactical mistakes.**
 
@@ -68,6 +68,7 @@ Remember that:
 - Look in different parts of nixpkgs or the project
 - Use a different tool that might provide better information
 - Consider if the issue requires a fundamentally different solution approach
+
 {% endif %}
 
 {% include 'snippets/project_info_section.md' %}
@@ -95,5 +96,4 @@ Notes:
 - Many build functions, like `mkDerivation` provide a C compiler and a matching libc. If you're missing libc anyways, the GNU libc package is called `glibc` in nixpkgs.
 - Do not produce a flatpak, or docker container and do not use tools related to theres technologies to produce your output. Use tools to find other more direct ways to build the project.
 - If you need packages from a package set like `python3Packages` or `qt6`, only add the package set at the top of the file and use `python3Packages.package_name` or `with python3Packages; [ package_name ]` to add the package.
-- When referring to directories like ${src}, or ${out} in scripts or commands, always use the ${} syntax inside strings, which will be replaced by nix during evaluation.
 - You will not find the package that I am asking you to build in nixpkgs already.

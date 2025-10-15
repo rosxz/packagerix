@@ -9,7 +9,7 @@ from vibenix.parsing import fetch_github_release_data, scrape_and_process, fetch
 from vibenix.flake import init_flake, get_package_contents
 from vibenix.nix import eval_progress, execute_build_and_add_to_stack, revert_packaging_to_solution
 from vibenix.packaging_flow.model_prompts import (
-    pick_template, summarize_github, fix_build_error, fix_hash_mismatch, fix_syntax_error,
+    pick_template, summarize_github, fix_build_error, fix_hash_mismatch,
     analyze_package_failure, classify_packaging_failure, PackagingFailure,
     summarize_build, choose_builders, compare_template_builders
 )
@@ -171,7 +171,7 @@ def compare_template(available_builders, initial_code,
     from vibenix.tools.search_related_packages import _extract_builders
 
     builders = choose_builders(available_builders, summary, additional_functions)
-    builders_set = set(builder.split(".")[-1] for builder in builders)
+    builders_set = set(builder.split(".")[-1].strip("'\"") for builder in builders) # has happened it reply with '"pkgs.(...)"'
     template_builders = _extract_builders(initial_code, available_builders)
     template_builders = set(builder.split(".")[-1] for builder in template_builders)
     if len(builders) > 0 and builders_set != template_builders:

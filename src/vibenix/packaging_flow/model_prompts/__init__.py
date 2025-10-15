@@ -34,6 +34,26 @@ SEARCH_FUNCTIONS = [
 SEARCH_AND_EDIT_FUNCTIONS = SEARCH_FUNCTIONS + [str_replace, insert, view]
 
 
+def run_formatter_after(func):
+    """Decorator to automatically run Nix formatter after prompts that modify code."""
+    def wrapper(*args, **kwargs):
+        result = func(*args, **kwargs)
+        try:
+            from vibenix.nix import run_formatter
+            run_formatter()
+            print("🎨 Code automatically formatted after model response")
+        except Exception as e:
+            print(f"⚠️  Warning: Failed to format code: {e}")
+        return result
+    return wrapper
+
+
+from pydantic import BaseModel
+class FinishResponse(BaseModel):
+    """Response model for the finish function."""
+    pass
+
+
 @ask_model_prompt('pick_template.md')
 def pick_template(project_page: str) -> TemplateType:
     """Select the appropriate template for a project."""
@@ -64,6 +84,7 @@ def get_feedback(
     ...
 
 
+@run_formatter_after
 @ask_model_prompt('refinement/refine_code.md', functions=SEARCH_AND_EDIT_FUNCTIONS)
 def refine_code(
     code: str,
@@ -76,6 +97,7 @@ def refine_code(
     ...
 
 
+@run_formatter_after
 @ask_model_prompt('error_fixing/fix_build_error.md', functions=SEARCH_AND_EDIT_FUNCTIONS)
 def fix_build_error(
     code: str,
@@ -96,12 +118,6 @@ def fix_build_error(
 @ask_model_prompt('error_fixing/fix_hash_mismatch.md')
 def fix_hash_mismatch(code: str, error: str) -> str:
     """Fix hash mismatch errors in Nix code."""
-    ...
-
-
-@ask_model_prompt('error_fixing/fix_syntax_error.md', functions=[str_replace])
-def fix_syntax_error(code: str, error: str) -> str:
-    """Fix syntax errors in Nix code."""
     ...
 
 
@@ -178,6 +194,7 @@ def choose_builders(
     ...
 
 
+@run_formatter_after
 @ask_model_prompt('compare_template_builders.md', functions=[search_nix_functions, str_replace])
 def compare_template_builders(
     initial_code: str,
