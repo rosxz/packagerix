@@ -109,7 +109,7 @@ def search_nixpkgs_manual_documentation(framework_or_keyword: str, page: int = 1
         
         # Process content
         lines = content.split('\n')
-        max_lines_per_page = 500
+        max_lines_per_page = 200
         total_pages = (len(lines) + max_lines_per_page - 1) // max_lines_per_page
         if page < 1 or page > total_pages:
             raise ValueError(f"Page number out of range. Total pages: {total_pages}")

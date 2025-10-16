@@ -85,8 +85,9 @@ def create_source_function_calls(store_path: str, prefix: str = "") -> List[Call
 
             number_lines_to_read = min(max(1, number_lines_to_read), MAX_LINES_TO_READ)
             with open(path, 'r', encoding='utf-8') as file:
-                sliced_lines = islice(file, line_offset, line_offset + number_lines_to_read)
-                return "".join(sliced_lines)
+                content = file.read()
+                sliced_lines = islice(content.splitlines(keepends=True), line_offset, line_offset + number_lines_to_read)
+                return "".join(sliced_lines) + f"\n... (showing lines {line_offset} to {line_offset + number_lines_to_read}, out of {len(content.splitlines())} total lines)"
         except Exception as e:
             return f"Error reading file content: {str(e)}"
     
@@ -170,6 +171,8 @@ def create_source_function_calls(store_path: str, prefix: str = "") -> List[Call
                 lines = result.stdout.strip().split('\n')
                 # replace all instances of the store path with "source"
                 lines = [line.split("-source/")[-1] for line in lines]
+                # limit individual line length to 200 characters
+                lines = [line if len(line) <= 200 else line[:200] + "... (truncated)" for line in lines]
                 if len(lines) > 50:
                     return '\n'.join(lines[:50]) + f"\n... (showing first 50 of {len(lines)} matches)"
                 return '\n'.join(lines)

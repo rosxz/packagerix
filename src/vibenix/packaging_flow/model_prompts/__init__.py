@@ -31,7 +31,8 @@ SEARCH_FUNCTIONS = [
     search_nixpkgs_for_file,
     search_nixpkgs_manual_documentation
 ]
-SEARCH_AND_EDIT_FUNCTIONS = SEARCH_FUNCTIONS + [str_replace, insert, view]
+EDIT_FUNCTIONS = [str_replace, insert, view]
+SEARCH_AND_EDIT_FUNCTIONS = SEARCH_FUNCTIONS + EDIT_FUNCTIONS
 
 
 def run_formatter_after(func):
@@ -115,7 +116,7 @@ def fix_build_error(
     ...
 
 
-@ask_model_prompt('error_fixing/fix_hash_mismatch.md')
+@ask_model_prompt('error_fixing/fix_hash_mismatch.md', functions=EDIT_FUNCTIONS)
 def fix_hash_mismatch(code: str, error: str) -> str:
     """Fix hash mismatch errors in Nix code."""
     ...
@@ -195,7 +196,7 @@ def choose_builders(
 
 
 @run_formatter_after
-@ask_model_prompt('compare_template_builders.md', functions=[search_nix_functions, str_replace])
+@ask_model_prompt('compare_template_builders.md', functions=[search_nix_functions, search_nixpkgs_manual_documentation]+EDIT_FUNCTIONS)
 def compare_template_builders(
     initial_code: str,
     builder_combinations_info: str,

@@ -363,12 +363,19 @@ def package_project(output_dir=None, project_url=None, revision=None, fetcher=No
             attempted_tool_calls.extend(iteration_tool_calls)
         
         updated_code = get_package_contents()
-        if updated_code == candidate.code:
-            coordinator_message("No changes made by the model, skipping iteration.")
-            continue
-        
         # Log the updated code
         ccl_logger.write_kv("updated_code", updated_code)
+
+        if updated_code == candidate.code:
+            coordinator_message("No changes made by the model, skipping iteration.")
+            ccl_logger.log_iteration_cost(
+                iteration=iteration,
+                iteration_cost=0.0,  # TODO: Get from pydantic-ai result.usage
+                input_tokens=0,
+                output_tokens=0
+            )
+            iteration += 1
+            continue
             
         # Test the fix
         coordinator_progress(f"Iteration {iteration + 1}: Testing fix attempt {iteration + 1} of {MAX_ITERATIONS}...")
