@@ -31,7 +31,7 @@ SEARCH_FUNCTIONS = [
     search_nixpkgs_for_file,
     search_nixpkgs_manual_documentation
 ]
-EDIT_FUNCTIONS = [str_replace, insert, view]
+EDIT_FUNCTIONS = [str_replace, view]
 SEARCH_AND_EDIT_FUNCTIONS = SEARCH_FUNCTIONS + EDIT_FUNCTIONS
 
 

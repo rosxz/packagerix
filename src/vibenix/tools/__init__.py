@@ -20,6 +20,5 @@ __all__ = [
     'search_nixpkgs_manual_documentation',
     'str_replace',
     'view',
-    'insert',
     'error_pagination',
 ]
