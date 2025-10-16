@@ -22,7 +22,7 @@ from vibenix.tools.file_tools import create_source_function_calls
 from vibenix.ccl_log import init_logger, get_logger, close_logger, enum_str
 from vibenix.git_info import get_git_info
 from vibenix.tools.view import _view as view_package_contents
-import os
+from vibenix.tools.error_pagination import error_pagination
 
 
 def get_nixpkgs_source_path() -> str:
@@ -346,12 +346,16 @@ def package_project(output_dir=None, project_url=None, revision=None, fetcher=No
             if is_syntax_error:
                 syntax_error_index = error_truncated.index("error: syntax error")
                 error_truncated = error_truncated[syntax_error_index:]
+            if len(candidate.result.error.error_message.split("\n")) > 256:
+                adt_functions = additional_functions + [error_pagination]
+            else:
+                adt_functions = additional_functions
             fix_build_error(
                 view_package_contents(),
                 error_truncated, 
                 summary, 
                 template_notes, 
-                additional_functions, 
+                adt_functions, 
                 has_broken_log_output,
                 is_dependency_error,
                 is_syntax_error,

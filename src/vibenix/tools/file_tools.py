@@ -87,7 +87,8 @@ def create_source_function_calls(store_path: str, prefix: str = "") -> List[Call
             with open(path, 'r', encoding='utf-8') as file:
                 content = file.read()
                 sliced_lines = islice(content.splitlines(keepends=True), line_offset, line_offset + number_lines_to_read)
-                return "".join(sliced_lines) + f"\n... (showing lines {line_offset} to {line_offset + number_lines_to_read}, out of {len(content.splitlines())} total lines)"
+                total_lines = len(content.splitlines())
+                return "".join(sliced_lines) + f"\n... (showing lines {line_offset} to {min(line_offset + number_lines_to_read, total_lines)}, out of {total_lines} total lines)"
         except Exception as e:
             return f"Error reading file content: {str(e)}"
     

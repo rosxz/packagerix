@@ -31,6 +31,7 @@ def refine_package(curr: Solution, project_page: str, additional_functions: list
             if "Content field missing from Gemini response" in str(e):
                 # Empty response means no improvements needed
                 coordinator_message(f"Refinement (iteration {iteration+1}/{max_iterations}): No improvements identified, keeping current code")
+                ccl_logger.prompt_end(2) 
                 ccl_logger.write_kv("feedback", "No improvements needed - empty response")
                 ccl_logger.log_iteration_cost(
                     iteration=iteration,

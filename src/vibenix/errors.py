@@ -21,7 +21,7 @@ class NixError(BaseModel):
     type: NixErrorKind
     error_message: str
     
-    def truncated(self, max_lines: int = 256) -> str:
+    def truncated(self, max_lines: int = 256, page: int = None) -> str:
         """Return truncated version of error message, keeping the tail end.
         
         Args:
@@ -31,12 +31,22 @@ class NixError(BaseModel):
             Truncated error message showing the last N lines
         """
         lines = self.error_message.split('\n')
+        pages = (len(lines) + max_lines - 1) // max_lines  # Ceiling division
         
         if len(lines) <= max_lines:
             return self.error_message
         
-        truncated_lines = lines[-max_lines:]
-        truncated = f"... ({len(lines) - max_lines} lines omitted) ...\n\n"
+        if page is not None:
+            if page < 0 or page >= pages:
+                raise ValueError(f"Error page requested '{page}' is out of range (0 to {pages - 1})")
+            start_index = page * max_lines
+            truncated_lines = lines[start_index:start_index + max_lines]
+        else:
+            page = pages - 1
+            start_index = page * max_lines
+            truncated_lines = lines[start_index:]
+
+        truncated = f"... (showing error page {page + 1} of {pages})\n"
         truncated += '\n'.join(truncated_lines)
         
         return truncated

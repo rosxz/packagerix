@@ -9,6 +9,7 @@ from vibenix.tools.search_nixpkgs_manual_documentation import search_nixpkgs_man
 from vibenix.tools.str_replace import str_replace
 from vibenix.tools.view import view
 from vibenix.tools.insert import insert
+from vibenix.tools.error_pagination import error_pagination
 
 # Export all functions so they can be imported from this module
 __all__ = [
@@ -20,4 +21,5 @@ __all__ = [
     'str_replace',
     'view',
     'insert',
+    'error_pagination',
 ]
