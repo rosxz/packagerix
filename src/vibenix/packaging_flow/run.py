@@ -324,11 +324,14 @@ def package_project(output_dir=None, project_url=None, revision=None, fetcher=No
             fix_hash_mismatch(view_package_contents(), candidate.result.error.truncated())
         elif candidate.result.error.type == NixErrorKind.INVALID_HASH:
             coordinator_message("Invalid SRI hash detected, fixing...")
-            hash_match = re.search(r'SRI hash \'([a-zA-Z0-9+/=]+)\'', candidate.result.error.truncated())
+            hash_match = re.search(r'hash \'([a-zA-Z0-9+/=]+)\'', candidate.result.error.truncated())
             if hash_match:
                 invalid_hash = hash_match.group(1)
-                coordinator_message(f"Invalid hash: {invalid_hash}")
-                fixed_code = re.sub(rf'"sha256-{invalid_hash}"', 'lib.fakeHash', candidate.code)
+                coordinator_message(f"Invalid hash from error: {invalid_hash}")
+                match = re.search(rf'"[^"]*?{invalid_hash}[^"]*?"', candidate.code)
+                if match:
+                    coordinator_message(f"Found invalid hash in code: {match.group(0)}")
+                fixed_code = re.sub(rf'"[^"]*?{invalid_hash}[^"]*?"', 'lib.fakeHash', candidate.code)
                 from vibenix.flake import update_flake
                 update_flake(fixed_code)
             else: # fallback if regex fails

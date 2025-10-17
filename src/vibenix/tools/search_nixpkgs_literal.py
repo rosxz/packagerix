@@ -8,6 +8,7 @@ from vibenix.ccl_log import get_logger, log_function_call
 @log_function_call("search_nixpkgs_for_package_literal")
 def search_nixpkgs_for_package_literal(query: str, package_set_unique: str = None) -> str:
     """Search the nixpkgs repository of Nix code for the given package using fuzzy search.
+    Try separating compound word package names into substrings for more results (e.g. "nvimtreesitter" -> "nvim treesitter", "fast-ssh" -> "fast ssh").
     
     Args:
         query: The search term

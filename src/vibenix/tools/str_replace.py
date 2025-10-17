@@ -85,7 +85,8 @@ def _str_replace(old_str: str, new_str: str, occurrence: int = 1) -> str:
             return_msg = f"Updated lines:\n```\n{diff}\n```"
         else:
             # Updated lines get * marker, other lines are shown for context (updated line number)
-            first_diff_index = next(i for i in range(min(len(previous_lines), len(updated_lines))) if previous_lines[i] != updated_lines[i])
+            new_str_idx = updated_content.index(new_str)
+            first_diff_index = updated_content[:new_str_idx].count("\n")
             diff_lines = []
             for i, line in enumerate(updated_lines[first_diff_index:], start=first_diff_index):
                 if i < first_diff_index+len(new_str.splitlines()):

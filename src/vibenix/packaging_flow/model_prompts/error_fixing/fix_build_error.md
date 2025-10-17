@@ -51,8 +51,8 @@ Remember that:
 - **The causes for syntax errors are very often made before the location where the error is reported.**
 - Strings are ONLY defined with quotation marks (")
 - Multi-line strings are ONLY defined with double apostrophes ('')
-- Double apostrophes ('') in multi-line strings are escaped with a single apostrophe ('), e.g. ''test\n'''var'' is a single multi-line string with an escaped apostrophe.
-- In multi-line strings, dollar signs ($), dollar-curly (${), line-feed (\n), and carriage-return (\n) must be escaped with double apostrophes (''). For example, ''test\n''$var'' is a single multi-line string with escaped dollar.
+- Double apostrophes ('') in multi-line strings are escaped with a single apostrophe ('), e.g. `var = ''test ''' end'';` is a single multi-line string with one escaped apostrophe.
+- In multi-line strings, dollar signs ($), dollar-curly (${), line-feed (\n), and carriage-return (\n) must be escaped by prepending them with double apostrophes (''). For example, `var = ''test ''$var end'';` is a single multi-line string with one escaped dollar sign.
 - For the remaining cases, special characters are usually escaped with a backslash (\).
 - If you need packages or attributes from a package set like `python3Packages` or `qt6`, only add the package set at the top of the file and not the full path to the attribute. Then, use `python3Packages.package_name` or `with python3Packages; [ package_name ]` to add the package.
 {% endif %}

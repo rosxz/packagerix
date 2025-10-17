@@ -19,6 +19,18 @@ def search_nixpkgs_for_package_semantic(query: str, package_set: str = None) -> 
     Returns a Nix expression with matching packages grouped by package set.
     """
     print(f"📞 Function called: search_nixpkgs_for_package_semantic with query: {query}, package_set: {package_set}")
+    return _search_nixpkgs_for_package_semantic(query, package_set)
+
+def _search_nixpkgs_for_package_semantic(query: str, package_set: str = None) -> str:
+    """Search the nixpkgs repository using semantic similarity with embeddings.
+    
+    Args:
+        query: The search term
+        package_set: Optional package set to search within (e.g. "python3Packages", "haskellPackages")
+    
+    Uses sentence transformers to find semantically similar package names and descriptions.
+    Returns a Nix expression with matching packages grouped by package set.
+    """
     
     # Get path to pre-computed embeddings from environment
     embeddings_path = os.environ.get('NIXPKGS_EMBEDDINGS')
@@ -39,7 +51,15 @@ def search_nixpkgs_for_package_semantic(query: str, package_set: str = None) -> 
         return f"Error loading pre-computed embeddings: {str(e)}"
     
     # Load model for encoding the query
-    model = SentenceTransformer('all-MiniLM-L6-v2')
+    try:
+        model = SentenceTransformer('all-MiniLM-L6-v2')
+    except NotImplementedError as e:
+        if "Cannot copy out of meta tensor" in str(e):
+            # Handle meta tensor issue by forcing CPU device during initialization
+            import torch
+            model = SentenceTransformer('all-MiniLM-L6-v2', device='cpu')
+        else:
+            return f"Error loading sentence transformer model: {str(e)}"
     
     # Encode query and find similar packages
     query_embedding = model.encode([query])

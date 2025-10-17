@@ -9,7 +9,17 @@ from vibenix.ui.logging_config import logger
 def init_flake():
 
     logger.info(f"Creating flake at {config.flake_dir} from reference directory {config.template_dir}")
-    shutil.copytree(config.template_dir, config.flake_dir, dirs_exist_ok = True)
+    
+    def ignore_problematic_symlinks(src, names):
+        """Ignore 'result' directories and other problematic symlinks that could cause infinite loops."""
+        ignored = []
+        for name in names:
+            src_path = os.path.join(src, name)
+            if name == 'result' or (os.path.islink(src_path) and not os.path.exists(src_path)):
+                ignored.append(name)
+        return ignored
+    
+    shutil.copytree(config.template_dir, config.flake_dir, dirs_exist_ok=True, ignore=ignore_problematic_symlinks)
 
     # Ensure the directory and all files have proper permissions
     os.chmod(config.flake_dir, 0o755)

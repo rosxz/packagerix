@@ -8,6 +8,7 @@ from itertools import islice
 from vibenix.ccl_log import get_logger, log_function_call
 
 MAX_LINES_TO_READ = 200
+MAX_LINE_LENGTH = 300
 
 def create_source_function_calls(store_path: str, prefix: str = "") -> List[Callable]:
     """
@@ -87,6 +88,8 @@ def create_source_function_calls(store_path: str, prefix: str = "") -> List[Call
             with open(path, 'r', encoding='utf-8') as file:
                 content = file.read()
                 sliced_lines = islice(content.splitlines(keepends=True), line_offset, line_offset + number_lines_to_read)
+                # limit individual line length
+                sliced_lines = [line if len(line) <= MAX_LINE_LENGTH else line[:MAX_LINE_LENGTH] + "... (truncated)\n" for line in sliced_lines]
                 total_lines = len(content.splitlines())
                 return "".join(sliced_lines) + f"\n... (showing lines {line_offset} to {min(line_offset + number_lines_to_read, total_lines)}, out of {total_lines} total lines)"
         except Exception as e:
@@ -142,17 +145,17 @@ def create_source_function_calls(store_path: str, prefix: str = "") -> List[Call
             size_bytes /= 1024.0
         return f"{size_bytes:.2f} PB"
 
-    def search_inside_files(pattern: str, relative_path: str = ".", custom_args: str = None) -> str:
+    def search_inside_files(pattern: str, relative_path: str = ".") -> str: # custom_args: str = None
         """Search for a pattern inside files within the {source_description} using `ripgrep`.
         
         Args:
             pattern: The search pattern (regex or literal string)
             relative_path: The relative path to search in (default: current directory)
-            custom_args: Optional custom `ripgrep` arguments to override defaults
         """
         print(f"📞 Function called: {prefix}search_inside_files with pattern: '{pattern}', path: '{relative_path}'")
         try:
             path = _validate_path(relative_path)
+            custom_args = None
             
             if custom_args:
                 # Use custom arguments provided by the user, need to parse them
@@ -172,8 +175,8 @@ def create_source_function_calls(store_path: str, prefix: str = "") -> List[Call
                 lines = result.stdout.strip().split('\n')
                 # replace all instances of the store path with "source"
                 lines = [line.split("-source/")[-1] for line in lines]
-                # limit individual line length to 200 characters
-                lines = [line if len(line) <= 200 else line[:200] + "... (truncated)" for line in lines]
+                # limit individual line length
+                lines = [line if len(line) <= MAX_LINE_LENGTH else line[:MAX_LINE_LENGTH] + "... (truncated)" for line in lines]
                 if len(lines) > 50:
                     return '\n'.join(lines[:50]) + f"\n... (showing first 50 of {len(lines)} matches)"
                 return '\n'.join(lines)
@@ -186,7 +189,7 @@ def create_source_function_calls(store_path: str, prefix: str = "") -> List[Call
         except Exception as e:
             return f"Error in search_inside_files: {str(e)}"
     
-    funcs = [list_directory_contents, read_file_content, search_inside_files, detect_file_type_and_size]
+    funcs = [list_directory_contents, read_file_content, search_inside_files] # detect_file_type_and_size
     for i in range(len(funcs)):
         func = funcs[i]
         # Update name and docstring with prefix

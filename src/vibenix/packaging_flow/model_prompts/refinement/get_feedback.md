@@ -24,7 +24,7 @@ Here is the Nix code for you to evaluate:
 {{ code }}
 ```
 
-This is refinement attempt {{ iteration }} / {{ total_iterations }}. Prioritize simpler improvements that don't break the build.
+This is refinement attempt {{ iteration }} / {{ max_iterations }}. Prioritize simpler improvements that don't break the build.
 
 {% include 'snippets/project_info_section.md' %}
 

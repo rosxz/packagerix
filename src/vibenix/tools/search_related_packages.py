@@ -307,7 +307,10 @@ def _create_find_similar_builder_patterns(cache: List[str]):
             # Get the fully qualified names for the provided builders in case they are not (models might ignore this instruction)
             qualified_builders = _get_builder_functions()
             builder_map = {b.split('.')[-1]: b for b in qualified_builders}
-            builders = [builder_map[b] if b in builder_map else b for b in builders] # TODO ? else b ?
+            builders = [builder_map[b] if b in builder_map else None for b in builders] # TODO ? else b ?
+            builders = [b for b in builders if b is not None]
+            if None in builders or len(builders) == 0:
+                return f"One or more specified builder functions are not recognized in nixpkgs. Choose from:\n{str(_get_builder_functions())}\n\n"
 
         print(f"📞 Function called: find_similar_builder_patterns with builders: {builders}{' and keyword: ' + keyword if keyword else ''}")
         return _get_builder_combinations(builders, keyword)

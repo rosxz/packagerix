@@ -27,7 +27,8 @@ def invoke_build(is_src_attr_only: bool) -> NixBuildResult:
     )
     
     if eval_result.returncode != 0:
-        if "invalid SRI hash" in eval_result.stderr:
+        import re
+        if "invalid SRI hash" in eval_result.stderr or re.search(r"hash '.*' does not include", eval_result.stderr):
             return NixBuildResult(
                 success=False,
                 is_src_attr_only=is_src_attr_only,
@@ -224,6 +225,18 @@ def execute_build_and_add_to_stack(updated_code: str) -> tuple[NixBuildResult, s
     result = invoke_build(True)
     if result.success:
         result = invoke_build(False)
+    # Check if full log can be fetched with a nix command
+    import re
+    match = re.search(r"For full logs, run '(nix log .+?)'", result.error.error_message) if result.error else None
+    if match:
+        full_log_cmd = match.group(1)
+        log_result = subprocess.run(
+            full_log_cmd.split(),
+            text=True,
+            capture_output=True
+        )
+        if log_result.returncode == 0:
+            result.error.error_message = log_result.stdout
     config.error_stack.append(result)
     return result, commit_hash
 
