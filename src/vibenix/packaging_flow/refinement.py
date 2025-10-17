@@ -30,6 +30,9 @@ def refine_package(curr: Solution, project_page: str, additional_functions: list
         coordinator_message(f"Refining package (iteration {iteration+1}/{max_iterations})...")
         coordinator_message(f"Received feedback: {feedback}")
         ccl_logger.write_kv("feedback", str(feedback))
+        if not feedback:
+            coordinator_message("No feedback received, ending refinement process.")
+            continue
 
         # Pass the feedback to the generator (refine_code)
         refine_code(code_lines, feedback, project_page)

@@ -17,7 +17,7 @@ import logging
 logger = logging.getLogger(__name__)
 
 
-async def _retry_with_backoff(func, max_retries=3, base_delay=2.0):
+async def _retry_with_backoff(func, max_retries=3, base_delay=5.0):
     """Retry function with exponential backoff for specific model errors."""
     for attempt in range(max_retries + 1):
         try:

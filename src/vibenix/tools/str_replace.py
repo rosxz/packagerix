@@ -84,9 +84,16 @@ def _str_replace(old_str: str, new_str: str, occurrence: int = 1) -> str:
             diff = "\n".join(diff_lines)
             return_msg = f"Updated lines:\n```\n{diff}\n```"
         else:
+            # Updated lines get * marker, other lines are shown for context (updated line number)
             first_diff_index = next(i for i in range(min(len(previous_lines), len(updated_lines))) if previous_lines[i] != updated_lines[i])
-            diff = "\n".join([f"{i:>3}: {line}" for i, line in enumerate(updated_lines[first_diff_index:], start=first_diff_index)])
-            return_msg = f"Showing lines starting from {first_diff_index}:\n```\n{diff}\n```"
+            diff_lines = []
+            for i, line in enumerate(updated_lines[first_diff_index:], start=first_diff_index):
+                if i < first_diff_index+len(new_str.splitlines()):
+                    diff_lines += [f"*{i + 1:>3}: {line}"]
+                else:
+                    diff_lines += [f" {i + 1:>3}: {line}"]
+            diff = "\n".join(diff_lines)
+            return_msg = f"Showing lines starting from {first_diff_index + 1}:\n```\n{diff}\n```"
 
         return f"Successfully replaced text. {return_msg}"
         

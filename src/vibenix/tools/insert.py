@@ -64,10 +64,21 @@ def _insert(insert_line: int, new_str: str) -> str:
         # Update the flake with new content
         update_flake(updated_content)
         
-        # Show all lines starting from first changed line
+        # Show all lines starting from first changed line, mark inserted lines with *
         start_line = insert_line-1
         updated_lines = updated_content.splitlines()
-        diff = "\n".join([f"{i+1:>3}: {line}" for i, line in enumerate(updated_lines[start_line:], start=start_line)])
+        previous_lines = current_content.splitlines()
+        
+        diff_lines = []
+        # Updated lines get * marker, other lines are shown for context (updated line number)
+        first_diff_index = next(i for i in range(min(len(previous_lines), len(updated_lines))) if previous_lines[i] != updated_lines[i])
+        diff_lines = []
+        for i, line in enumerate(updated_lines[first_diff_index:], start=first_diff_index):
+            if i < first_diff_index+len(new_str.splitlines()):
+                diff_lines += [f"*{i + 1:>3}: {line}"]
+            else:
+                diff_lines += [f" {i + 1:>3}: {line}"]
+        diff = "\n".join(diff_lines)
         return_msg = f"Lines starting from {insert_line}:\n```\n{diff}\n```"
 
         return f"Successfuly inserted text. {return_msg}"
