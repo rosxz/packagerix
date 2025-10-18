@@ -20,11 +20,6 @@ from .errors import NixBuildErrorDiff, NixBuildResult
 def enum_str(enum: Enum):
     return f"{type(enum).__name__}.{enum.name}"
 
-def get_model_pricing(model: str) -> Optional[tuple[float, float]]:
-    """Get model pricing per token."""
-    # TODO: Implement pricing with pydantic-ai
-    return (0.0, 0.0)
-
 
 @dataclass
 class CCLLogger:
@@ -141,15 +136,27 @@ class CCLLogger:
         self._file_handle.write(string)
         self._file_handle.flush()
 
-    def log_model_config(self, model: str):
+    def log_model_config(self, model_config: dict):
         """Log model configuration including pricing if available."""
         self.enter_attribute("model_config")
-        self.write_kv("model", model)
-        pricing = get_model_pricing(model)
-        if pricing:
-            input_cost, output_cost = pricing
-            self.write_kv("input_cost_per_token", f"{input_cost:.15f}".rstrip('0'))
-            self.write_kv("output_cost_per_token", f"{output_cost:.15f}".rstrip('0'))
+
+        full_model = model_config.get("full_model", "")
+        self.write_kv("full_model", full_model)
+
+        self.enter_attribute("model_settings")
+        model_settings = model_config.get("model_settings", {})
+        for k, v in model_settings.items():
+            self.write_kv(k, str(v))
+        self.leave_attribute()
+
+        # genai-prices doesnt provide direct way to get actual pricing
+        from vibenix.model_config import calc_model_pricing
+        input_cost = calc_model_pricing(full_model, 1, 0)
+        output_cost = calc_model_pricing(full_model, 0, 1)
+        self.write_kv("input_cost_per_token", f"{input_cost:.15f}".rstrip('0'))
+        self.write_kv("output_cost_per_token", f"{output_cost:.15f}".rstrip('0'))
+        # TODO add thought token costs if applicable
+
         self.leave_attribute()
 
     def log_session_end(self, signal: str = None, total_cost: float = None):

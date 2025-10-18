@@ -33,7 +33,7 @@ async def _retry_with_backoff(func, max_retries=3, base_delay=5.0):
                 else:
                     logger.warning("Model returned empty response after max retries, treating as None")
                     # Return None to signal no improvements after all retries
-                    return None, Usage(prompt_tokens=0, completion_tokens=0, total_tokens=0)
+                    return None, Usage(prompt_tokens=0, completion_tokens=0)
             else:
                 raise
         except Exception as e:
@@ -95,7 +95,6 @@ class VibenixAgent:
             usage = Usage(
                 prompt_tokens=usage_data.input_tokens if usage_data else 0,
                 completion_tokens=usage_data.output_tokens if usage_data else 0,
-                total_tokens=usage_data.total_tokens if usage_data else 0
             )
             
             # Handle both text and structured output
@@ -140,7 +139,6 @@ class VibenixAgent:
                 usage = Usage(
                     prompt_tokens=usage_data.input_tokens if usage_data else 0,
                     completion_tokens=usage_data.output_tokens if usage_data else 0,
-                    total_tokens=usage_data.total_tokens if usage_data else 0
                 )
                 
                 return full_response, usage
@@ -159,7 +157,6 @@ class VibenixAgent:
                     usage = Usage(
                         prompt_tokens=usage_data.input_tokens if usage_data else 0,
                         completion_tokens=usage_data.output_tokens if usage_data else 0,
-                        total_tokens=usage_data.total_tokens if usage_data else 0
                     )
                     
                     return full_response, usage

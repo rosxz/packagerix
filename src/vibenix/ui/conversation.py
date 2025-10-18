@@ -167,40 +167,17 @@ def coordinator_progress(message: str):
     adapter.show_progress(message)
 
 
-# Placeholder for Usage class that will be replaced with pydantic-ai's usage tracking
+# Usage class for tracking tokens
 @dataclass
 class Usage:
-    """Placeholder for usage tracking."""
-    prompt_tokens: int = 0
-    completion_tokens: int = 0
-    total_tokens: int = 0
+    """Usage tracking with token counts."""
+    def __init__(self, prompt_tokens: int = 0, completion_tokens: int = 0, model: str = ""):
+        self.prompt_tokens = prompt_tokens
+        self.completion_tokens = completion_tokens
+        self.model = model
 
+    def calculate_cost(self) -> float:
+        """Calculate cost from PydanticAI RunUsage object."""
 
-def handle_model_chat(chat, tool_call_collector=None) -> tuple[str, Usage]:
-    """Handle model chat using pydantic-ai agent.
-    
-    Args:
-        chat: A dict with 'agent' (VibenixAgent) and 'prompt' (str)
-        tool_call_collector: Optional list to collect tool calls made during this chat
-        
-    Returns:
-        A tuple of (response_text, usage) where usage contains token counts
-    """
-    from vibenix.agent import VibenixAgent
-    
-    # Extract agent and prompt from chat dict
-    if isinstance(chat, dict) and 'agent' in chat and 'prompt' in chat:
-        agent = chat['agent']
-        prompt = chat['prompt']
-    else:
-        raise ValueError("Chat must be a dict with 'agent' and 'prompt' keys")
-    
-    # TODO: Implement tool call collection
-    # For now, just run the agent
-    response, usage = agent.run_stream(prompt)
-    
-    # Show the response in the UI
-    adapter = get_ui_adapter()
-    adapter.show_message(Message(Actor.MODEL, response))
-    
-    return response, usage
+        from vibenix.model_config import calc_model_pricing
+        return calc_model_pricing(self.model, self.prompt_tokens, self.completion_tokens)

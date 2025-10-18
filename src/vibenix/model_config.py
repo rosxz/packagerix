@@ -275,3 +275,23 @@ def initialize_model_config():
         
         model_settings = create_openai_settings(final_settings)
         _cached_model = OpenAIModel(config["model_name"], provider=provider, settings=model_settings)
+
+
+def calc_model_pricing(model: str, prompt_tokens: int, completion_tokens: int) -> float:
+    try:
+        provider, model_ref = model.split("/", 1)
+        from genai_prices import calc_price, Usage
+        # Get pricing from genai-prices library
+        price_data = calc_price(
+            Usage(input_tokens=prompt_tokens, output_tokens=completion_tokens),
+            model_ref=model_ref,
+            provider_id=provider,
+            )
+        return float(price_data.total_price)
+    except ImportError:
+        pass
+    except Exception:
+        # If genai-prices doesn't have this model, fall back to 0
+        pass
+    # Default to 0 for unknown models (like local/Ollama models)
+    return 0.0

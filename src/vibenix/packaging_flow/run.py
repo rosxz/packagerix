@@ -4,14 +4,14 @@ import re
 import subprocess
 from pathlib import Path
 
-from vibenix.ui.conversation import ask_user, coordinator_message, coordinator_error, coordinator_progress
+from vibenix.ui.conversation import coordinator_message, coordinator_error, coordinator_progress
 from vibenix.parsing import fetch_github_release_data, scrape_and_process, fetch_combined_project_data, fill_src_attributes
 from vibenix.flake import init_flake, get_package_contents
 from vibenix.nix import eval_progress, execute_build_and_add_to_stack, revert_packaging_to_solution
 from vibenix.packaging_flow.model_prompts import (
     pick_template, summarize_github, fix_build_error, fix_hash_mismatch,
     analyze_package_failure, classify_packaging_failure, PackagingFailure,
-    summarize_build, choose_builders, compare_template_builders
+    summarize_build, choose_builders, compare_template_builders, model_prompt_manager
 )
 from vibenix.packaging_flow.refinement import refine_package
 from vibenix.packaging_flow.user_prompts import get_project_url
@@ -209,8 +209,8 @@ def package_project(output_dir=None, project_url=None, revision=None, fetcher=No
         coordinator_message("Welcome to vibenix!")
     
     # Log model configuration
-    model = "ollama/qwen3"  # TODO: Get from pydantic-ai agent config
-    ccl_logger.log_model_config(model)
+    from vibenix.model_config import get_model_config
+    ccl_logger.log_model_config(get_model_config())
 
     ccl_logger.write_kv("project_url", project_url)
 
@@ -375,11 +375,12 @@ def package_project(output_dir=None, project_url=None, revision=None, fetcher=No
 
         if updated_code == candidate.code:
             coordinator_message("No changes made by the model, skipping iteration.")
+            usage = model_prompt_manager.get_iteration_usage()
             ccl_logger.log_iteration_cost(
                 iteration=iteration,
-                iteration_cost=0.0,  # TODO: Get from pydantic-ai result.usage
-                input_tokens=0,
-                output_tokens=0
+                iteration_cost=usage.calculate_cost(),
+                input_tokens=usage.prompt_tokens,
+                output_tokens=usage.completion_tokens
             )
             iteration += 1
             continue
@@ -452,14 +453,13 @@ def package_project(output_dir=None, project_url=None, revision=None, fetcher=No
                     revert_packaging_to_solution(best)
                     consecutive_non_build_errors = 0
         
-        # TODO: Log iteration cost and token usage from pydantic-ai
+        usage = model_prompt_manager.get_iteration_usage()
         ccl_logger.log_iteration_cost(
             iteration=iteration,
-            iteration_cost=0.0,  # TODO: Get from pydantic-ai result.usage
-            input_tokens=0,
-            output_tokens=0
+            iteration_cost=usage.calculate_cost(),
+            input_tokens=usage.prompt_tokens,
+            output_tokens=usage.completion_tokens
         )
-        
         iteration += 1
 
     # Close the iteration list and iterate attribute
@@ -476,8 +476,7 @@ def package_project(output_dir=None, project_url=None, revision=None, fetcher=No
         ccl_logger.write_kv("refined_package", candidate.code)
         
         # Always log success and return, regardless of refinement outcome
-        # TODO: Implement cost tracking with pydantic-ai
-        ccl_logger.log_session_end(signal=None, total_cost=0.0)
+        ccl_logger.log_session_end(signal=None, total_cost=model_prompt_manager.get_session_cost())
         close_logger()
         if output_dir:
             save_package_output(candidate.code, project_url, output_dir)
@@ -498,8 +497,8 @@ def package_project(output_dir=None, project_url=None, revision=None, fetcher=No
     ccl_logger.leave_attribute()
     if isinstance(packaging_failure, PackagingFailure):
         coordinator_message(f"Packaging failure type: {packaging_failure}\nDetails:\n{details}\n")
-    # TODO: Implement cost tracking with pydantic-ai
-    ccl_logger.log_session_end(signal=None, total_cost=0.0)
+
+    ccl_logger.log_session_end(signal=None, total_cost=model_prompt_manager.get_session_cost())
     close_logger()
     return None
 
@@ -537,16 +536,9 @@ def run_packaging_flow(output_dir=None, project_url=None, revision=None, fetcher
         if result:
             coordinator_message("Packaging completed successfully!")
             coordinator_message(f"Final package code:\n```nix\n{result}\n```")
-            # Print total API cost
-            # TODO: Implement cost tracking with pydantic-ai
-            # Cost tracking is not yet implemented with pydantic-ai
-            pass
         else:
             coordinator_message("Packaging failed. Please check the errors above.")
-            # Print total API cost even on failure
-            # TODO: Implement cost tracking with pydantic-ai
-            # Cost tracking is not yet implemented with pydantic-ai
-            pass
+        print(f"Total API cost: ${model_prompt_manager.get_session_cost():.4f}")
     except Exception as e:
         coordinator_error(f"Unexpected error: {e}")
         raise

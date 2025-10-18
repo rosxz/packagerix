@@ -10,6 +10,7 @@ from vibenix.errors import NixBuildErrorDiff, NixErrorKind, NixBuildResult
 from vibenix.packaging_flow.Solution import Solution
 from vibenix.tools.view import _view as view_package_contents, view
 
+from vibenix.ui.conversation_templated import model_prompt_manager
 
 def refine_package(curr: Solution, project_page: str, additional_functions: list = None) -> Solution:
     """Refinement cycle to improve the packaging."""
@@ -51,11 +52,12 @@ def refine_package(curr: Solution, project_page: str, additional_functions: list
             coordinator_message("Refined packaging code successfuly builds, continuing...")
             curr = attempt
 
+        usage = model_prompt_manager.get_iteration_usage()
         ccl_logger.log_iteration_cost(
             iteration=iteration,
-            iteration_cost=0,
-            input_tokens=0,
-            output_tokens=0
+            iteration_cost=usage.calculate_cost(),
+            input_tokens=usage.prompt_tokens,
+            output_tokens=usage.completion_tokens
         )
     # Close the iteration list and refine_package attribute
     ccl_logger.leave_list()

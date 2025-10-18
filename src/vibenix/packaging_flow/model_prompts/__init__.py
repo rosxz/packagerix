@@ -7,7 +7,7 @@ from enum import Enum
 from typing import List, Optional
 
 from vibenix.template.template_types import TemplateType
-from vibenix.ui.conversation_templated import ask_model_prompt
+from vibenix.ui.conversation_templated import model_prompt_manager
 from vibenix.tools import (
     search_nixpkgs_for_package_semantic,
     search_nixpkgs_for_package_literal,
@@ -34,6 +34,7 @@ SEARCH_FUNCTIONS = [
 EDIT_FUNCTIONS = [str_replace, view]
 SEARCH_AND_EDIT_FUNCTIONS = SEARCH_FUNCTIONS + EDIT_FUNCTIONS
 
+ask_model_prompt = model_prompt_manager.ask_model_prompt
 
 def run_formatter_after(func):
     """Decorator to automatically run Nix formatter after prompts that modify code."""
