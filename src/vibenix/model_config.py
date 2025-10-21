@@ -228,7 +228,7 @@ def initialize_model_config():
         
         logger.info(f"Using Anthropic model: {model_name}")
         provider = AnthropicProvider(api_key=api_key)
-        _cached_model = AnthropicModel(model_name, provider=provider)
+        _cached_model = AnthropicModel(model_name, provider=provider, thinking=False)
     
     elif provider_name == "gemini":
         # Get Google API key - check environment first (as override), then secure storage
