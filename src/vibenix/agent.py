@@ -93,8 +93,8 @@ class VibenixAgent:
             # Convert pydantic-ai usage to our Usage dataclass
             usage_data = result.usage() if hasattr(result, 'usage') else None
             usage = Usage(
-                prompt_tokens=usage_data.input_tokens if usage_data else 0,
-                completion_tokens=usage_data.output_tokens if usage_data else 0,
+                prompt_tokens=usage_data.details['input_tokens'] if usage_data else 0,
+                completion_tokens=usage_data.details['output_tokens'] if usage_data else 0,
             )
             
             # Handle both text and structured output
@@ -137,8 +137,8 @@ class VibenixAgent:
                 # Get usage data
                 usage_data = result.usage() if hasattr(result, 'usage') else None
                 usage = Usage(
-                    prompt_tokens=usage_data.input_tokens if usage_data else 0,
-                    completion_tokens=usage_data.output_tokens if usage_data else 0,
+                    prompt_tokens=usage_data.details['input_tokens'] if usage_data else 0,
+                    completion_tokens=usage_data.details['output_tokens'] if usage_data else 0,
                 )
                 
                 return full_response, usage
@@ -155,8 +155,8 @@ class VibenixAgent:
                     # Get usage data
                     usage_data = result.usage() if hasattr(result, 'usage') else None
                     usage = Usage(
-                        prompt_tokens=usage_data.input_tokens if usage_data else 0,
-                        completion_tokens=usage_data.output_tokens if usage_data else 0,
+                        prompt_tokens=usage_data.details['input_tokens'] if usage_data else 0,
+                        completion_tokens=usage_data.details['output_tokens'] if usage_data else 0,
                     )
                     
                     return full_response, usage
