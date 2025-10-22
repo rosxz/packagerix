@@ -21,17 +21,14 @@ from vibenix.ui.logging_config import logger
 # Default model settings for different providers
 DEFAULT_MODEL_SETTINGS = {
     "gemini": {
-        "max_tokens": 32768,     # 32k tokens for complex packaging scenarios
         "temperature": 0.1,      # Lower temperature for focused responses
         "thinking_budget": 16384  # 8k tokens for reasoning about tool calls
     },
     "anthropic": {
-        "max_tokens": 32768,
         "temperature": 0.1,
-        "anthropic_thinking": { "type": "enabled", "thinking_budget": 8192 }
+        "anthropic_thinking": { "type": "disabled" }
     },
     "openai": {
-        "max_tokens": 32768,
         "temperature": 0.1
     }
 }
