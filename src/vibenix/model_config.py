@@ -8,7 +8,7 @@ import json
 from typing import Optional, Dict, Any, Tuple
 from pydantic_ai.models.openai import OpenAIModel, OpenAIModelSettings
 from pydantic_ai.providers.openai import OpenAIProvider
-from pydantic_ai.models.anthropic import AnthropicModel
+from pydantic_ai.models.anthropic import AnthropicModel, AnthropicModelSettings
 from pydantic_ai.providers.anthropic import AnthropicProvider
 from pydantic_ai.models.google import GoogleModel, GoogleModelSettings
 from pydantic_ai.providers.google import GoogleProvider
@@ -41,8 +41,8 @@ _cached_config = None
 _cached_model = None
 
 
-def load_saved_configuration() -> Optional[Tuple[str, str, Optional[str], Optional[str], Optional[Dict]]]:
-    """Load previously saved configuration, returns (provider_name, model, ollama_host, openai_api_base, model_settings).
+def load_saved_configuration() -> Optional[Tuple[str, str, Optional[str], Optional[str]]]:
+    """Load previously saved configuration, returns (provider_name, model, ollama_host, openai_api_base).
     
     This maintains compatibility with the previous configuration format.
     """
@@ -58,14 +58,13 @@ def load_saved_configuration() -> Optional[Tuple[str, str, Optional[str], Option
             model = config_data.get("model")
             ollama_host = config_data.get("ollama_host")
             openai_api_base = config_data.get("openai_api_base")
-            model_settings = config_data.get("model_settings", {})
             
             if provider_name and model:
                 # Set OPENAI_BASE_URL if using OpenAI with custom endpoint
                 if provider_name == "openai" and openai_api_base:
                     os.environ["OPENAI_BASE_URL"] = openai_api_base
                 
-                return provider_name, model, ollama_host, openai_api_base, model_settings
+                return provider_name, model, ollama_host, openai_api_base
             
     except Exception as e:
         logger.warning(f"Could not load saved configuration: {e}")
@@ -85,7 +84,7 @@ def get_model_config() -> dict:
     saved_config = load_saved_configuration()
     
     if saved_config:
-        provider_name, model, ollama_host, openai_api_base, model_settings = saved_config
+        provider_name, model, ollama_host, openai_api_base = saved_config
         
         # Remove provider prefix from model if present
         if "/" in model:
@@ -109,8 +108,7 @@ def get_model_config() -> dict:
             "provider": provider_name,
             "model_name": model_name,
             "base_url": base_url,
-            "full_model": model,
-            "model_settings": model_settings or {}
+            "full_model": model
         }
     else:
         # Default configuration
@@ -119,8 +117,7 @@ def get_model_config() -> dict:
             "provider": "openai",
             "model_name": "qwen3-coder-30b-a3b",
             "base_url": "http://llama.digidow.ins.jku.at:11434/v1/",
-            "full_model": "openai/qwen3-coder-30b-a3b",
-            "model_settings": {}
+            "full_model": "openai/qwen3-coder-30b-a3b"
         }
     
     return _cached_config
@@ -206,6 +203,16 @@ def create_openai_settings(settings: Dict[str, Any]) -> OpenAIModelSettings:
     return OpenAIModelSettings(**merged_settings)
 
 
+def create_anthropic_settings(settings: Dict[str, Any]) -> AnthropicModelSettings:
+    """Create AnthropicModelSettings from config dict."""
+    # Use constants for defaults
+    defaults = DEFAULT_MODEL_SETTINGS["anthropic"].copy()
+    
+    merged_settings = {**defaults, **settings}
+    logger.info(f"Creating Anthropic settings: max_tokens={merged_settings.get('max_tokens')}, temperature={merged_settings.get('temperature')}, anthropic_thinking={merged_settings.get('anthropic_thinking')}")
+    return AnthropicModelSettings(**merged_settings)
+
+
 def initialize_model_config():
     """Initialize model configuration and create model instance. Must be called once at startup."""
     global _cached_model
@@ -228,7 +235,11 @@ def initialize_model_config():
         
         logger.info(f"Using Anthropic model: {model_name}")
         provider = AnthropicProvider(api_key=api_key)
-        _cached_model = AnthropicModel(model_name, provider=provider)
+        
+        # Always use env settings or defaults, never from config file
+        env_settings = load_model_settings_from_env("anthropic")
+        model_settings = create_anthropic_settings(env_settings)
+        _cached_model = AnthropicModel(model_name, provider=provider, settings=model_settings)
     
     elif provider_name == "gemini":
         # Get Google API key - check environment first (as override), then secure storage
@@ -243,19 +254,12 @@ def initialize_model_config():
         provider = GoogleProvider(api_key=api_key)
         
         env_settings = load_model_settings_from_env("gemini")
-        saved_settings = config.get("model_settings", {})
-        
-        # Environment variables take precedence
-        if os.environ.get("VIBENIX_MODEL_SETTINGS"):
-            final_settings = env_settings
-        else:
-            final_settings = saved_settings if saved_settings else env_settings
-        
-        model_settings = create_gemini_settings(final_settings)
+        model_settings = create_gemini_settings(env_settings)
         _cached_model = GoogleModel(config["model_name"], provider=provider, settings=model_settings)
     else:
         # Default to OpenAI-compatible models
         api_key = os.environ.get("OPENAI_API_KEY", "dummy")
+        base_url = config.get("base_url")
         
         # Log configuration details
         if "OPENAI_BASE_URL" in os.environ:
@@ -265,15 +269,7 @@ def initialize_model_config():
         provider = OpenAIProvider(base_url=base_url, api_key=api_key)
         
         env_settings = load_model_settings_from_env("openai")
-        saved_settings = config.get("model_settings", {})
-        
-        # Environment variables take precedence
-        if os.environ.get("VIBENIX_MODEL_SETTINGS"):
-            final_settings = env_settings
-        else:
-            final_settings = saved_settings if saved_settings else env_settings
-        
-        model_settings = create_openai_settings(final_settings)
+        model_settings = create_openai_settings(env_settings)
         _cached_model = OpenAIModel(config["model_name"], provider=provider, settings=model_settings)
 
 

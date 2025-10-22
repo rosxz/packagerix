@@ -56,49 +56,6 @@ def choose_provider_terminal() -> Optional[str]:
             print("❌ Please enter 1, 2, 3, or 'q' to quit")
 
 
-def configure_model_settings(provider: str) -> Dict[str, Any]:
-    """Allow user to configure model settings for the selected provider."""
-    defaults = DEFAULT_MODEL_SETTINGS.get(provider, DEFAULT_MODEL_SETTINGS["openai"])
-    
-    print(f"\n⚙️  Model Settings for {provider.title()}")
-    print("=" * 40)
-    
-    # Show current defaults
-    print("Default settings:")
-    for key, value in defaults.items():
-        print(f"  • {key}: {value}")
-    
-    use_defaults = input(f"\nUse defaults? (Y/n): ").strip().lower()
-    if use_defaults != 'n':
-        return defaults.copy()
-    
-    print("\n🔧 Customize Settings:")
-    custom_settings = {}
-    
-    # Configure each setting generically
-    for key, default_value in defaults.items():
-        while True:
-            try:
-                user_input = input(f"{key} (default {default_value}): ").strip()
-                if not user_input:
-                    custom_settings[key] = default_value
-                    break
-                
-                # Try to convert to the same type as default
-                if isinstance(default_value, bool):
-                    custom_settings[key] = user_input.lower() in ('true', 't', 'yes', 'y', '1')
-                elif isinstance(default_value, int):
-                    custom_settings[key] = int(user_input)
-                elif isinstance(default_value, float):
-                    custom_settings[key] = float(user_input)
-                else:
-                    custom_settings[key] = user_input
-                break
-            except ValueError:
-                print("❌ Invalid input, try again")
-    
-    return custom_settings
-
 
 def choose_gemini_model_terminal(api_key: str) -> Optional[str]:
     """Let user choose a Gemini model."""
@@ -191,14 +148,11 @@ def show_model_config_terminal() -> Optional[Dict[str, str]]:
     if not model:
         return None
     
-    # Step 4: Configure model settings
-    model_settings = configure_model_settings(provider)
-    
     # Save configuration
     print(f"\n✅ Saving configuration: {provider}/{model}")
     
     # Save to config file
-    save_configuration(provider, model, openai_api_base, model_settings)
+    save_configuration(provider, model, openai_api_base)
     
     return {
         "provider": provider,
@@ -385,17 +339,14 @@ def choose_anthropic_model_terminal(api_key: str) -> Optional[str]:
 
 def save_configuration(provider: str, model: str, openai_api_base: str, model_settings: Dict[str, Any] = None):
     """Save the configuration for future use."""
-    # Use default model settings if none provided
-    if model_settings is None:
-        model_settings = DEFAULT_MODEL_SETTINGS.get(provider, DEFAULT_MODEL_SETTINGS["openai"])
+    # Don't save model_settings - these should be in code only
     
     # Save to config file
     config_data = {
         "provider": provider,
         "model": f"{provider}/{model}",
         "backend": "pydantic-ai",
-        "openai_api_base": openai_api_base,
-        "model_settings": model_settings
+        "openai_api_base": openai_api_base
     }
     
     try:
@@ -422,7 +373,7 @@ def ensure_model_configured() -> bool:
     saved_config = load_saved_configuration()
     
     if saved_config:
-        provider_name, model, ollama_host, openai_api_base, model_settings = saved_config
+        provider_name, model, ollama_host, openai_api_base = saved_config
         print(f"\n✅ Found saved model configuration: {model}")
         
         # Ask if they want to use it or reconfigure
