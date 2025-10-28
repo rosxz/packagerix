@@ -51,6 +51,7 @@ class ModelPromptManager:
         """Reset the iteration usage counters."""
         self._session_usage.prompt_tokens += self._iteration_usage.prompt_tokens
         self._session_usage.completion_tokens += self._iteration_usage.completion_tokens
+        self._session_usage.cache_read_tokens += self._iteration_usage.cache_read_tokens
         self._iteration_usage = Usage(model=self._model)
     #####
 
@@ -147,6 +148,7 @@ class ModelPromptManager:
                 # Track usage for cost calculations
                 self._iteration_usage.prompt_tokens += usage.prompt_tokens
                 self._iteration_usage.completion_tokens += usage.completion_tokens
+                self._iteration_usage.cache_read_tokens += usage.cache_read_tokens
                 return result
             
             return wrapper

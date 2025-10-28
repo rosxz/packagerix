@@ -380,7 +380,8 @@ def package_project(output_dir=None, project_url=None, revision=None, fetcher=No
                 iteration=iteration,
                 iteration_cost=usage.calculate_cost(),
                 input_tokens=usage.prompt_tokens,
-                output_tokens=usage.completion_tokens
+                output_tokens=usage.completion_tokens,
+                cache_read_tokens=usage.cache_read_tokens
             )
             iteration += 1
             continue
@@ -458,7 +459,8 @@ def package_project(output_dir=None, project_url=None, revision=None, fetcher=No
             iteration=iteration,
             iteration_cost=usage.calculate_cost(),
             input_tokens=usage.prompt_tokens,
-            output_tokens=usage.completion_tokens
+            output_tokens=usage.completion_tokens,
+            cache_read_tokens=usage.cache_read_tokens
         )
         iteration += 1
 

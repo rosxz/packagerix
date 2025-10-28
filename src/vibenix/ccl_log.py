@@ -151,11 +151,12 @@ class CCLLogger:
 
         # genai-prices doesnt provide direct way to get actual pricing
         from vibenix.model_config import calc_model_pricing
-        input_cost = calc_model_pricing(full_model, 1, 0)
-        output_cost = calc_model_pricing(full_model, 0, 1)
+        input_cost = calc_model_pricing(full_model, 1, 0, 0)
+        output_cost = calc_model_pricing(full_model, 0, 1, 0)
+        cache_read_cost = calc_model_pricing(full_model, 1, 0, 1)
         self.write_kv("input_cost_per_token", f"{input_cost:.15f}".rstrip('0'))
         self.write_kv("output_cost_per_token", f"{output_cost:.15f}".rstrip('0'))
-        # TODO add thought token costs if applicable
+        self.write_kv("cache_read_cost_per_token", f"{cache_read_cost:.15f}".rstrip('0'))
 
         self.leave_attribute()
 
@@ -236,13 +237,14 @@ class CCLLogger:
         self.leave_attribute()
     
     def log_iteration_cost(self, iteration: int, iteration_cost: float, 
-                          input_tokens: int, output_tokens: int):
+                           input_tokens: int, output_tokens: int, cache_read_tokens: int = 0):
         """Log the total cost for an iteration."""
         self.enter_attribute("iteration_cost")
         self.write_time("elapsed")
         self.write_kv("iteration", str(iteration))
         self.write_kv("input_tokens", str(input_tokens))
         self.write_kv("output_tokens", str(output_tokens))
+        self.write_kv("cache_read_tokens", str(cache_read_tokens))
         self.write_kv("total_tokens", str(input_tokens + output_tokens))
         self.write_kv("cost", f"{iteration_cost:.6f}")
         self.leave_attribute()

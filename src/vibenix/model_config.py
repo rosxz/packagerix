@@ -33,7 +33,7 @@ DEFAULT_MODEL_SETTINGS = {
 }
 DEFAULT_USAGE_LIMITS = {
     "total_tokens_limit": 32768,
-    "tool_calls_limit": 10,
+    "tool_calls_limit": 8,
     # check_tokens, check_before_tool_call
 }
 
@@ -287,13 +287,15 @@ def initialize_model_config(): # initialize from saved config or defaults
         _cached_model = OpenAIModel(config["model_name"], provider=provider, settings=model_settings)
 
 
-def calc_model_pricing(model: str, prompt_tokens: int, completion_tokens: int) -> float:
+def calc_model_pricing(model: str, prompt_tokens: int, completion_tokens: int,
+                       cache_read_tokens: int = 0) -> float:
     try:
         provider, model_ref = model.split("/", 1)
         from genai_prices import calc_price, Usage
         # Get pricing from genai-prices library
         price_data = calc_price(
-            Usage(input_tokens=prompt_tokens, output_tokens=completion_tokens),
+            Usage(input_tokens=prompt_tokens, output_tokens=completion_tokens,
+                  cache_read_tokens=cache_read_tokens),
             model_ref=model_ref,
             provider_id=provider,
             )

@@ -8,6 +8,7 @@ from typing import Callable, Any
 from pydantic_ai import Agent, UnexpectedModelBehavior
 from pydantic_ai.usage import UsageLimits
 from tenacity import retry, stop_after_attempt, wait_exponential, retry_if_exception_type
+from tenacity.retry import retry_base
 from pydantic_ai.exceptions import UsageLimitExceeded, UnexpectedModelBehavior
 from vibenix.model_config import get_model
 from vibenix.ui.conversation import get_ui_adapter, Message, Actor, Usage
@@ -49,14 +50,20 @@ class VibenixAgent:
         self._tools.append(func)
     
     @retry(
-      retry=retry_if_exception_type((UsageLimitExceeded, UnexpectedModelBehavior)),
+      retry=retry_if_exception_type((UnexpectedModelBehavior)),
       stop=stop_after_attempt(3),
       wait=wait_exponential(multiplier=3, max=60)
     )
     async def run_async(self, prompt: str) -> tuple[Any, Usage]:
         """Run the agent asynchronously and return response with usage."""
+        retry_state = getattr(self, '_retry_state', None)
+        attempt = retry_state.attempt_number if retry_state else 1
+        if attempt > 1:
+            logger.warning(f"Retrying prompt, attempt {attempt}")
         
-        usage_limits = UsageLimits(**DEFAULT_USAGE_LIMITS)
+        # Reset usage limits on retry attempts (they are fresh for each agent.run())
+        limits = DEFAULT_USAGE_LIMITS.copy()
+        usage_limits = UsageLimits(**limits)
         result = await self.agent.run(prompt, usage_limits=usage_limits)
         
         # Convert pydantic-ai usage to our Usage dataclass
@@ -64,6 +71,7 @@ class VibenixAgent:
         usage = Usage(
             prompt_tokens=usage_data.input_tokens if usage_data else 0,
             completion_tokens=usage_data.output_tokens if usage_data else 0,
+            cache_read_tokens=usage_data.cache_read_tokens if usage_data else 0,
         )
         
         # Handle both text and structured output
@@ -83,18 +91,24 @@ class VibenixAgent:
         return loop.run_until_complete(self.run_async(prompt))
     
     @retry(
-      retry=retry_if_exception_type((UsageLimitExceeded, UnexpectedModelBehavior)),
+      retry=retry_if_exception_type((UnexpectedModelBehavior)),
       stop=stop_after_attempt(3),
       wait=wait_exponential(multiplier=3, max=60)
     )
     async def run_stream_async(self, prompt: str) -> tuple[str, Usage]:
         """Run the agent with streaming and return complete response with usage."""
         adapter = get_ui_adapter()
+        retry_state = getattr(self, '_retry_state', None)
+        attempt = retry_state.attempt_number if retry_state else 1
+        if attempt > 1:
+            logger.warning(f"Retrying prompt, attempt {attempt}")
         
         # For text output, we use regular run method to avoid streaming issues
         # We can get rid of this by switching away from text output to structured output for the updated code
         if self._output_type is None:
-            usage_limits = UsageLimits(**DEFAULT_USAGE_LIMITS)
+            # Reset usage limits on retry attempts (they are fresh for each agent.run())
+            limits = DEFAULT_USAGE_LIMITS.copy()
+            usage_limits = UsageLimits(**limits)
             result = await self.agent.run(prompt, usage_limits=usage_limits)
             
             # Get the text output
@@ -111,12 +125,15 @@ class VibenixAgent:
             usage = Usage(
                 prompt_tokens=usage_data.input_tokens if usage_data else 0,
                 completion_tokens=usage_data.output_tokens if usage_data else 0,
+                cache_read_tokens=usage_data.cache_read_tokens if usage_data else 0,
             )
             
             return full_response, usage
         else:
             # For structured output, use streaming
-            usage_limits = UsageLimits(**DEFAULT_USAGE_LIMITS)
+            # Reset usage limits on retry attempts (they are fresh for each agent.run())
+            limits = DEFAULT_USAGE_LIMITS.copy()
+            usage_limits = UsageLimits(**limits)
             async with self.agent.run_stream(prompt, usage_limits=usage_limits) as result:
                 output = await result.get_output()
                 full_response = str(output)
@@ -127,6 +144,7 @@ class VibenixAgent:
                 usage = Usage(
                     prompt_tokens=usage_data.input_tokens if usage_data else 0,
                     completion_tokens=usage_data.output_tokens if usage_data else 0,
+                    cache_read_tokens=usage_data.cache_read_tokens if usage_data else 0,
                 )
                 
                 return full_response, usage

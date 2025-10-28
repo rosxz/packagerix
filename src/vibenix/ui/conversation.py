@@ -171,13 +171,14 @@ def coordinator_progress(message: str):
 @dataclass
 class Usage:
     """Usage tracking with token counts."""
-    def __init__(self, prompt_tokens: int = 0, completion_tokens: int = 0, model: str = ""):
+    def __init__(self, prompt_tokens: int = 0, completion_tokens: int = 0, cache_read_tokens: int = 0, model: str = ""):
         self.prompt_tokens = prompt_tokens
         self.completion_tokens = completion_tokens
+        self.cache_read_tokens = cache_read_tokens
         self.model = model
 
     def calculate_cost(self) -> float:
         """Calculate cost from PydanticAI RunUsage object."""
 
         from vibenix.model_config import calc_model_pricing
-        return calc_model_pricing(self.model, self.prompt_tokens, self.completion_tokens)
+        return calc_model_pricing(self.model, self.prompt_tokens, self.completion_tokens, self.cache_read_tokens)
