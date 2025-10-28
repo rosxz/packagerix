@@ -47,6 +47,12 @@ class ModelPromptManager:
         self.reset_iteration_usage()
         return usage
 
+    def add_iteration_usage(self, usage: Usage):
+        """Add usage from a model interaction to the iteration usage."""
+        self._iteration_usage.prompt_tokens += usage.prompt_tokens
+        self._iteration_usage.completion_tokens += usage.completion_tokens
+        self._iteration_usage.cache_read_tokens += usage.cache_read_tokens
+
     def reset_iteration_usage(self):
         """Reset the iteration usage counters."""
         self._session_usage.prompt_tokens += self._iteration_usage.prompt_tokens
@@ -146,9 +152,7 @@ class ModelPromptManager:
                 get_logger().prompt_end(2)
                 
                 # Track usage for cost calculations
-                self._iteration_usage.prompt_tokens += usage.prompt_tokens
-                self._iteration_usage.completion_tokens += usage.completion_tokens
-                self._iteration_usage.cache_read_tokens += usage.cache_read_tokens
+                self.add_iteration_usage(usage)
                 return result
             
             return wrapper

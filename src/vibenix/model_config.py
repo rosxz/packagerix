@@ -34,7 +34,6 @@ DEFAULT_MODEL_SETTINGS = {
 DEFAULT_USAGE_LIMITS = {
     "total_tokens_limit": 32768,
     "tool_calls_limit": 8,
-    # check_tokens, check_before_tool_call
 }
 
 # Cache for model configuration to avoid repeated loading and logging
