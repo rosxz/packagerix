@@ -16,7 +16,8 @@ from vibenix.tools import (
     search_nixpkgs_manual_documentation,
     str_replace,
     insert,
-    view
+    view,
+    build_package,
 )
 from vibenix.errors import NixBuildErrorDiff, LogDiff, FullLogDiff, ProcessedLogDiff
 
@@ -29,7 +30,7 @@ SEARCH_FUNCTIONS = [
     search_nixpkgs_for_package_literal,
     search_nix_functions,
     search_nixpkgs_for_file,
-    search_nixpkgs_manual_documentation
+    search_nixpkgs_manual_documentation,
 ]
 EDIT_FUNCTIONS = [str_replace, view]
 SEARCH_AND_EDIT_FUNCTIONS = SEARCH_FUNCTIONS + EDIT_FUNCTIONS
@@ -48,12 +49,6 @@ def run_formatter_after(func):
             print(f"⚠️  Warning: Failed to format code: {e}")
         return result
     return wrapper
-
-
-from pydantic import BaseModel
-class FinishResponse(BaseModel):
-    """Response model for the finish function."""
-    pass
 
 
 @ask_model_prompt('pick_template.md')
@@ -94,7 +89,7 @@ def refine_code(
     project_page: Optional[str] = None,
     template_notes: Optional[str] = None,
     additional_functions: List = []
-) -> str:
+) -> build_package:
     """Refine a nix package based on feedback."""
     ...
 
@@ -112,13 +107,13 @@ def fix_build_error(
     is_syntax_error: bool = False,
     attempted_tool_calls: List = [],
     tool_call_collector: List = None
-) -> str:
+) -> build_package:
     """Fix a build error in Nix code."""
     ...
 
 
 @ask_model_prompt('error_fixing/fix_hash_mismatch.md', functions=EDIT_FUNCTIONS)
-def fix_hash_mismatch(code: str, error: str) -> str:
+def fix_hash_mismatch(code: str, error: str) -> build_package:
     """Fix hash mismatch errors in Nix code."""
     ...
 
@@ -202,7 +197,7 @@ def compare_template_builders(
     initial_code: str,
     builder_combinations_info: str,
     project_page: Optional[str] = None,
-    additional_functions: List = []) -> str:
+    additional_functions: List = []) -> build_package:
     """Compare the template builders with ones from choose_builders."""
     ...
 

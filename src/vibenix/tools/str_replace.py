@@ -30,19 +30,12 @@ def _str_replace(old_str: str, new_str: str, occurrence: int = 1) -> str:
         current_content = get_package_contents()
         previous_content = current_content
         
-        # Check if old_str exists in content
+        if not old_str:
+            error_msg = f"Error: `old_str` cannot be empty."
+            return error_msg
         count = current_content.count(old_str)
         if count == 0:
-            lines = current_content.splitlines()
-            similar_lines = []
-            for i, line in enumerate(lines, start=1):
-                if old_str.strip() in line or any(word in line for word in old_str.split() if len(word) > 3):
-                    similar_lines.append(f"{i:>3}: {line}")
-            
-            error_msg = f"Error: Text not found in packaging expression."#\n Looked for: {repr(old_str)}"
-            #if similar_lines:
-            #    error_msg += f"\n\nSimilar lines found:\n" + "\n".join(similar_lines[:5])
-            return error_msg
+            return f"Error: Text not found in packaging expression."
 
         # Validate occurrence parameter
         if occurrence < 1:
@@ -64,10 +57,10 @@ def _str_replace(old_str: str, new_str: str, occurrence: int = 1) -> str:
         else:
             updated_content = current_content.replace(old_str, new_str)
 
-        # Test if it breaks syntax
+        # Test if it breaks syntax (commented in favor of prompt with syntax hints)
         #from vibenix.nix import check_syntax
         #syntax_err = check_syntax(updated_content)
-        #if syntax_err and "attribute" not in syntax_err:
+        #if syntax_err and "expect" in syntax_err:
         #    syntax_error_index = syntax_err.index("error: syntax error")
         #    error_truncated = syntax_err[syntax_error_index:]
         #    error_msg = f"Error: Insertion aborted, breaks syntax:\n{error_truncated}"

@@ -16,7 +16,7 @@ Error:
 {{ error }}
 ```
            
-**IMPORTANT**: To perform each change to the code, use the text editor tools: `str_replace`, `view`. Finally, reply with a very brief summary of the changes made.
+**IMPORTANT**: To perform each change to the code, use the text editor tools: `str_replace`, `view`.
 
 Note: Never replace more than one instance of lib.fakeHash.
 Note: Never put sha256-AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA= in the code.

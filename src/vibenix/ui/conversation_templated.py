@@ -19,6 +19,7 @@ from vibenix.ui.conversation import (
 
 from vibenix.packaging_flow.model_prompts.prompt_loader import get_prompt_loader
 from vibenix.agent import VibenixAgent
+from abc import ABC
 
 T = TypeVar('T')
 
@@ -66,7 +67,11 @@ class ModelPromptManager:
             # Get return type hint
             type_hints = get_type_hints(func)
             return_type = type_hints.get('return', type(None))
-            
+            # OutputFunctions returntype workaround -> check if the class is abstract
+            if inspect.isclass(return_type) and (ABC in return_type.__bases__):
+                # Get the same named method from the return type class
+                return_type = getattr(return_type, return_type.__name__, None)
+
             # Determine output type and whether to use streaming
             is_streaming = return_type == str
             is_enum = inspect.isclass(return_type) and issubclass(return_type, Enum)
@@ -112,6 +117,7 @@ class ModelPromptManager:
                 
                 # Add tools to the agent
                 all_functions = (functions or []) + additional_functions
+                from vibenix.packaging_flow.model_prompts import EDIT_FUNCTIONS
                 for tool_func in all_functions:
                     agent.add_tool(tool_func)
                 
@@ -125,19 +131,15 @@ class ModelPromptManager:
                     # For non-streaming (structured outputs), just run normally
                     response, usage = agent.run(rendered_prompt)
                     
+                    # Pydantic-ai should return the structured type directly
+                    result = response
+                    adapter.show_message(Message(Actor.MODEL, str(result)))
                     if is_structured:
-                        # Pydantic-ai should return the structured type directly
-                        result = response
                         if is_enum:
-                            adapter.show_message(Message(Actor.MODEL, str(result)))
                             get_logger().reply_chunk_typed(0, result, 'enum', 4)
                         else:
-                            # For lists and other structured types
-                            adapter.show_message(Message(Actor.MODEL, str(result)))
                             get_logger().reply_chunk_typed(0, result, str(type(result)), 4)
                     else:
-                        result = response
-                        adapter.show_message(Message(Actor.MODEL, str(result)))
                         get_logger().reply_chunk_text(0, result, 4)
                 
                 get_logger().prompt_end(2)

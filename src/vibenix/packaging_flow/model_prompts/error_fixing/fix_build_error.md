@@ -21,8 +21,8 @@ Error:
 4. Look for command-line flags or environment variables that control output formatting
 
 Do NOT guess at solutions - use your tools to find real examples and patterns from nixpkgs, the project's CI, or the project itself.
-{% endif %}
 
+{% endif %}
 {% if is_dependency_build_error %}
 **IMPORTANT: This appears to be a dependency build failure, not an error in your derivation.**
 
@@ -55,8 +55,8 @@ Remember that:
 - In multi-line strings, dollar signs ($), dollar-curly (${), line-feed (\n), and carriage-return (\n) must be escaped by prepending them with double apostrophes (''). For example, `var = ''test ''$var end'';` is a single multi-line string with one escaped dollar sign.
 - For the remaining cases, special characters are usually escaped with a backslash (\).
 - If you need packages or attributes from a package set like `python3Packages` or `qt6`, only add the package set at the top of the file and not the full path to the attribute. Then, use `python3Packages.package_name` or `with python3Packages; [ package_name ]` to add the package.
-{% endif %}
 
+{% endif %}
 {% if attempted_tool_calls %}
 **The following tool calls have already been attempted without making progress. Consider trying different approaches:**
 {% for call in attempted_tool_calls %}
@@ -70,7 +70,6 @@ Remember that:
 - Consider if the issue requires a fundamentally different solution approach
 
 {% endif %}
-
 {% include 'snippets/project_info_section.md' %}
 
 {% include 'snippets/template_note_section.md' %}
@@ -78,7 +77,7 @@ Remember that:
 If the error message does not give you enough information to make progress, and to verify your actions, look at relevant files in the proejct directory,
 and try to compare your approach with similar packages in nixpkgs.
 
-**IMPORTANT**: To perform each change to the code, use the text editor tools: `str_replace`, `view`. Finally, reply with a very brief summary of the changes made.
+**IMPORTANT**: To perform each edit to the code, use the text editor tools: `str_replace`, `view`. Limit to 5 edits at most.
 
 Known errors:
 - `error: evaluation aborted with the following error message: 'lib.customisation.callPackageWith: Function called without required argument "package_name" at /nix/store/[...]`:

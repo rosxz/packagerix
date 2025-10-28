@@ -32,9 +32,9 @@ def get_nixpkgs_source_path() -> str:
 def get_builder_functions() -> List[str]:
     """Returns the list of all builder functions in nixpkgs."""
     print("📞 Function called: get_builder_functions")
-    return _get_builder_functions()
+    return _get_builder_functions(do_print=True)
 
-def _get_builder_functions() -> List[str]:
+def _get_builder_functions(do_print: bool = False) -> List[str]:
     """Returns the list of all builder functions in nixpkgs."""
     import json
     from pathlib import Path
@@ -48,7 +48,8 @@ def _get_builder_functions() -> List[str]:
             with open(cache_file, 'r') as f:
                 cached_data = json.load(f)
             functions = cached_data['functions']
-            print(f"♻️ Loaded {len(functions)} builder functions from cache")
+            if do_print:
+                print(f"♻️ Loaded {len(functions)} builder functions from cache")
             return functions
         except (json.JSONDecodeError, KeyError) as e:
             print(f"⚠️ Cache file corrupted, regenerating: {e}")
@@ -307,18 +308,19 @@ def _create_find_similar_builder_patterns(cache: List[str]):
             # Get the fully qualified names for the provided builders in case they are not (models might ignore this instruction)
             qualified_builders = _get_builder_functions()
             builder_map = {b.split('.')[-1]: b for b in qualified_builders}
-            builders = [builder_map[b] if b in builder_map else None for b in builders] # TODO ? else b ?
-            builders = [b for b in builders if b is not None]
-            if None in builders or len(builders) == 0:
-                return f"One or more specified builder functions are not recognized in nixpkgs. Choose from:\n{str(_get_builder_functions())}\n\n"
+            parsed_builders = []
+            for b in builders:
+                name = b.split('.')[-1]
+                if builder_map.get(name, None) is None:
+                    return f"Specified builder function '{b}' is not recognized in nixpkgs. Choose from:\n{str(_get_builder_functions())}\n\n"
+                parsed_builders.append(builder_map[name])
+            builders = parsed_builders
 
         print(f"📞 Function called: find_similar_builder_patterns with builders: {builders}{' and keyword: ' + keyword if keyword else ''}")
         return _get_builder_combinations(builders, keyword)
     return find_similar_builder_patterns
 
 def _get_builder_combinations(chosen_builders: List[str], keyword: str = None) -> str:
-    ccl_logger = get_logger()
-    ccl_logger.enter_attribute("get_builder_combinations", log_start=True)
     try:
         nixpkgs_path = get_nixpkgs_source_path()
     except Exception as e:
@@ -330,7 +332,6 @@ def _get_builder_combinations(chosen_builders: List[str], keyword: str = None) -
         return "A maximum of 5 builder functions can be specified."
     
     all_builders = list(set(chosen_builders))
-    ccl_logger.write_kv("chosen_builders", str(all_builders))
     
     print(f"Analyzing nixpkgs for builder usage: {all_builders}")
     
@@ -394,20 +395,14 @@ def _get_builder_combinations(chosen_builders: List[str], keyword: str = None) -
         reverse=True # Descending order
     )
     if not sorted_combinations:
-        ccl_logger.write_kv("result", "No packages found with the specified builders and keyword.")
-        ccl_logger.leave_attribute(log_end=True)
         return "No packages found with the specified builders and keyword."
     
     # Format results
     result_lines = []
     result_lines.append("= BUILDER FUNCTION COMBINATION ANALYSIS =")
     
-    ccl_logger.enter_attribute("results")
     iter = 0
     for combination, all_packages in sorted_combinations:
-        ccl_logger.log_iteration_start(iter)
-        ccl_logger.write_kv("combination", combination)
-        
         if keyword:
             packages_to_show = keyword_combination_counts.get(combination, set())
         else:
@@ -421,17 +416,12 @@ def _get_builder_combinations(chosen_builders: List[str], keyword: str = None) -
         PACKAGE_LIMIT = 5
         random.shuffle(randomized_packages)
         result_lines.extend([f"  {package}" for package in randomized_packages[:PACKAGE_LIMIT]])
-        ccl_logger.write_kv("packages", str(randomized_packages[:PACKAGE_LIMIT]))
         
         if len(randomized_packages) > PACKAGE_LIMIT and len(randomized_packages) - PACKAGE_LIMIT > 0:
             result_lines.append(f"  ... and {len(randomized_packages) - PACKAGE_LIMIT} more packages")
-        ccl_logger.write_kv("package_count", str(len(randomized_packages)))
         iter += 1
-    ccl_logger.leave_list()
     result_lines.append("\nUse `nixpkgs_read_file_contents` to inspect any of the above packages.")
     if not keyword:
         result_lines.append("No other combinations between the chosen builders are present in nixpkgs.")
-    ccl_logger.leave_attribute()
-    ccl_logger.leave_attribute(log_end=True)
     
     return "\n".join(result_lines)

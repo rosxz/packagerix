@@ -10,6 +10,7 @@ from vibenix.tools.str_replace import str_replace
 from vibenix.tools.view import view
 from vibenix.tools.insert import insert
 from vibenix.tools.error_pagination import error_pagination
+from vibenix.tools.build_package import build_package
 
 # Export all functions so they can be imported from this module
 __all__ = [
@@ -21,4 +22,5 @@ __all__ = [
     'str_replace',
     'view',
     'error_pagination',
+    'build_package',
 ]
