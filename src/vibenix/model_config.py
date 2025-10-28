@@ -14,26 +14,27 @@ from pydantic_ai.models.google import GoogleModel, GoogleModelSettings
 from pydantic_ai.providers.google import GoogleProvider
 from vibenix.ui.logging_config import logger
 
-# TODO: Add retry configuration for providers that support custom HTTP clients
-# For now, we'll use default retry behavior
-
 
 # Default model settings for different providers
 DEFAULT_MODEL_SETTINGS = {
     "gemini": {
-        "max_tokens": 32768,     # 32k tokens for complex packaging scenarios
         "temperature": 0.1,      # Lower temperature for focused responses
-        "thinking_budget": 16384  # 8k tokens for reasoning about tool calls
+        "thinking_budget": -1,
     },
     "anthropic": {
-        "max_tokens": 32768,
         "temperature": 0.1,
-        "anthropic_thinking": { "type": "enabled", "thinking_budget": 8192 }
+        "anthropic_thinking": { "type": "enabled", "thinking_budget": 4096 },
+        "parallel_tool_calls": False,
     },
     "openai": {
-        "max_tokens": 32768,
-        "temperature": 0.1
+        "temperature": 0.1,
+        "parallel_tool_calls": False,
     }
+}
+DEFAULT_USAGE_LIMITS = {
+    "total_tokens_limit": 32768,
+    "tool_calls_limit": 10,
+    # check_tokens, check_before_tool_call
 }
 
 # Cache for model configuration to avoid repeated loading and logging
@@ -74,7 +75,7 @@ def load_saved_configuration() -> Optional[Tuple[str, str, Optional[str], Option
 
 
 def get_model_config() -> dict:
-    """Get the model configuration from saved config or defaults."""
+    """Get the model configuration from env, saved config, and defaults."""
     global _cached_config
     
     # Return cached config if available
@@ -86,6 +87,9 @@ def get_model_config() -> dict:
     
     if saved_config:
         provider_name, model, ollama_host, openai_api_base, model_settings = saved_config
+        env_model_settings = load_model_settings_from_env(provider_name) # env + defaults
+        if model_settings:
+            model_settings = {**model_settings, **env_model_settings} # saved + ^
         
         # Remove provider prefix from model if present
         if "/" in model:
@@ -189,10 +193,16 @@ def create_gemini_settings(settings: Dict[str, Any]) -> GoogleModelSettings:
     merged_settings = {**defaults, **settings}
     
     # Handle thinking config - convert thinking_budget to google_thinking_config format
-    thinking_budget = merged_settings.pop("thinking_budget", defaults["thinking_budget"])
-    merged_settings["google_thinking_config"] = {"thinking_budget": thinking_budget}
+    try:
+        thinking_budget = merged_settings.pop("thinking_budget", defaults["thinking_budget"])
+        merged_settings["google_thinking_config"] = {"thinking_budget": thinking_budget}
+    except Exception as e:
+        pass # No thinking config provided
+    info_msg = f"Creating Gemini settings:"
+    for key in merged_settings:
+        info_msg += f" {key}={merged_settings[key]},"
     
-    logger.info(f"Creating Gemini settings: max_tokens={merged_settings.get('max_tokens')}, temperature={merged_settings.get('temperature')}, thinking_budget={thinking_budget}")
+    logger.info(info_msg.rstrip(","))
     return GoogleModelSettings(**merged_settings)
 
 
@@ -206,7 +216,7 @@ def create_openai_settings(settings: Dict[str, Any]) -> OpenAIModelSettings:
     return OpenAIModelSettings(**merged_settings)
 
 
-def initialize_model_config():
+def initialize_model_config(): # initialize from saved config or defaults
     """Initialize model configuration and create model instance. Must be called once at startup."""
     global _cached_model
     
@@ -227,7 +237,7 @@ def initialize_model_config():
                 raise ValueError("ANTHROPIC_API_KEY not found in environment or secure storage. Run interactively to configure.")
         
         logger.info(f"Using Anthropic model: {model_name}")
-        provider = AnthropicProvider(api_key=api_key)
+        provider = AnthropicProvider(api_key=api_key, http_client=create_retrying_client())
         _cached_model = AnthropicModel(model_name, provider=provider)
     
     elif provider_name == "gemini":
@@ -240,7 +250,7 @@ def initialize_model_config():
                 raise ValueError("GEMINI_API_KEY not found in environment or secure storage. Run interactively to configure.")
         
         logger.info(f"Using Gemini model: {model_name}")
-        provider = GoogleProvider(api_key=api_key)
+        provider = GoogleProvider(api_key=api_key, http_client=create_retrying_client())
         
         env_settings = load_model_settings_from_env("gemini")
         saved_settings = config.get("model_settings", {})
@@ -262,7 +272,7 @@ def initialize_model_config():
             logger.info(f"Set OPENAI_BASE_URL to {os.environ['OPENAI_BASE_URL']}")
         
         logger.info(f"Using OpenAI-compatible model: {model_name} at {base_url}")
-        provider = OpenAIProvider(base_url=base_url, api_key=api_key)
+        provider = OpenAIProvider(base_url=base_url, api_key=api_key, http_client=create_retrying_client())
         
         env_settings = load_model_settings_from_env("openai")
         saved_settings = config.get("model_settings", {})
@@ -295,3 +305,33 @@ def calc_model_pricing(model: str, prompt_tokens: int, completion_tokens: int) -
         pass
     # Default to 0 for unknown models (like local/Ollama models)
     return 0.0
+
+
+def create_retrying_client():
+    """Create a client with smart retry handling for multiple error types."""
+
+    from pydantic_ai.exceptions import UnexpectedModelBehavior, UsageLimitExceeded
+    from pydantic_ai.retries import AsyncTenacityTransport, RetryConfig, wait_retry_after
+    from httpx import AsyncClient, HTTPStatusError
+    from tenacity import retry_if_exception_type, stop_after_attempt, wait_exponential
+    from pydantic import BaseModel
+
+    def should_retry_status(response: BaseModel):
+        """Raise exceptions for retryable HTTP status codes."""
+        if response.status_code in (429, 502, 503, 504):
+            response.raise_for_status()  # This will raise HTTPStatusError
+
+    transport = AsyncTenacityTransport(
+        # Create retry configuration for handling transient failures
+        config = RetryConfig(
+            retry=retry_if_exception_type((HTTPStatusError,  ConnectionError)),
+            wait=wait_retry_after(
+                fallback_strategy=wait_exponential(multiplier=3, max=60),
+                max_wait=300
+            ),
+            stop=stop_after_attempt(5),
+            reraise=True,
+        ),
+        validate_response=should_retry_status
+    )
+    return AsyncClient(transport=transport)

@@ -289,7 +289,7 @@ def package_project(output_dir=None, project_url=None, revision=None, fetcher=No
     initial_result, initial_hash = execute_build_and_add_to_stack(initial_code)
     best = Solution(code=initial_code, result=initial_result, commit_hash=initial_hash)
 
-    ccl_logger.log_initial_build(best.code, best.result)
+    ccl_logger.log_initial_build(view_package_contents(), best.result)
     ccl_logger.enter_attribute("iterate")
     
     iteration = 0
