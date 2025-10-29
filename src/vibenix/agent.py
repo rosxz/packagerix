@@ -7,7 +7,7 @@ import asyncio
 from typing import Callable, Any
 from pydantic_ai import Agent, UnexpectedModelBehavior, capture_run_messages
 from pydantic_ai.usage import UsageLimits
-from tenacity import retry, stop_after_attempt, wait_exponential, retry_if_exception_type
+from tenacity import retry, stop_after_attempt, wait_exponential, retry_if_exception_type, RetryError
 from pydantic_ai.exceptions import UsageLimitExceeded, UnexpectedModelBehavior
 from vibenix.model_config import get_model
 from vibenix.ui.conversation import get_ui_adapter, Message, Actor, Usage
@@ -103,7 +103,8 @@ class VibenixAgent:
       retry=retry_if_exception_type((UsageLimitExceeded, UnexpectedModelBehavior)),
       stop=stop_after_attempt(3),
       wait=wait_exponential(multiplier=3, max=60),
-      before_sleep=lambda retry_state: _capture_failed_usage_before_retry(retry_state, _global_failed_messages)
+      before_sleep=lambda retry_state: _capture_failed_usage_before_retry(retry_state, _global_failed_messages),
+      retry_error_callback=lambda retry_state: _capture_failed_usage_before_retry(retry_state, _global_failed_messages)
     )
     async def run_stream_async(self, prompt: str) -> tuple[str, Usage]:
         """Run the agent with streaming and return complete response with usage."""
@@ -237,3 +238,7 @@ def _capture_failed_usage_before_retry(retry_state, failed_messages=None):
     except Exception as e:
         print(f"Could not capture failed usage before retry: {e}")
         # Don't let usage tracking errors break the retry flow
+    finally:
+        exception = retry_state.outcome.exception()
+        if isinstance(exception, RetryError):
+            raise exception

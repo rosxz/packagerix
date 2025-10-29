@@ -128,29 +128,36 @@ class ModelPromptManager:
                 for tool_func in all_functions:
                     agent.add_tool(tool_func)
                 
-                # Run the agent
-                if is_streaming:
-                    # For string returns, use streaming
-                    response, usage = agent.run_stream(rendered_prompt)
-                    result = response
-                    get_logger().reply_chunk_text(0, result, 4)
-                else:
-                    # For non-streaming (structured outputs), just run normally
-                    response, usage = agent.run(rendered_prompt)
-                    
-                    # Pydantic-ai should return the structured type directly
-                    result = response
-                    adapter.show_message(Message(Actor.MODEL, str(result)))
-                    if is_structured:
-                        if is_enum:
-                            get_logger().reply_chunk_typed(0, result, 'enum', 4)
-                        else:
-                            get_logger().reply_chunk_typed(0, result, str(type(result)), 4)
-                    else:
+                try:
+                    # Run the agent
+                    if is_streaming:
+                        # For string returns, use streaming
+                        response, usage = agent.run_stream(rendered_prompt)
+                        result = response
                         get_logger().reply_chunk_text(0, result, 4)
+                    else:
+                        # For non-streaming (structured outputs), just run normally
+                        response, usage = agent.run(rendered_prompt)
+                        
+                        # Pydantic-ai should return the structured type directly
+                        result = response
+                        adapter.show_message(Message(Actor.MODEL, str(result)))
+                        if is_structured:
+                            if is_enum:
+                                get_logger().reply_chunk_typed(0, result, 'enum', 4)
+                            else:
+                                get_logger().reply_chunk_typed(0, result, str(type(result)), 4)
+                        else:
+                            get_logger().reply_chunk_text(0, result, 4)
+                except Exception as e:
+                    adapter.show_message(Message(Actor.MODEL, f"Error: {str(e)}"))
+                    get_logger().reply_chunk_text(0, f"Error: {str(e)}", 4)
+                    get_logger().prompt_end(2)
+                    return None
+                    # UsageLimitExceeded, or other exceptions.
+                    # Proceed to next iteration, if problem persists, the loop will stop anyway
                 
                 get_logger().prompt_end(2)
-                
                 # Track usage for cost calculations
                 self.add_iteration_usage(usage)
                 return result
