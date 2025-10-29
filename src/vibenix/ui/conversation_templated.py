@@ -124,7 +124,6 @@ class ModelPromptManager:
                 
                 # Add tools to the agent
                 all_functions = (functions or []) + additional_functions
-                from vibenix.packaging_flow.model_prompts import EDIT_FUNCTIONS
                 for tool_func in all_functions:
                     agent.add_tool(tool_func)
                 
