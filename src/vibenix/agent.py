@@ -193,6 +193,7 @@ def _capture_failed_usage_before_retry(retry_state, failed_messages=None):
         attempt = retry_state.attempt_number if retry_state else 1
         # Add separator to logs for retry attempts
         get_logger().write_kv("retry_attempt", str(attempt))
+        get_logger().write_kv("exception", str(exception))
 
         if any(isinstance(exception, kind) for kind in (UsageLimitExceeded, UnexpectedModelBehavior)) \
          and failed_messages:
