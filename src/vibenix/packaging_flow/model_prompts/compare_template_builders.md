@@ -24,4 +24,4 @@ Strictly adhere to the following constraints:
 *   Do NOT alter the `src`, `pname`, `version`, or any other metadata attributes.
 *   Do NOT make any stylistic changes, add comments, or refactor the code unnecessarily. Your changes must be purely functional and directly related to the builder logic.
 
-**IMPORTANT**: To perform each edit to the code, use the text editor tools: `str_replace`, `view`. Limit to 5 edits at most.
+**IMPORTANT**: To perform each change to the code, use the text editor tools: `str_replace`, `view`. Finally, reply with a very brief summary of the changes made.
