@@ -19,7 +19,7 @@ from vibenix.ui.logging_config import logger
 DEFAULT_MODEL_SETTINGS = {
     "gemini": {
         "temperature": 0.1,      # Lower temperature for focused responses
-        "thinking_budget": -1,
+        "thinking_budget": 8192,
     },
     "anthropic": {
         "temperature": 0.1,
@@ -32,8 +32,8 @@ DEFAULT_MODEL_SETTINGS = {
     }
 }
 DEFAULT_USAGE_LIMITS = {
-    "total_tokens_limit": 32768,
-    "tool_calls_limit": 8,
+    "total_tokens_limit": 65536,
+    "tool_calls_limit": 10,
 }
 
 # Cache for model configuration to avoid repeated loading and logging
