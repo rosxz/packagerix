@@ -54,6 +54,11 @@ on:
         options:
           - implementation
           - evaluation
+      concurrent_jobs:
+        description: 'Number of jobs to run in parallel (1 to avoid rate limits)'
+        required: false
+        default: '1'
+        type: number
   push:
     branches:
       - main
@@ -160,7 +165,7 @@ jobs:
     timeout-minutes: 105
     strategy:
       matrix: ${{ fromJson(needs.setup.outputs.matrix) }}
-      max-parallel: 1  # Run only 1 job at a time to avoid API rate limits
+      max-parallel: ${{ fromJson(github.event.inputs.concurrent_jobs || '1') }}  # Configurable parallel jobs
       fail-fast: false
     steps:
       - uses: actions/checkout@v4
@@ -237,6 +242,9 @@ jobs:
           if [ -n "${{ github.event.inputs.model_settings }}" ]; then
             echo "VIBENIX_MODEL_SETTINGS='${{ github.event.inputs.model_settings }}'" >> $GITHUB_ENV
           fi
+
+          # Set Github token in nix config
+          echo "NIX_CONFIG='access-tokens = github.com=${{ secrets.GH_TOKEN }}'" >> $GITHUB_ENV
       
       - name: Process package request
         id: process
