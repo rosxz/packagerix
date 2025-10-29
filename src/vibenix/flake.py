@@ -41,9 +41,9 @@ def update_flake(new_content, do_commit: bool = False) -> str:
         file.write(new_content)
 
     repo = git.Repo(config.flake_dir.as_posix())
+    repo.git.add('-A')
     if not do_commit:
         return None
-    repo.git.add('-A')
     commit = repo.index.commit("build step")
     return commit.hexsha
 

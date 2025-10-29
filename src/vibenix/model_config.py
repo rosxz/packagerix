@@ -18,8 +18,9 @@ from vibenix.ui.logging_config import logger
 # Default model settings for different providers
 DEFAULT_MODEL_SETTINGS = {
     "gemini": {
+        "max_tokens": 32768,
         "temperature": 0.1,      # Lower temperature for focused responses
-        "thinking_budget": 8192,
+        "thinking_budget": 16384,
     },
     "anthropic": {
         "temperature": 0.1,

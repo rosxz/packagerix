@@ -17,7 +17,6 @@ from vibenix.tools import (
     str_replace,
     insert,
     view,
-    build_package,
 )
 from vibenix.errors import NixBuildErrorDiff, LogDiff, FullLogDiff, ProcessedLogDiff
 
@@ -89,7 +88,7 @@ def refine_code(
     project_page: Optional[str] = None,
     template_notes: Optional[str] = None,
     additional_functions: List = []
-) -> build_package:
+) -> str:
     """Refine a nix package based on feedback."""
     ...
 
@@ -107,13 +106,13 @@ def fix_build_error(
     is_syntax_error: bool = False,
     attempted_tool_calls: List = [],
     tool_call_collector: List = None
-) -> build_package:
+) -> str:
     """Fix a build error in Nix code."""
     ...
 
 
 @ask_model_prompt('error_fixing/fix_hash_mismatch.md', functions=EDIT_FUNCTIONS)
-def fix_hash_mismatch(code: str, error: str) -> build_package:
+def fix_hash_mismatch(code: str, error: str) -> str:
     """Fix hash mismatch errors in Nix code."""
     ...
 
@@ -197,7 +196,7 @@ def compare_template_builders(
     initial_code: str,
     builder_combinations_info: str,
     project_page: Optional[str] = None,
-    additional_functions: List = []) -> build_package:
+    additional_functions: List = []) -> str:
     """Compare the template builders with ones from choose_builders."""
     ...
 
