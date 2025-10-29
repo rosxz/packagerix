@@ -4,7 +4,6 @@ import subprocess
 import json
 from vibenix.ccl_log import get_logger, log_function_call
 
-
 @log_function_call("search_nixpkgs_for_package_literal")
 def search_nixpkgs_for_package_literal(query: str, package_set_unique: str = None) -> str:
     """Search the nixpkgs repository of Nix code for the given package using fuzzy search.
@@ -17,7 +16,10 @@ def search_nixpkgs_for_package_literal(query: str, package_set_unique: str = Non
     Returns a Nix expression with matching packages grouped by package set.
     """
     print(f"📞 Function called: search_nixpkgs_for_package_literal with query: {query}, package_set_unique: {package_set_unique}")
+    return _search_nixpkgs_for_package_literal(query, package_set_unique)
 
+def _search_nixpkgs_for_package_literal(query: str, package_set_unique: str = None) -> str:
+    """Search the nixpkgs repository of Nix code for the given package using fuzzy search."""
     
     # Get all packages (using ^ to match everything)
     nix_result = subprocess.run(
