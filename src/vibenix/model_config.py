@@ -19,16 +19,16 @@ from vibenix.ui.logging_config import logger
 DEFAULT_MODEL_SETTINGS = {
     "gemini": {
         "max_tokens": 32768,
-        "temperature": 0.1,      # Lower temperature for focused responses
+        "temperature": 0.7,      # Lower temperature for focused responses
         "thinking_budget": 16384,
     },
     "anthropic": {
-        "temperature": 0.1,
+        "temperature": 0.7,
         "anthropic_thinking": { "type": "enabled", "thinking_budget": 4096 },
         "parallel_tool_calls": False,
     },
     "openai": {
-        "temperature": 0.1,
+        "temperature": 0.7,
         "parallel_tool_calls": False,
     }
 }
