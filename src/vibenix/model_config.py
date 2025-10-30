@@ -15,20 +15,23 @@ from pydantic_ai.providers.google import GoogleProvider
 from vibenix.ui.logging_config import logger
 
 
-# Default model settings for different providers
+SEED = 42 # Life
 DEFAULT_MODEL_SETTINGS = {
     "gemini": {
-        "temperature": 0.7,      # Lower temperature for focused responses
+        "temperature": 0.7,
         "thinking_budget": -1,
+        "seed": SEED,
     },
     "anthropic": {
-        "temperature": 0.1,
+        "temperature": 0.7,
         "anthropic_thinking": { "type": "enabled", "thinking_budget": 4096 },
         "parallel_tool_calls": False,
+        "seed": SEED,
     },
     "openai": {
-        "temperature": 0.1,
+        "temperature": 0.7,
         "parallel_tool_calls": False,
+        "seed": SEED,
     }
 }
 DEFAULT_USAGE_LIMITS = {
