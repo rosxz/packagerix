@@ -77,8 +77,6 @@ Remember that:
 If the error message does not give you enough information to make progress, and to verify your actions, look at relevant files in the proejct directory,
 and try to compare your approach with similar packages in nixpkgs.
 
-**IMPORTANT**: To perform each change to the code, use the text editor tools: `str_replace`, `view`. Finally, reply with a very brief summary of the changes made.
-
 Known errors:
 - `error: evaluation aborted with the following error message: 'lib.customisation.callPackageWith: Function called without required argument "package_name" at /nix/store/[...]`:
    This error indicates that one of the function arguments you specified at the top of the file was not found and is incorrect.
@@ -96,3 +94,6 @@ Notes:
 - Do not produce a flatpak, or docker container and do not use tools related to theres technologies to produce your output. Use tools to find other more direct ways to build the project.
 - If you need packages from a package set like `python3Packages` or `qt6`, only add the package set at the top of the file and use `python3Packages.package_name` or `with python3Packages; [ package_name ]` to add the package.
 - You will not find the package that I am asking you to build in nixpkgs already.
+
+
+Your response needs to list the concrete changes you would make to the code to fix the error. Be specific.

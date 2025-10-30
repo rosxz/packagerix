@@ -6,6 +6,7 @@ This module contains all functions that interact with the AI model using templat
 from enum import Enum
 from typing import List, Optional
 
+from vibenix.ui.conversation import ask_user,  coordinator_message, coordinator_error, coordinator_progress
 from vibenix.template.template_types import TemplateType
 from vibenix.ui.conversation_templated import model_prompt_manager
 from vibenix.tools import (
@@ -15,7 +16,7 @@ from vibenix.tools import (
     search_nixpkgs_for_file,
     search_nixpkgs_manual_documentation,
     str_replace,
-    insert,
+    insert_line_after,
     view,
 )
 from vibenix.errors import NixBuildErrorDiff, LogDiff, FullLogDiff, ProcessedLogDiff
@@ -31,7 +32,7 @@ SEARCH_FUNCTIONS = [
     search_nixpkgs_for_file,
     search_nixpkgs_manual_documentation,
 ]
-EDIT_FUNCTIONS = [str_replace, view]
+EDIT_FUNCTIONS = [str_replace, insert_line_after, view]
 SEARCH_AND_EDIT_FUNCTIONS = SEARCH_FUNCTIONS + EDIT_FUNCTIONS
 
 ask_model_prompt = model_prompt_manager.ask_model_prompt
@@ -47,6 +48,40 @@ def run_formatter_after(func):
         except Exception as e:
             print(f"⚠️  Warning: Failed to format code: {e}")
         return result
+    return wrapper
+
+@run_formatter_after
+@ask_model_prompt('implement_changes.md', functions=EDIT_FUNCTIONS)
+def implement_changes(
+    code: str,
+    changes: str,
+    edit_tools: List[str] = [func.__name__ for func in EDIT_FUNCTIONS],
+    additional_functions: List = [],
+    ) -> str:
+    """Implement specific changes to the Nix code as requested."""
+    ...
+
+# decorator to run implement changes after another prompt
+def run_implement_changes_after(func):
+    """Decorator to automatically run implement_changes after certain prompts."""
+    def wrapper(*args, **kwargs):
+        result = func(*args, **kwargs)
+        if not isinstance(result, str):
+            raise ValueError("run_implement_changes_after can only be applied to functions returning str")
+        coordinator_message(f"🛠️  Implementing changes:\n{result}\n\n")
+        try:
+            from vibenix.packaging_flow.model_prompts import implement_changes
+            from vibenix.tools.view import _view as view_packaging_code
+            updated_code = implement_changes(
+                code=view_packaging_code(),
+                changes=result,
+                additional_functions=[]
+            )
+            print("🛠️  Changes implemented after model response")
+            return result
+        except Exception as e:
+            print(f"⚠️  Warning: Failed to implement changes: {e}")
+            return result
     return wrapper
 
 
@@ -68,6 +103,7 @@ def evaluate_code(code: str, previous_code: str, feedback: str) -> RefinementExi
     ...
 
 
+@run_implement_changes_after
 @ask_model_prompt('refinement/get_feedback.md', functions=SEARCH_FUNCTIONS)
 def get_feedback(
     code: str,
@@ -80,8 +116,8 @@ def get_feedback(
     ...
 
 
-@run_formatter_after
-@ask_model_prompt('refinement/refine_code.md', functions=SEARCH_AND_EDIT_FUNCTIONS)
+@run_implement_changes_after
+@ask_model_prompt('refinement/refine_code.md', functions=SEARCH_FUNCTIONS)
 def refine_code(
     code: str,
     feedback: str,
@@ -93,8 +129,8 @@ def refine_code(
     ...
 
 
-@run_formatter_after
-@ask_model_prompt('error_fixing/fix_build_error.md', functions=SEARCH_AND_EDIT_FUNCTIONS)
+@run_implement_changes_after
+@ask_model_prompt('error_fixing/fix_build_error.md', functions=SEARCH_FUNCTIONS)
 def fix_build_error(
     code: str,
     error: str,
@@ -155,7 +191,7 @@ def evaluate_progress(log_diff: LogDiff) -> NixBuildErrorDiff:
         )
 
 
-@ask_model_prompt('failure_analysis/classify_packaging_failure.md')
+@ask_model_prompt('failure_analysis/classify_packaging_failure.md', functions=SEARCH_FUNCTIONS)
 def classify_packaging_failure(details: str) -> PackagingFailure:
     """Classify a packaging failure based on the provided details."""
     ...
@@ -190,8 +226,8 @@ def choose_builders(
     ...
 
 
-@run_formatter_after
-@ask_model_prompt('compare_template_builders.md', functions=[search_nix_functions, search_nixpkgs_manual_documentation]+EDIT_FUNCTIONS)
+@run_implement_changes_after
+@ask_model_prompt('compare_template_builders.md', functions=[search_nix_functions, search_nixpkgs_manual_documentation])
 def compare_template_builders(
     initial_code: str,
     builder_combinations_info: str,

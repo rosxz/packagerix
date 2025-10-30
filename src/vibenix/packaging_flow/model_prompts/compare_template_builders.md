@@ -2,14 +2,14 @@
 
 {% include 'snippets/project_info_section.md' %}
 
-Your primary goal is to modify the structure of the Nix packaging template provided below. Your modifications should be strictly limited to the following actions:
+Your primary goal is to modify the structure of the Nix packaging code provided below. Your modifications should be strictly limited to the following actions:
 *   **Modify:** Change the existing builder function, if the main package requires a different builder.
 *   **Add:** Add more builder functions and respective derivations.
-*   **No Change:** Leave the template as is if the existing structure is already appropriate.
+*   **No Change:** Leave the code as is if the existing structure is already appropriate.
 
 Focus exclusively on these structural changes.
 
-Here is the chosen Nix packaging template:
+Here is the initial Nix code:
 ```nix
 {{ initial_code }}
 ```
@@ -24,4 +24,4 @@ Strictly adhere to the following constraints:
 *   Do NOT alter the `src`, `pname`, `version`, or any other metadata attributes.
 *   Do NOT make any stylistic changes, add comments, or refactor the code unnecessarily. Your changes must be purely functional and directly related to the builder logic.
 
-**IMPORTANT**: To perform each change to the code, use the text editor tools: `str_replace`, `view`. Finally, reply with a very brief summary of the changes made.
+Your response needs to list the concrete changes you would make to the initial code. Be specific.
