@@ -67,7 +67,7 @@ def run_implement_changes_after(func):
     def wrapper(*args, **kwargs):
         result = func(*args, **kwargs)
         if not isinstance(result, str):
-            raise ValueError("run_implement_changes_after can only be applied to functions returning str")
+            return result
         coordinator_message(f"🛠️  Implementing changes:\n{result}\n\n")
         try:
             from vibenix.packaging_flow.model_prompts import implement_changes
