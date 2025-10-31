@@ -19,6 +19,7 @@ from vibenix.ui.conversation import (
 
 from vibenix.packaging_flow.model_prompts.prompt_loader import get_prompt_loader
 from vibenix.agent import VibenixAgent
+from abc import ABC
 
 T = TypeVar('T')
 
@@ -46,10 +47,17 @@ class ModelPromptManager:
         self.reset_iteration_usage()
         return usage
 
+    def add_iteration_usage(self, usage: Usage):
+        """Add usage from a model interaction to the iteration usage."""
+        self._iteration_usage.prompt_tokens += usage.prompt_tokens
+        self._iteration_usage.completion_tokens += usage.completion_tokens
+        self._iteration_usage.cache_read_tokens += usage.cache_read_tokens
+
     def reset_iteration_usage(self):
         """Reset the iteration usage counters."""
         self._session_usage.prompt_tokens += self._iteration_usage.prompt_tokens
         self._session_usage.completion_tokens += self._iteration_usage.completion_tokens
+        self._session_usage.cache_read_tokens += self._iteration_usage.cache_read_tokens
         self._iteration_usage = Usage(model=self._model)
     #####
 
@@ -66,7 +74,11 @@ class ModelPromptManager:
             # Get return type hint
             type_hints = get_type_hints(func)
             return_type = type_hints.get('return', type(None))
-            
+            # OutputFunctions returntype workaround -> check if the class is abstract
+            if inspect.isclass(return_type) and (ABC in return_type.__bases__):
+                # Get the same named method from the return type class
+                return_type = getattr(return_type, return_type.__name__, None)
+
             # Determine output type and whether to use streaming
             is_streaming = return_type == str
             is_enum = inspect.isclass(return_type) and issubclass(return_type, Enum)
@@ -115,37 +127,40 @@ class ModelPromptManager:
                 for tool_func in all_functions:
                     agent.add_tool(tool_func)
                 
-                # Run the agent
-                if is_streaming:
-                    # For string returns, use streaming
-                    response, usage = agent.run_stream(rendered_prompt)
-                    result = response
-                    get_logger().reply_chunk_text(0, result, 4)
-                else:
-                    # For non-streaming (structured outputs), just run normally
-                    response, usage = agent.run(rendered_prompt)
-                    
-                    if is_structured:
+                try:
+                    # Run the agent
+                    if is_streaming:
+                        # For string returns, use streaming
+                        response, usage = agent.run_stream(rendered_prompt)
+                        result = response
+                        get_logger().reply_chunk_text(0, result, 4)
+                    else:
+                        # For non-streaming (structured outputs), just run normally
+                        response, usage = agent.run(rendered_prompt)
+                        
                         # Pydantic-ai should return the structured type directly
                         result = response
-                        if is_enum:
-                            adapter.show_message(Message(Actor.MODEL, str(result)))
-                            get_logger().reply_chunk_typed(0, result, 'enum', 4)
-                        else:
-                            # For lists and other structured types
-                            adapter.show_message(Message(Actor.MODEL, str(result)))
-                            get_logger().reply_chunk_typed(0, result, str(type(result)), 4)
-                    else:
-                        result = response
                         adapter.show_message(Message(Actor.MODEL, str(result)))
-                        get_logger().reply_chunk_text(0, result, 4)
-                
-                get_logger().prompt_end(2)
-                
-                # Track usage for cost calculations
-                self._iteration_usage.prompt_tokens += usage.prompt_tokens
-                self._iteration_usage.completion_tokens += usage.completion_tokens
-                return result
+                        if is_structured:
+                            if is_enum:
+                                get_logger().reply_chunk_typed(0, result, 'enum', 4)
+                            else:
+                                get_logger().reply_chunk_typed(0, result, str(type(result)), 4)
+                        else:
+                            get_logger().reply_chunk_text(0, result, 4)
+                    
+                    get_logger().prompt_end(2)
+                    # Track usage for cost calculations
+                    self.add_iteration_usage(usage)
+                    return result
+                    
+                except Exception as e:
+                    adapter.show_message(Message(Actor.MODEL, f"Error: {str(e)}"))
+                    get_logger().reply_chunk_text(0, f"Error: {str(e)}", 4)
+                    get_logger().prompt_end(2)
+                    # UsageLimitExceeded, or other exceptions.
+                    # Proceed to next iteration, if problem persists, the loop will stop anyway
+                    return None
             
             return wrapper
         return decorator

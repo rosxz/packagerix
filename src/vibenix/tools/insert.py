@@ -55,7 +55,7 @@ def _insert(insert_line: int, new_str: str) -> str:
         # Test if it breaks syntax
         from vibenix.nix import check_syntax
         syntax_err = check_syntax(updated_content)
-        if syntax_err and "expected" in syntax_err:
+        if syntax_err and "expect" in syntax_err:
             syntax_error_index = syntax_err.index("error: syntax error")
             error_truncated = syntax_err[syntax_error_index:]
             error_msg = f"Error: Insertion aborted, breaks syntax:\n{error_truncated}"

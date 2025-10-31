@@ -384,7 +384,7 @@ def ensure_model_configured() -> bool:
     # No saved config or user wants to reconfigure
     print("\n⚙️  Let's configure your AI model")
     
-    config = show_model_config_terminal()
+    config = show_model_config_terminal() # Creates the configuration + saves it
     if config:
         print("\n✅ Model configuration complete!")
         return True

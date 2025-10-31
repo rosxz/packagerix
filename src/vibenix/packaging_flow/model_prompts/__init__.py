@@ -16,7 +16,7 @@ from vibenix.tools import (
     search_nixpkgs_manual_documentation,
     str_replace,
     insert,
-    view
+    view,
 )
 from vibenix.errors import NixBuildErrorDiff, LogDiff, FullLogDiff, ProcessedLogDiff
 
@@ -29,7 +29,7 @@ SEARCH_FUNCTIONS = [
     search_nixpkgs_for_package_literal,
     search_nix_functions,
     search_nixpkgs_for_file,
-    search_nixpkgs_manual_documentation
+    search_nixpkgs_manual_documentation,
 ]
 EDIT_FUNCTIONS = [str_replace, view]
 SEARCH_AND_EDIT_FUNCTIONS = SEARCH_FUNCTIONS + EDIT_FUNCTIONS
@@ -48,12 +48,6 @@ def run_formatter_after(func):
             print(f"⚠️  Warning: Failed to format code: {e}")
         return result
     return wrapper
-
-
-from pydantic import BaseModel
-class FinishResponse(BaseModel):
-    """Response model for the finish function."""
-    pass
 
 
 @ask_model_prompt('pick_template.md')

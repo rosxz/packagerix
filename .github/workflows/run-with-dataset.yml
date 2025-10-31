@@ -41,14 +41,24 @@ on:
         description: 'Ollama host URL (e.g., http://your-host.tailnet:11434)'
         required: false
         type: string
-      dataset:
-        description: 'Which dataset to use'
+      dataset_manual:
+        description: 'Dataset directory name in research/ (e.g., packaging_requests, october_25_dataset)'
+        required: false
+        default: 'packaging_requests'
+        type: string
+      csv_file:
+        description: 'Which CSV file to use within the dataset'
         required: false
         default: 'implementation'
         type: choice
         options:
           - implementation
           - evaluation
+      concurrent_jobs:
+        description: 'Number of jobs to run in parallel (1 to avoid rate limits)'
+        required: false
+        default: '1'
+        type: number
   push:
     branches:
       - main
@@ -107,12 +117,15 @@ jobs:
           
           matrix_data = []
           
-          # Select CSV file based on dataset choice
-          dataset = '${{ github.event.inputs.dataset || 'implementation' }}'
-          if dataset == 'implementation':
-              csv_file = 'research/packaging_requests/used_during_implementation.csv'
+          # Determine dataset directory and CSV file
+          dataset_dir = 'research/${{ github.event.inputs.dataset_manual || 'packaging_requests' }}'
+          
+          # Select CSV file based on csv_file choice
+          csv_file_choice = '${{ github.event.inputs.csv_file || 'implementation' }}'
+          if csv_file_choice == 'implementation':
+              csv_file = f'{dataset_dir}/used_during_implementation.csv'
           else:  # evaluation
-              csv_file = 'research/packaging_requests/post_project_evaluation.csv'
+              csv_file = f'{dataset_dir}/post_project_evaluation.csv'
           
           with open(csv_file, 'r') as f:
               reader = csv.DictReader(f)
@@ -152,7 +165,7 @@ jobs:
     timeout-minutes: 105
     strategy:
       matrix: ${{ fromJson(needs.setup.outputs.matrix) }}
-      max-parallel: 1  # Run only 1 job at a time to avoid API rate limits
+      max-parallel: ${{ fromJson(github.event.inputs.concurrent_jobs || '1') }}  # Configurable parallel jobs
       fail-fast: false
     steps:
       - uses: actions/checkout@v4
@@ -229,6 +242,9 @@ jobs:
           if [ -n "${{ github.event.inputs.model_settings }}" ]; then
             echo "VIBENIX_MODEL_SETTINGS='${{ github.event.inputs.model_settings }}'" >> $GITHUB_ENV
           fi
+
+          # Set Github token in nix config
+          echo "NIX_CONFIG='access-tokens = github.com=${{ secrets.GH_TOKEN }}'" >> $GITHUB_ENV
       
       - name: Process package request
         id: process
@@ -251,7 +267,7 @@ jobs:
             repo_path=$(echo "${{ matrix.repo_url }}" | sed 's|https://github.com/||')
             repo_owner=$(echo "$repo_path" | cut -d'/' -f1)
             repo_name=$(echo "$repo_path" | cut -d'/' -f2)
-            fetcher_file="research/packaging_requests/fetchers/${repo_owner},${repo_name}.nix"
+            fetcher_file="research/${{ github.event.inputs.dataset_manual || 'packaging_requests' }}/fetchers/${repo_owner},${repo_name}.nix"
             
             # Check if fetcher file exists
             if [ -f "$fetcher_file" ]; then
