@@ -1,7 +1,8 @@
 You are software packaging expert who can build any project using the Nix programming language.
 
-Your task is to fix the following error in the following Nix code, making only the necessary changes, avoiding other modifications or additions.
+Fix the error in the following Nix code.
 
+Code:
 ```nix
 {{ code }}
 ```
@@ -12,31 +13,17 @@ Error:
 ```
 
 {% if is_broken_log_output %}
-**IMPORTANT: The build log output appears to be garbled. This is typically because the build system is outputting interactive elements (progress bars, ANSI codes, etc.) that don't work well in non-interactive environments.** However, it can also have other reasons.
-
-**You MUST prioritize fixing the log output and use your search tools to find a solution:**
-1. Search nixpkgs for packages using the same build system to see how they handle this
-2. Search the project source files for build configuration options or documentation about non-interactive output
-3. Look at the project's CI configuration files (e.g., .github/workflows, .gitlab-ci.yml) to see how they handle non-interactive builds
-4. Look for command-line flags or environment variables that control output formatting
-
-Do NOT guess at solutions - use your tools to find real examples and patterns from nixpkgs, the project's CI, or the project itself.
+**IMPORTANT: The build log output appears to be garbled. This is typically because the build system is outputting interactive elements (progress bars, ANSI codes, etc.) that don't work well in non-interactive environments.**
+Prioritize fixing the log output.
+Search the project source files for build configuration options, and documentation about non-interactive output, or command-line flags and environment variables that control output formatting.
 
 {% endif %}
 {% if is_dependency_build_error %}
 **IMPORTANT: This appears to be a dependency build failure, not an error in your derivation.**
 
-The error shows that a dependency from nixpkgs failed to build. **DO NOT try to fix the dependency itself.**
-
 Common causes for dependency build failures:
 1. Missing lock files (package-lock.json, Cargo.lock, etc.) - Check if the project needs these files
-2. Wrong nixpkgs version or channel - But you cannot change this
-3. Platform-specific issues - But you cannot fix these
-
-**Focus only on:**
-- Checking if the project requires lock files that are missing and finding them
-- Ensuring your derivation correctly specifies its dependencies
-- Looking for alternative ways to express the dependency requirements
+2. Wrong nixpkgs version or channel - You can't change this
 
 **DO NOT:**
 - Try to write derivations for the failing dependencies
@@ -46,15 +33,65 @@ Common causes for dependency build failures:
 {% endif %}
 {% if is_syntax_error %}
 **IMPORTANT: This appears to be an evaluation error, derived from syntactical mistakes.**
+The causes for syntax errors are very often made before the location where the error is reported.
 
-Remember that:
-- **The causes for syntax errors are very often made before the location where the error is reported.**
-- Strings are ONLY defined with quotation marks (")
-- Multi-line strings are ONLY defined with double apostrophes ('')
-- Double apostrophes ('') in multi-line strings are escaped with a single apostrophe ('), e.g. `var = ''test ''' end'';` is a single multi-line string with one escaped apostrophe.
-- In multi-line strings, dollar signs ($), dollar-curly (${), line-feed (\n), and carriage-return (\n) must be escaped by prepending them with double apostrophes (''). For example, `var = ''test ''$var end'';` is a single multi-line string with one escaped dollar sign.
-- For the remaining cases, special characters are usually escaped with a backslash (\).
-- If you need packages or attributes from a package set like `python3Packages` or `qt6`, only add the package set at the top of the file and not the full path to the attribute. Then, use `python3Packages.package_name` or `with python3Packages; [ package_name ]` to add the package.
+Example reference package:
+```nix
+{ lib
+, stdenv
+, fetchFromGitHub
+, cmake
+, pkg-config
+, python3Packages
+, qt6
+}:
+
+stdenv.mkDerivation rec {
+  pname = "example-app";
+  version = "1.0.0";
+
+  src = fetchFromGitHub {
+    owner = "example";
+    repo = "example-app";
+    rev = "v${version}";
+    hash = "...";
+  };
+
+  nativeBuildInputs = [
+    cmake
+    pkg-config
+    qt6.wrapQtAppsHook
+  ];
+
+  buildInputs = [
+    qt6.qtbase
+  ] ++ (with python3Packages; [
+    requests
+  ]);
+
+  # Multi-line string with escaped special characters
+  postPatch = ''
+    # Escaped dollar sign
+    substituteInPlace setup.py \
+      --replace "''${OLD_VAR}" "new_value"
+    
+    # Escaped newline
+    echo "Line 1''\nLine 2" > config.txt
+    
+    # Escaped apostrophes in multi-line string
+    echo "Don'''t forget to escape" >> config.txt
+  '';
+
+  # Regular strings
+  configureFlags = [
+    "--enable-feature"
+    "--with-path=${placeholder "out"}/lib"
+  ];
+
+  # Environment variable
+  NIX_CFLAGS_COMPILE = "-O2 -DVERSION=\"${version}\"";
+}
+```
 
 {% endif %}
 {% if attempted_tool_calls %}
@@ -63,37 +100,19 @@ Remember that:
 - {{ call.function }}({% for key, value in call.arguments.items() %}{{ key }}="{{ value }}"{% if not loop.last %}, {% endif %}{% endfor %})
 {% endfor %}
 
-**Suggestions for alternative approaches:**
-- Try different search queries or terms
-- Look in different parts of nixpkgs or the project
-- Use a different tool that might provide better information
-- Consider if the issue requires a fundamentally different solution approach
+Try different tools, arguments, or entirely different approaches.
 
 {% endif %}
 {% include 'snippets/project_info_section.md' %}
 
-{% include 'snippets/template_note_section.md' %}
-
-If the error message does not give you enough information to make progress, and to verify your actions, look at relevant files in the proejct directory,
-and try to compare your approach with similar packages in nixpkgs.
-
-Known errors:
-- `error: evaluation aborted with the following error message: 'lib.customisation.callPackageWith: Function called without required argument "package_name" at /nix/store/[...]`:
-   This error indicates that one of the function arguments you specified at the top of the file was not found and is incorrect.
-   The package in question might now be available nixpkgs, might be avilable under a different name, or might be part of a package set only.
-   Use tools to find the package or other code that depends on the same package.
 Notes:
-- Nothing in the meta attribute of a derivation has any impact on its build output, so do not provide a meta attribute.
-- Do not access the project's online git repository, such as GitHub, and instead browse the local files in the Nix store.
-- Do not the arguments of fetchFromGitHub or without good reason.
-- If you need to introduce a new hash, use lib.fakeHash as a placeholder, and automated process will replace this with the actual hash.
-- ONLY replace existing hashes with `lib.fakeHash`, if you need to add an argument to a fetcher, like `leaveDotGit` keep the git directory as part of the source code or `fetchSubmodule` to fetch submodules. In those cases you MUST change the hash to `lib.fakeHash` at the same time as well, or the fetched contents will not be updated.
-- 'lib.customisation.callPackageWith: Function called without required argument X usually means the name of package X in the function arguments is not correct, or package X does not exist, or is part of a package set which should be listed as a function argument at the top of the file instead of the package.
-- If you search for a package using your tools, and you don't have a match, try again with another query or try a different tool.
-- Many build functions, like `mkDerivation` provide a C compiler and a matching libc. If you're missing libc anyways, the GNU libc package is called `glibc` in nixpkgs.
-- Do not produce a flatpak, or docker container and do not use tools related to theres technologies to produce your output. Use tools to find other more direct ways to build the project.
-- If you need packages from a package set like `python3Packages` or `qt6`, only add the package set at the top of the file and use `python3Packages.package_name` or `with python3Packages; [ package_name ]` to add the package.
-- You will not find the package that I am asking you to build in nixpkgs already.
+```md
+{% include 'snippets/template_note_section.md' %}
+```
 
+- Nothing in the meta attribute has any impact on the build, ignore meta attributes.
+- Do not alter the `src` attribute arguments (fetchFromGitHub) without good reason.
+- Do not produce a flatpak, or docker container and do not use tools related to these technologies to produce your output.
+- The package I am asking you to build is not in nixpkgs.
 
 Your response needs to list the concrete changes you would make to the code to fix the error. Be specific.

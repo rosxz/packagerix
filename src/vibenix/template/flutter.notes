@@ -14,7 +14,6 @@
 
 ### Linux Desktop
 - Requires `wrapGAppsHook3` (automatically included)
-- May need additional runtime dependencies like `pulseaudio`
 - WebRTC apps need `libgbm` and `libdrm` with proper rpath linking
 - Icons should be generated in multiple sizes using ImageMagick
 
@@ -23,43 +22,9 @@
 - Output will be static web files in `$out`
 - May need to handle external JavaScript dependencies (like Olm for encryption)
 
-## Common Dependencies
-
-- **Media playback**: `mpv-unwrapped`, `libass`
-- **WebRTC**: `libgbm`, `libdrm` 
-- **Audio**: `pulseaudio`
-- **System tray**: Additional GTK dependencies
-
 ## Build Modes
 
 Flutter supports different build modes:
 - `--release` (default): Optimized for performance
 - `--profile`: Performance profiling enabled
 - `--debug`: Full debugging support
-
-## Troubleshooting
-
-1. **Missing native libraries**: Use `patchelf --add-rpath` to fix library paths
-2. **Icon not showing**: Ensure icon path in desktop file matches installed location
-3. **Audio issues**: Add `pulseaudio` to `runtimeDependencies`
-4. **WebRTC crashes**: Properly link `libgbm` and `libdrm` with NIX_LDFLAGS
-
-## Testing
-
-```bash
-# Build the package
-nix-build -A yourPackage
-
-# Test the application
-./result/bin/yourPackage
-
-# Check desktop integration
-desktop-file-validate ./result/share/applications/*.desktop
-```
-
-## Flutter Web Apps
-
-For web builds, additional steps may be needed:
-- Handle external JavaScript dependencies
-- Configure web-specific assets
-- Set up proper CORS headers if needed

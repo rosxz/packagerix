@@ -6,23 +6,10 @@ Important notes for packaging Rust applications:
    - Set to lib.fakeHash initially, then update with correct hash from build error
    - This downloads and hashes all Cargo dependencies
    - Change `sourceRoot` if Cargo.lock is in a unconventional location (e.g. sourceRoot = "${src.name}/rust/")
-4. Common native dependencies requiring pkg-config:
-   - openssl (for TLS/HTTPS functionality)
-   - zlib (for compression)
-   - sqlite (for database functionality)
-   - alsa-lib (for audio on Linux)
-5. Feature management:
+4. Feature management:
    - buildFeatures: Enable specific Cargo features
    - buildNoDefaultFeatures: Disable default features (then specify only needed ones)
-6. Testing considerations:
-   - Many Rust projects have integration tests that may fail in sandbox
+5. Testing considerations:
    - Use doCheck = false to disable all tests
    - Use checkFlags to skip specific failing tests
-   - Network-dependent tests often need to be skipped
-7. Shell completions:
-   - Many Rust CLI tools can generate their own completions
-   - Common patterns: --completions, completions subcommand, or clap_complete
-   - Check the tool's --help for completion generation options
-8. Cross-compilation works well with Rust, but may need platform-specific handling
-9. For GUI applications, may need additional runtime dependencies and desktop files
-10. Version injection: Some apps get version from git tags, may need patches for release builds
+   - Network-dependent tests often need to be skipped (sandbox)
