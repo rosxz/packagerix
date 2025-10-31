@@ -409,7 +409,7 @@ def package_project(output_dir=None, project_url=None, revision=None, fetcher=No
                     first_build_error = False
                     ccl_logger.write_kv("is_first_build_error", None)
                 elif best.result.error == candidate.result.error:
-                    eval_result = NixBuildErrorDiff.REGRESS
+                    eval_result = NixBuildErrorDiff.PROGRESS
                 else:
                     ccl_logger.log_progress_eval_start()
                     eval_result = eval_progress(best.result, candidate.result, iteration)
