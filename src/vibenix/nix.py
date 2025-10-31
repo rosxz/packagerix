@@ -185,39 +185,39 @@ def eval_initial_build() -> NixError:
 # a significantly higher number of magical phrases indicates progress
 # an about equal amount goes to an llm to break the tie using same_build_error with the two tails of the two build logs
 def eval_progress(previous_result: NixBuildResult, current_result: NixBuildResult, build_iteration: int) -> NixBuildErrorDiff:    
-    if build_iteration == 1 or current_result.success:
-        return NixBuildErrorDiff.PROGRESS
+    # if build_iteration == 1 or current_result.success:
+    #     return NixBuildErrorDiff.PROGRESS
     
-    # Log truncated versions for debugging
-    logger.info(f"previous error (last 50 lines): \n```\n{previous_result.error.truncated(50)}\n```\n")
-    logger.info(f"new error (last 50 lines): \n```\n{current_result.error.truncated(50)}\n```\n")
+    # # Log truncated versions for debugging
+    # logger.info(f"previous error (last 50 lines): \n```\n{previous_result.error.truncated(50)}\n```\n")
+    # logger.info(f"new error (last 50 lines): \n```\n{current_result.error.truncated(50)}\n```\n")
 
-    repo = git.Repo(config.flake_dir.as_posix())
-    logger.info(repo.commit().diff())
+    # repo = git.Repo(config.flake_dir.as_posix())
+    # logger.info(repo.commit().diff())
 
-    if not current_result.is_src_attr_only and previous_result.is_src_attr_only:
-        return NixBuildErrorDiff.PROGRESS
-    if current_result.is_src_attr_only:
-        return NixBuildErrorDiff.REGRESS
+    # if not current_result.is_src_attr_only and previous_result.is_src_attr_only:
+    #     return NixBuildErrorDiff.PROGRESS
+    # if current_result.is_src_attr_only:
+    #     return NixBuildErrorDiff.REGRESS
 
-    # Prepare the logs for comparison with limited lines to avoid token limits
-    log_comparison = prepare_logs_for_comparison(
-        previous_result.error.error_message,
-        current_result.error.error_message,
-        max_lines=240 # 260 exceeded token limit on gianni-rosato/aviator
-    )
+    # # Prepare the logs for comparison with limited lines to avoid token limits
+    # log_comparison = prepare_logs_for_comparison(
+    #     previous_result.error.error_message,
+    #     current_result.error.error_message,
+    #     max_lines=240 # 260 exceeded token limit on gianni-rosato/aviator
+    # )
     
-    # Log the comparison details
-    logger.info(f"Log comparison details:")
-    logger.info(f"  Initial build: {log_comparison.initial_lines} total lines")
-    logger.info(f"  Attempted improvement: {log_comparison.improvement_lines} total lines")
-    if isinstance(log_comparison, FullLogDiff):
-        logger.info(f"  Showing full logs (both under 100 lines)")
-    else:
-        logger.info(f"  Logs diverge at line: {log_comparison.divergence_line}")
-        logger.info(f"  Sending to model - truncated logs showing divergence")
+    # # Log the comparison details
+    # logger.info(f"Log comparison details:")
+    # logger.info(f"  Initial build: {log_comparison.initial_lines} total lines")
+    # logger.info(f"  Attempted improvement: {log_comparison.improvement_lines} total lines")
+    # if isinstance(log_comparison, FullLogDiff):
+    #     logger.info(f"  Showing full logs (both under 100 lines)")
+    # else:
+    #     logger.info(f"  Logs diverge at line: {log_comparison.divergence_line}")
+    #     logger.info(f"  Sending to model - truncated logs showing divergence")
     
-    return evaluate_progress(log_comparison)
+    return NixBuildErrorDiff.PROGRESS
 
 def execute_build_and_add_to_stack(updated_code: str) -> tuple[NixBuildResult, str]:
     """Update flake with new code, build it, and add result to error stack."""
