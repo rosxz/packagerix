@@ -473,9 +473,9 @@ def package_project(output_dir=None, project_url=None, revision=None, fetcher=No
     ccl_logger.write_kv("raw_package", candidate.code)
     
     if candidate.result.success:
-        coordinator_message("Build succeeded! Refining package...")
-        candidate = refine_package(candidate, summary, additional_functions)
-        ccl_logger.write_kv("refined_package", candidate.code)
+        #coordinator_message("Build succeeded! Refining package...")
+        #candidate = refine_package(candidate, summary, additional_functions)
+        #ccl_logger.write_kv("refined_package", candidate.code)
         
         # Always log success and return, regardless of refinement outcome
         ccl_logger.log_session_end(signal=None, total_cost=model_prompt_manager.get_session_cost())
