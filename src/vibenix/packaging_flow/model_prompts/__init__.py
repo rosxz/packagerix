@@ -57,7 +57,7 @@ def implement_changes(
     changes: str,
     edit_tools: List[str] = [func.__name__ for func in EDIT_FUNCTIONS],
     additional_functions: List = [],
-    ) -> str:
+    ) -> None:
     """Implement specific changes to the Nix code as requested."""
     ...
 

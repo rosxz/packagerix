@@ -152,9 +152,12 @@ class ModelPromptManager:
                     adapter.show_message(Message(Actor.MODEL, f"Error: {str(e)}"))
                     get_logger().reply_chunk_text(0, f"Error: {str(e)}", 4)
                     get_logger().prompt_end(2)
+
+                    # If we NEED a result, then no can do. Re-raise
+                    if return_type != type(None):
+                        raise e
                     return None
-                    # UsageLimitExceeded, or other exceptions.
-                    # Proceed to next iteration, if problem persists, the loop will stop anyway
+                    # Otherwise, proceed to next iteration, if problem persists, the loop will stop anyway
                 
                 get_logger().prompt_end(2)
                 # Track usage for cost calculations
