@@ -1,10 +1,9 @@
-Important notes for packaging Go applications:
+Notes for packaging Go applications:
 
 1. Use buildGoModule for Go modules (Go 1.11+), buildGoPackage for older projects
 2. vendorHash management:
-   - Set to lib.fakeHash initially, then update with the correct hash from build error
-   - Use null if the project has no vendor dependencies
    - Use lib.fakeHash for new packages to get the correct hash
+   - Use null if the project has no vendor dependencies
 3. Common ldflags patterns:
    - "-s": Strip symbol table
    - "-w": Strip debug info
@@ -20,8 +19,5 @@ Important notes for packaging Go applications:
    - Add installShellFiles to nativeBuildInputs
    - Use postInstall to generate and install completions
    - Check if app supports --completion flag
-8. Version checking:
-   - Use doInstallCheck = true with custom installCheckPhase
-   - Or use versionCheckHook from nixpkgs
-9. For applications with assets/templates, may need to copy them in postInstall
-10. Cross-compilation usually works out of the box with Go
+8. For applications with assets/templates, may need to copy them in postInstall
+9. Cross-compilation usually works out of the box with Go
