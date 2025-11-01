@@ -28,11 +28,11 @@ from vibenix.packaging_flow.model_prompts.enums import RefinementExit, Packaging
 
 # Standard search functions for all prompts that need them
 SEARCH_FUNCTIONS = [
-    # search_nixpkgs_for_package_semantic,
+    search_nixpkgs_for_package_semantic,
     # search_nixpkgs_for_package_literal,
     # search_nix_functions,
     # search_nixpkgs_for_file,
-    # search_nixpkgs_manual_documentation,
+    search_nixpkgs_manual_documentation,
 ]
 EDIT_FUNCTIONS = [replace, insert_line_after, read_file]
 SEARCH_AND_EDIT_FUNCTIONS = SEARCH_FUNCTIONS + EDIT_FUNCTIONS
