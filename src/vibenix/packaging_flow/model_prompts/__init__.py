@@ -20,6 +20,8 @@ from vibenix.tools import (
     read_file,
 )
 from vibenix.errors import NixBuildErrorDiff, LogDiff, FullLogDiff, ProcessedLogDiff
+from vibenix.parsing import extract_updated_code
+from vibenix.flake import update_flake
 
 # Re-export enums
 from vibenix.packaging_flow.model_prompts.enums import RefinementExit, PackagingFailure
@@ -81,7 +83,17 @@ def get_feedback(
 
 
 @run_formatter_after
-@ask_model_prompt('refinement/refine_code.md', functions=SEARCH_AND_EDIT_FUNCTIONS)
+@ask_model_prompt('refinement/refine_code.md', functions=SEARCH_FUNCTIONS)
+def _refine_code_internal(
+    code: str,
+    feedback: str,
+    project_page: Optional[str] = None,
+    template_notes: Optional[str] = None,
+    additional_functions: List = []
+) -> str:
+    """Internal function that calls the model for refinement."""
+    ...
+
 def refine_code(
     code: str,
     feedback: str,
@@ -90,11 +102,29 @@ def refine_code(
     additional_functions: List = []
 ) -> str:
     """Refine a nix package based on feedback."""
-    ...
+    response = _refine_code_internal(code, feedback, project_page, template_notes, additional_functions)
+    updated_code = extract_updated_code(response, language='nix')
+    update_flake(updated_code)
+    return updated_code
 
 
 @run_formatter_after
-@ask_model_prompt('error_fixing/fix_build_error.md', functions=SEARCH_AND_EDIT_FUNCTIONS)
+@ask_model_prompt('error_fixing/fix_build_error.md', functions=SEARCH_FUNCTIONS)
+def _fix_build_error_internal(
+    code: str,
+    error: str,
+    project_page: Optional[str] = None,
+    template_notes: Optional[str] = None,
+    additional_functions: List = [],
+    is_broken_log_output: bool = False,
+    is_dependency_build_error: bool = False,
+    is_syntax_error: bool = False,
+    attempted_tool_calls: List = [],
+    tool_call_collector: List = None
+) -> str:
+    """Internal function that calls the model to fix build errors."""
+    ...
+
 def fix_build_error(
     code: str,
     error: str,
@@ -108,7 +138,14 @@ def fix_build_error(
     tool_call_collector: List = None
 ) -> str:
     """Fix a build error in Nix code."""
-    ...
+    response = _fix_build_error_internal(
+        code, error, project_page, template_notes, additional_functions,
+        is_broken_log_output, is_dependency_build_error, is_syntax_error,
+        attempted_tool_calls, tool_call_collector
+    )
+    updated_code = extract_updated_code(response, language='nix')
+    update_flake(updated_code)
+    return updated_code
 
 
 @ask_model_prompt('error_fixing/fix_hash_mismatch.md', functions=EDIT_FUNCTIONS)

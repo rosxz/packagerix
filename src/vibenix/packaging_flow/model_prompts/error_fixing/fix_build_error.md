@@ -12,4 +12,4 @@ Error:
 {{ error }}
 ```
 
-You MUST use the available tools to fix the error. Use the `replace` tool at least once.
+IMPORTANT: You must output the complete updated Nix file in a code block.  Output the entire file with all your changes included, wrapped in triple backticks with the 'nix' language identifier.

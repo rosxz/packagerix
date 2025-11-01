@@ -164,10 +164,24 @@ def fetch_combined_project_data(url):
     
     return combined_data
 
-def extract_updated_code(model_reply):
-    pattern = r"^```nix\n(.*?)\n```$"
-
-    matches = list(re.finditer(pattern, model_reply, re.DOTALL | re.MULTILINE))
+def extract_updated_code(model_reply, language: str = None):
+    """
+    Extract code from the last code block in the model reply.
+    
+    Args:
+        model_reply: The model's response text
+        language: Optional language identifier (e.g., 'nix', 'python'). 
+                 If None, extracts from any code block.
+    
+    Returns:
+        The extracted code content
+    """
+    if language:
+        pattern = rf"```{re.escape(language)}\n(.*?)\n```"
+    else:
+        pattern = r"```(?:\w+)?\n(.*?)\n```"
+    
+    matches = list(re.finditer(pattern, model_reply, re.DOTALL))
     if len(matches) == 0:
         error_msg = "No section delimited by triple backticks was found in the model's reply"
         logger.error(error_msg)

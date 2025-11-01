@@ -25,6 +25,8 @@ Among the tools at your disposal for the task, you can:
     - look at relevant files in the project directory in the Nix store;
     - search for nixpkgs packages names or functions in Noogle.
 
+IMPORTANT: You must output the complete updated Nix file in a code block. Output the entire file with all your changes included, wrapped in triple backticks with the 'nix' language identifier.
+
 Note: The meta attribute is irrelevant, do not include it.
 Note: Do not change any other arguments of fetchFromGitHub or another fetcher if it has an actual hash already.
 Note: If you need to introduce a new hash, use lib.fakeHash as a placeholder, and automated process will replace this with the actual hash."""
