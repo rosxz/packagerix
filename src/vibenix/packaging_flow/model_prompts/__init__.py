@@ -15,9 +15,9 @@ from vibenix.tools import (
     search_nix_functions,
     search_nixpkgs_for_file,
     search_nixpkgs_manual_documentation,
-    str_replace,
+    replace,
     insert_line_after,
-    view,
+    read_file,
 )
 from vibenix.errors import NixBuildErrorDiff, LogDiff, FullLogDiff, ProcessedLogDiff
 
@@ -32,7 +32,7 @@ SEARCH_FUNCTIONS = [
     # search_nixpkgs_for_file,
     search_nixpkgs_manual_documentation,
 ]
-EDIT_FUNCTIONS = [str_replace, insert_line_after, view]
+EDIT_FUNCTIONS = [replace, insert_line_after, read_file]
 SEARCH_AND_EDIT_FUNCTIONS = SEARCH_FUNCTIONS + EDIT_FUNCTIONS
 
 ask_model_prompt = model_prompt_manager.ask_model_prompt

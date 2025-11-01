@@ -5,7 +5,7 @@ from vibenix.flake import get_package_contents
 
 
 @log_function_call("view")
-def view() -> str:
+def read_file() -> str:
     """Examine the contents of the current packaging expression.
 
     Args:

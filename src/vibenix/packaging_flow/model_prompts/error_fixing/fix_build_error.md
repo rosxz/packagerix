@@ -11,3 +11,5 @@ Error:
 ```
 {{ error }}
 ```
+
+You MUST use the available tools to fix the error. Use the `replace` tool at least once.

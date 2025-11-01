@@ -4,8 +4,8 @@ from vibenix.ccl_log import get_logger, log_function_call
 from vibenix.flake import update_flake, get_package_contents
 
 
-@log_function_call("str_replace")
-def str_replace(old_str: str, new_str: str, occurrence: int = 1) -> str:
+@log_function_call("replace")
+def replace(old_str: str, new_str: str, occurrence: int = 1) -> str:
     """
     Replace text in the current packaging expression.
     DO NOT include line numbers (`1: `), just the exact text to find and replace.

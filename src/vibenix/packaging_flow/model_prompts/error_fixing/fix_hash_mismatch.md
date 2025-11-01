@@ -20,3 +20,5 @@ Note: Never replace more than one instance of lib.fakeHash.
 Note: Never put sha256-AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA= in the code.
 Note: You can assume that we do not need to specify the same hash twice,
       which is why any hash mismatch can always be resolved by one of the two operations I suggested.
+
+You MUST use the available tools to fix the error. Use the `replace` tool at least once.
