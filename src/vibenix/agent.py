@@ -73,6 +73,9 @@ class VibenixAgent:
             except (UsageLimitExceeded, UnexpectedModelBehavior) as e:
                 # Store messages globally for the before_sleep callback
                 _global_failed_messages = list(messages)
+                logger.exception(f"Agent run failed: {type(e).__name__}")
+                adapter = get_ui_adapter()
+                adapter.show_error(f"{type(e).__name__}: {str(e)}")
                 raise
         
         # Convert pydantic-ai usage to our Usage dataclass
@@ -97,7 +100,13 @@ class VibenixAgent:
             loop = asyncio.new_event_loop()
             asyncio.set_event_loop(loop)
         
-        return loop.run_until_complete(self.run_async(prompt))
+        try:
+            return loop.run_until_complete(self.run_async(prompt))
+        except Exception as e:
+            logger.exception(f"Agent run (sync) failed: {type(e).__name__}")
+            adapter = get_ui_adapter()
+            adapter.show_error(f"{type(e).__name__}: {str(e)}")
+            raise
     
     @retry(
       retry=retry_if_exception_type((UsageLimitExceeded, UnexpectedModelBehavior)),
@@ -126,6 +135,8 @@ class VibenixAgent:
                 except (UsageLimitExceeded, UnexpectedModelBehavior) as e:
                     # Store messages globally for the before_sleep callback
                     _global_failed_messages = list(messages)
+                    logger.exception(f"Agent run_stream (text) failed: {type(e).__name__}")
+                    adapter.show_error(f"{type(e).__name__}: {str(e)}")
                     raise
             
             # Get the text output
@@ -161,6 +172,8 @@ class VibenixAgent:
                 except (UsageLimitExceeded, UnexpectedModelBehavior) as e:
                     # Store messages globally for the before_sleep callback
                     _global_failed_messages = list(messages)
+                    logger.exception(f"Agent run_stream (structured) failed: {type(e).__name__}")
+                    adapter.show_error(f"{type(e).__name__}: {str(e)}")
                     raise
                 print(full_response)
                 
@@ -182,7 +195,13 @@ class VibenixAgent:
             loop = asyncio.new_event_loop()
             asyncio.set_event_loop(loop)
         
-        return loop.run_until_complete(self.run_stream_async(prompt))
+        try:
+            return loop.run_until_complete(self.run_stream_async(prompt))
+        except Exception as e:
+            logger.exception(f"Agent run_stream (sync) failed: {type(e).__name__}")
+            adapter = get_ui_adapter()
+            adapter.show_error(f"{type(e).__name__}: {str(e)}")
+            raise
 
 def _capture_failed_usage_before_retry(retry_state, failed_messages=None):
     """Capture usage from failed request and add to iteration tracking before retry."""
@@ -237,6 +256,7 @@ def _capture_failed_usage_before_retry(retry_state, failed_messages=None):
                     model_prompt_manager.add_iteration_usage(estimated_usage)
                 
     except Exception as e:
+        logger.exception(f"Could not capture failed usage before retry: {type(e).__name__}")
         print(f"Could not capture failed usage before retry: {e}")
         # Don't let usage tracking errors break the retry flow
     finally:

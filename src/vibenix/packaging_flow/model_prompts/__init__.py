@@ -148,10 +148,18 @@ def fix_build_error(
     return updated_code
 
 
-@ask_model_prompt('error_fixing/fix_hash_mismatch.md', functions=EDIT_FUNCTIONS)
+@run_formatter_after
+@ask_model_prompt('error_fixing/fix_hash_mismatch.md')
+def _fix_hash_mismatch_internal(code: str, error: str) -> str:
+    """Internal function that calls the model to fix hash mismatch errors."""
+    ...
+
 def fix_hash_mismatch(code: str, error: str) -> str:
     """Fix hash mismatch errors in Nix code."""
-    ...
+    response = _fix_hash_mismatch_internal(code, error)
+    updated_code = extract_updated_code(response, language='nix')
+    update_flake(updated_code)
+    return updated_code
 
 
 def evaluate_progress(log_diff: LogDiff) -> NixBuildErrorDiff:
