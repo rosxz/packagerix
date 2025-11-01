@@ -236,7 +236,7 @@ def choose_builders(
 
 
 @run_formatter_after
-@ask_model_prompt('compare_template_builders.md', functions=SEARCH_AND_EDIT_FUNCTIONS)
+@ask_model_prompt('compare_template_builders.md', functions=SEARCH_FUNCTIONS)
 def compare_template_builders(
     initial_code: str,
     builder_combinations_info: str,

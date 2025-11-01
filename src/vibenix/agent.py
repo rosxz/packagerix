@@ -73,7 +73,13 @@ class VibenixAgent:
             except (UsageLimitExceeded, UnexpectedModelBehavior) as e:
                 # Store messages globally for the before_sleep callback
                 _global_failed_messages = list(messages)
-                logger.exception(f"Agent run failed: {type(e).__name__}")
+                logger.error(f"Agent run failed: {type(e).__name__}")
+                logger.error(f"Prompt that caused error:\n{prompt}")
+                logger.error(f"Exception message: {str(e)}")
+                logger.error(f"Exception type: {type(e).__name__}")
+                if hasattr(e, '__dict__'):
+                    logger.error(f"Exception attributes: {e.__dict__}")
+                logger.exception("Full exception traceback:")
                 adapter = get_ui_adapter()
                 adapter.show_error(f"{type(e).__name__}: {str(e)}")
                 raise
@@ -135,7 +141,13 @@ class VibenixAgent:
                 except (UsageLimitExceeded, UnexpectedModelBehavior) as e:
                     # Store messages globally for the before_sleep callback
                     _global_failed_messages = list(messages)
-                    logger.exception(f"Agent run_stream (text) failed: {type(e).__name__}")
+                    logger.error(f"Agent run_stream (text) failed: {type(e).__name__}")
+                    logger.error(f"Prompt that caused error:\n{prompt}")
+                    logger.error(f"Exception message: {str(e)}")
+                    logger.error(f"Exception type: {type(e).__name__}")
+                    if hasattr(e, '__dict__'):
+                        logger.error(f"Exception attributes: {e.__dict__}")
+                    logger.exception("Full exception traceback:")
                     adapter.show_error(f"{type(e).__name__}: {str(e)}")
                     raise
             
@@ -172,7 +184,13 @@ class VibenixAgent:
                 except (UsageLimitExceeded, UnexpectedModelBehavior) as e:
                     # Store messages globally for the before_sleep callback
                     _global_failed_messages = list(messages)
-                    logger.exception(f"Agent run_stream (structured) failed: {type(e).__name__}")
+                    logger.error(f"Agent run_stream (structured) failed: {type(e).__name__}")
+                    logger.error(f"Prompt that caused error:\n{prompt}")
+                    logger.error(f"Exception message: {str(e)}")
+                    logger.error(f"Exception type: {type(e).__name__}")
+                    if hasattr(e, '__dict__'):
+                        logger.error(f"Exception attributes: {e.__dict__}")
+                    logger.exception("Full exception traceback:")
                     adapter.show_error(f"{type(e).__name__}: {str(e)}")
                     raise
                 print(full_response)

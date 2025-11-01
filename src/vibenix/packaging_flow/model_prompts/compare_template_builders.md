@@ -23,3 +23,5 @@ Strictly adhere to the following constraints:
 *   Do NOT add, remove, or modify any package dependencies (e.g., `buildInputs`, `nativeBuildInputs`). The model should not add any new packages to the build.
 *   Do NOT alter the `src`, `pname`, `version`, or any other metadata attributes.
 *   Do NOT make any stylistic changes, add comments, or refactor the code unnecessarily. Your changes must be purely functional and directly related to the builder logic.
+
+IMPORTANT: You must output the complete updated Nix file in a code block.  Output the entire file with all your changes included, wrapped in triple backticks with the 'nix' language identifier.

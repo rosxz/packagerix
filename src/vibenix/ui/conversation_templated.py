@@ -130,9 +130,8 @@ class ModelPromptManager:
                 try:
                     # Run the agent
                     if is_streaming:
-                        # For string returns, use regular run to avoid validation issues
-                        # run_stream() can trigger output validation even for text outputs
-                        response, usage = agent.run(rendered_prompt)
+                        # For string returns, use streaming
+                        response, usage = agent.run_stream(rendered_prompt)
                         result = response
                         get_logger().reply_chunk_text(0, result, 4)
                     else:

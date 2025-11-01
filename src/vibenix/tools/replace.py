@@ -16,7 +16,7 @@ def replace(old_str: str, new_str: str, occurrence: int = 1) -> str:
         occurrence: Which occurrence to replace if multiple matches exist (1-based, defaults to first)
     
     Example:
-        str_replace("buildInputs = [];", "buildInputs = [ cmake ];")
+        replace("buildInputs = [];", "buildInputs = [ cmake ];")
     """
     print(f"📞 Function called: str_replace")
     return _str_replace(old_str, new_str, occurrence)
