@@ -21,7 +21,7 @@ from vibenix.errors import NixBuildErrorDiff, NixErrorKind
 from vibenix.tools.file_tools import create_source_function_calls
 from vibenix.ccl_log import init_logger, get_logger, close_logger, enum_str
 from vibenix.git_info import get_git_info
-from vibenix.tools.view import _view as view_package_contents
+from vibenix.tools.read_file import _view as view_package_contents
 from vibenix.tools.error_pagination import error_pagination
 
 

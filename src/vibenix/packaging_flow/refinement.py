@@ -8,7 +8,7 @@ from vibenix.ccl_log import init_logger, get_logger, close_logger, enum_str
 from pydantic import BaseModel
 from vibenix.errors import NixBuildErrorDiff, NixErrorKind, NixBuildResult
 from vibenix.packaging_flow.Solution import Solution
-from vibenix.tools.view import _view as view_package_contents, view
+from vibenix.tools.read_file import _view as view_package_contents
 
 from vibenix.ui.conversation_templated import model_prompt_manager
 
