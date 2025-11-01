@@ -162,7 +162,7 @@ jobs:
     needs: setup
     runs-on: ubuntu-latest
     name: Package ${{ matrix.repo_name }}
-    timeout-minutes: 105
+    timeout-minutes: 45
     strategy:
       matrix: ${{ fromJson(needs.setup.outputs.matrix) }}
       max-parallel: ${{ fromJson(github.event.inputs.concurrent_jobs || '1') }}  # Configurable parallel jobs
@@ -257,9 +257,6 @@ jobs:
           # Create output directory for this run
           mkdir -p output
           
-          # Set timeout to 1.5 hours (5400 seconds) for CI
-          export VIBENIX_TIMEOUT_SECONDS=5400
-
           # Prepare fetcher argument if use_cached_fetchers is true
           fetcher_arg=""
           if [ "${{ github.event.inputs.use_cached_fetchers || 'true' }}" = "true" ]; then
