@@ -11,6 +11,7 @@ if TYPE_CHECKING:
 
 solution_stack: List['Solution']
 build_timeout: str
+nixpkgs_commit: str
 
 def init():
     global solution_stack
@@ -31,4 +32,8 @@ def init():
     # time out build after 7 minutes
     global build_timeout
     build_timeout = str(7*60)
+
+    # Default nixpkgs commit (matches main project's nixpkgs)
+    global nixpkgs_commit
+    nixpkgs_commit = "d3d2d80a2191a73d1e86456a751b83aa13085d7d"
    
