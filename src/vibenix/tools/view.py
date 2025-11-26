@@ -12,7 +12,8 @@ def view() -> str:
         view_range: Optional(list[int]): A list of two integers specifying the start and end lines to view (1-indexed, inclusive).
     """
     print(f"📞 Function called: view")
-    return _view()
+    from vibenix.ui.conversation_templated import get_model_prompt_manager
+    return _view(prompt=get_model_prompt_manager().get_current_prompt())
 
 
 def _view(view_range: list[int]=None, prompt: str=None) -> str:

@@ -3,12 +3,9 @@
 This module provides utilities for loading prompt templates and asking models questions.
 """
 
-import os
 import inspect
-from pathlib import Path
 from enum import Enum
-from typing import TypeVar, Union, get_origin, get_args, Any, Optional, List, Callable, get_type_hints
-from functools import wraps
+from typing import TypeVar, Optional, List, Callable, get_type_hints
 from vibenix.ccl_log import get_logger
 from vibenix.ui.conversation import (
     ModelCodeResponse,
@@ -18,11 +15,9 @@ from vibenix.ui.conversation import (
     get_ui_adapter
 )
 from vibenix.defaults import get_settings_manager
-from pydantic_ai.usage import RunUsage
 
 from vibenix.packaging_flow.model_prompts.prompt_loader import get_prompt_loader
 from vibenix.agent import VibenixAgent
-from abc import ABC
 
 T = TypeVar('T')
 
@@ -34,6 +29,7 @@ class ModelPromptManager:
         self._iteration_usage = Usage(model=model)
         self._session_tool_usage = {} # total across retries
         self._model = model
+        self.current_prompt = None
     
     def get_session_cost(self):
         """Get the accumulated cost for this session."""
@@ -77,6 +73,14 @@ class ModelPromptManager:
         self._session_tool_usage[tool_name].completion_tokens += completion
         self._session_tool_usage[tool_name].prompt_tokens += prompt
         self._session_tool_usage[tool_name].cache_read_tokens += cache_read
+
+    def set_current_prompt(self, prompt: str):
+        """Set the current prompt being used."""
+        self.current_prompt = prompt
+
+    def get_current_prompt(self) -> Optional[str]:
+        """Get the current prompt being used."""
+        return self.current_prompt
     #####
 
     def ask_model_prompt(self, template_path: str):
@@ -91,6 +95,8 @@ class ModelPromptManager:
         def decorator(func: Callable[..., T]) -> Callable[..., T]:
             def wrapper(*args, **kwargs) -> T:
                 adapter = get_ui_adapter()
+
+                self.set_current_prompt(func.__name__)
 
                 type_hints = get_type_hints(func)
                 return_type = type_hints.get('return', type(None))
@@ -180,6 +186,7 @@ class ModelPromptManager:
                     get_logger().prompt_end(2)
                     # Track usage for cost calculations
                     self.add_iteration_usage(usage)
+                    self.set_current_prompt(None)
 
                     return result
                     
@@ -187,6 +194,8 @@ class ModelPromptManager:
                     adapter.show_message(Message(Actor.MODEL, f"Error: {str(e)}"))
                     get_logger().reply_chunk_text(0, f"Error: {str(e)}", 4)
                     get_logger().prompt_end(2)
+                    self.set_current_prompt(None)
+
                     raise e
             
             return wrapper
