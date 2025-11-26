@@ -282,3 +282,19 @@ def run_formatter():
     else:
         updated_code = format_result.stdout
         update_flake(updated_code)
+
+
+def get_build_output_path() -> Optional[str]:
+    """Get the output path of the built package."""
+    eval_result = subprocess.run(
+        ["nix", "eval", "--raw", ".#default.outPath"],
+        text=True,
+        cwd=config.flake_dir,
+        capture_output=True
+    )
+    
+    if eval_result.returncode != 0:
+        return None
+    
+    out_path = eval_result.stdout.strip().strip('"')
+    return out_path
