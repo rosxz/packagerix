@@ -56,7 +56,6 @@ GET_BUILDER_TOOLS = ['get_builder_functions']
 FIND_SIMILAR_BUILDER_PATTERNS = ['find_similar_builder_patterns']
 ADDITIONAL_TOOLS = GET_BUILDER_TOOLS + FIND_SIMILAR_BUILDER_PATTERNS + PROJECT_TOOLS + NIXPKGS_TOOLS
 ALL_TOOLS = get_names(SEARCH_TOOLS + EDIT_TOOLS) + ADDITIONAL_TOOLS
-
 ALL_PROMPTS = [
     "pick_template",
     "summarize_github",
@@ -113,9 +112,15 @@ DEFAULT_VIBENIX_SETTINGS = {
         "progress_evaluation": True,
         "build_summary": True,
         "compare_template_builders": True,
+        "template_notes": False,
+        "packaging_loop": {
+            "max_iterations": 40,
+            "max_consecutive_non_build_errors": 99,
+            "max_consecutive_rebuilds_without_progress": 10,
+        },
         "refinement": {
             "enabled": True,
-            "iterations": 3,
+            "max_iterations": 3,
         },
         "edit_tools": True,
         # Snippets to add to prompts dynamically
@@ -180,7 +185,7 @@ class VibenixSettingsManager:
         """
         prompt_tools = DEFAULT_PROMPT_TOOLS.get(prompt_name, [])
 
-        if any(self._tool_name_map[tool_name] in EDIT_TOOLS for tool_name in prompt_tools):
+        if any(tool_name in get_names(EDIT_TOOLS) for tool_name in prompt_tools):
             return True
         return False
 

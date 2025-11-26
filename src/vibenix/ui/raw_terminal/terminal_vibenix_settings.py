@@ -395,12 +395,7 @@ def show_vibenix_settings_terminal() -> bool:
         elif choice == '6':
             # Save full settings or compacted settings
             confirm = input("\n💾 Save as compacted settings? (Y/n): ").strip().lower()
-            if confirm != 'n':
-                save_settings_to_file(diff_only=True)
-                print("\n✅ Compacted settings saved!")
-            else:
-                save_settings_to_file(diff_only=False)
-                print("\n✅ Full settings saved!")
+            save_settings_to_file(diff_only=(confirm != 'n'))
             return True
         
         elif choice == '7' or choice == 'q':

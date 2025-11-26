@@ -9,24 +9,14 @@ from typing import List, Optional
 from vibenix.template.template_types import TemplateType
 from vibenix.ui.conversation_templated import get_model_prompt_manager
 from vibenix.ui.conversation import ModelCodeResponse
-from vibenix.tools import (
-    search_nixpkgs_for_package_semantic,
-    search_nixpkgs_for_package_literal,
-    search_nix_functions,
-    search_nixpkgs_for_file,
-    search_nixpkgs_manual_documentation,
-    str_replace,
-    insert_line_after,
-    view,
-    error_pagination,
-)
 from vibenix.errors import NixBuildErrorDiff, LogDiff, FullLogDiff, ProcessedLogDiff
 
 # Re-export enums
 from vibenix.packaging_flow.model_prompts.enums import RefinementExit, PackagingFailure
 
 
-ask_model_prompt = get_model_prompt_manager().ask_model_prompt
+model_prompt_manager = get_model_prompt_manager()
+ask_model_prompt = model_prompt_manager.ask_model_prompt
 
 def run_formatter_after(func):
     """Decorator to automatically run Nix formatter after prompts that modify code."""

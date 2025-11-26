@@ -39,6 +39,11 @@ class UIAdapter(ABC):
     def ask_user(self, prompt: str) -> str:
         """Ask the user for input and return the complete response."""
         pass
+
+    @abstractmethod
+    def ask_user_multiline(self, prompt: str) -> str:
+        """Ask the user for multiline input and return the complete response."""
+        pass
     
     @abstractmethod
     def handle_model_streaming(self, streamed_result) -> str:
@@ -74,6 +79,16 @@ class TerminalUIAdapter(UIAdapter):
         # Simple synchronous input
         response = input("")
         
+        self.show_message(Message(Actor.USER, response))
+        return response
+
+    def ask_user_multiline(self, prompt: str) -> str:
+        """Ask user for multiline input via terminal."""
+        self.show_message(Message(Actor.COORDINATOR, prompt))
+
+        import sys
+        response = "".join(sys.stdin.readlines())
+
         self.show_message(Message(Actor.USER, response))
         return response
     
@@ -142,6 +157,22 @@ def ask_user(prompt_text: str):
             
             # Simple synchronous call - adapter handles any async internally
             user_input = adapter.ask_user(prompt_text)
+            
+            # Call the original function with user input as first argument
+            return func(user_input, *args, **kwargs)
+        
+        return wrapper
+    return decorator
+
+def ask_user_multiline(prompt_text: str):
+    """Decorator for functions that need user input. Prompt should start with '@user'."""
+    def decorator(func: Callable[..., T]) -> Callable[..., T]:
+        @wraps(func)
+        def wrapper(*args, **kwargs):
+            adapter = get_ui_adapter()
+            
+            # Simple synchronous call - adapter handles any async internally
+            user_input = adapter.ask_user_multiline(prompt_text)
             
             # Call the original function with user input as first argument
             return func(user_input, *args, **kwargs)
