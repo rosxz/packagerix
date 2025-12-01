@@ -16,14 +16,17 @@ from vibenix.nix import get_build_output_path
 
 from vibenix import config
 
-def refine_package(curr: Solution, project_page: str, additional_functions: list = None) -> Solution:
+def refine_package(curr: Solution, project_page: str, template_notes: str) -> Solution:
     """Refinement cycle to improve the packaging."""
     from vibenix.defaults import get_settings_manager
+    # Max iterations for refinement's internal packaging loop (fix build errors)
     max_iterations = get_settings_manager().get_setting_value("refinement.max_iterations")
 
     from vibenix.ccl_log import get_logger, close_logger
     ccl_logger = get_logger()
     ccl_logger.enter_attribute("refine_package", log_start=True)
+
+    chat_history = [] # List to keep track of (user_prompt -> final model response) over the course of refinement
 
     coordinator_message("Starting refinement process for the package.")
     iteration = 0
@@ -35,39 +38,50 @@ Please provide feedback on the current packaging code (press CTRL-D to finish): 
         if not user_input.strip():
             coordinator_message("No further feedback provided, ending refinement process.")
             break
-        ccl_logger.log_iteration_start(iteration)
-        ccl_logger.write_kv("code", curr.code)
-
         feedback = user_input.strip()
-        ccl_logger.write_kv("feedback", str(feedback))
-        coordinator_message(f"Refining package based on user feedback...")
-        refine_code(view_package_contents(prompt="refine_code"), feedback, project_page)
-        # TODO BUILD LOG IS NOT BEING PASSED!
 
-        updated_code = get_package_contents()
-        ccl_logger.write_kv("refined_code", updated_code)
-        attempt = execute_build_and_add_to_stack(updated_code)
-        while True:
+        while True: # loop to avoid reprompting user for the same feedback
+            ccl_logger.log_iteration_start(iteration)
+            ccl_logger.write_kv("code", curr.code)
+
+            ccl_logger.write_kv("feedback", str(feedback))
+            coordinator_message(f"Refining package based on user feedback...")
+            refine_code(view_package_contents(prompt="refine_code"), feedback, project_page, chat_history=chat_history)
+            # TODO BUILD LOG IS NOT BEING PASSED! ignore this for now
+
+            updated_code = get_package_contents()
+            ccl_logger.write_kv("refined_code", updated_code)
+            attempt = execute_build_and_add_to_stack(updated_code)
+
             # Verify the updated code still builds
-            if not attempt.result.success:
+            while not attempt.result.success:
                 coordinator_error(f"Refinement caused a regression ({attempt.result.error.type}), attempting to fix errors introduced.")
+
                 ccl_logger.enter_attribute("refinement_fix")
                 max_iterations = get_settings_manager().get_setting_value("refinement.max_iterations")
                 #pp_and_feedback = project_page + f"\n```\nRefrain from making changes that are contradcitory to fixing the following underlying issue:```\n{feedback}"
-                _, attempt, _ = packaging_loop(attempt, project_page, "", max_iterations)
+                _, attempt, _ = packaging_loop(attempt, project_page, template_notes, max_iterations)
                 ccl_logger.leave_attribute()
-                user_choice = get_ui_adapter().ask_user(f"Failed to implement changes based on user feedback in {max_iterations} iterations. Keep trying (or revert to previous state) ? (y/N): ")
-                if user_choice.strip().lower() != 'y':
-                    coordinator_message("Resetting packaging code to previous successful solution.")
-                    revert_packaging_to_solution(curr)
-                    ccl_logger.write_kv("type", attempt.result.error.type)
-                    ccl_logger.write_kv("error", attempt.result.error.truncated())
+
+                if not attempt.result.success:
+                    user_choice = get_ui_adapter().ask_user(f"Failed to implement changes based on user feedback in {max_iterations} iterations. Keep trying (or revert to previous state) ? (y/N): ")
+                    if user_choice.strip().lower() != 'y':
+                        coordinator_message("Resetting packaging code to previous successful solution.")
+                        revert_packaging_to_solution(curr)
+                        ccl_logger.write_kv("type", attempt.result.error.type)
+                        ccl_logger.write_kv("error", attempt.result.error.truncated())
+                        break
+
+            if attempt.result.success:
+                coordinator_progress("Refined packaging code successfuly builds.")
+                coordinator_message(f'''The flake containing the package is present at '{config.flake_dir}'.
+Build output should be present at '{get_build_output_path()}'.''')
+                user_choice = get_ui_adapter().ask_user(f"Did the feedback/issue get fixed? (Y/n): ")
+                if user_choice.strip().lower() != 'n':
+                    curr = attempt
+                    iteration += 1
                     break
-            else:
-                coordinator_message("Refined packaging code successfuly builds, continuing...")
-                curr = attempt
-                break
-        iteration += 1
+            iteration += 1
 
     if iteration > 0:
         ccl_logger.leave_list()

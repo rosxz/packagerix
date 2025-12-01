@@ -170,7 +170,7 @@ def prepare_logs_for_comparison(initial_error: str, attempted_improvement: str, 
 # "comiling ..." 
 def eval_initial_build() -> NixError:
     """Evaluate the initial build - look for hash mismatch which indicates progress."""
-    build_result = config.error_stack[-1]
+    build_result = config.solution_stack[-1].result
     error_message = build_result.error.error_message
     
     # Check if this is a hash mismatch error (indicates template was filled correctly)
@@ -237,15 +237,17 @@ def execute_build_and_add_to_stack(updated_code: str) -> Solution:
         )
         if log_result.returncode == 0:
             result.error.error_message = log_result.stdout
-    config.error_stack.append(result)
-    return Solution(code=updated_code, commit_hash=commit_hash,
-        result=result, error_index=len(config.error_stack)-1)
+    out_path = get_build_output_path() if result.success else None
+    solution = Solution(code=updated_code, commit_hash=commit_hash,
+        result=result, out_path=out_path, error_index=len(config.solution_stack))
+    config.solution_stack.append(solution)
+    return solution
 
 def revert_packaging_to_solution(solution: Solution) -> None:
     """Revert the flake to a known good solution."""
     repo = git.Repo(config.flake_dir.as_posix())
     repo.git.reset('--hard', solution.commit_hash)
-    config.error_stack = config.error_stack[:solution.error_index + 1]
+    config.solution_stack = config.solution_stack[:solution.error_index + 1]
     logger.info(f"Reverted to commit {solution.commit_hash}.")
 
 def check_syntax(code: str) -> Optional[str]:

@@ -122,6 +122,7 @@ class ModelPromptManager:
                 }
                 
                 tool_call_collector = template_context.pop('tool_call_collector', None) # TODO
+                chat_history = template_context.pop('chat_history', None)
 
                 get_logger().prompt_begin(func.__name__, template_path, 2, template_context)
                 
@@ -162,11 +163,11 @@ class ModelPromptManager:
                     # Run the agent
                     if is_streaming: # TODO remove when possible
                         # For string returns, use streaming
-                        result, usage = agent.run_stream(rendered_prompt)
+                        result, usage = agent.run_stream(rendered_prompt, message_history=chat_history if chat_history else None)
                         get_logger().reply_chunk_text(0, result, 4)
                     else:
                         # For non-streaming (structured outputs), just run normally
-                        result, usage = agent.run(rendered_prompt)
+                        result, usage = agent.run(rendered_prompt, message_history=chat_history if chat_history else None)
                         
                         if return_type == ModelCodeResponse:
                             from vibenix.flake import update_flake
@@ -187,6 +188,20 @@ class ModelPromptManager:
                     # Track usage for cost calculations
                     self.add_iteration_usage(usage)
                     self.set_current_prompt(None)
+
+                    if chat_history is not None:
+                        from pydantic_ai.messages import ModelRequest, ModelResponse, UserPromptPart, TextPart
+                        from vibenix.flake import get_package_contents
+                        
+                        # Create user request message with the rendered prompt
+                        user_message = ModelRequest(parts=[UserPromptPart(content=rendered_prompt)])
+                        
+                        # Create model response message with package contents
+                        model_message = ModelResponse(parts=[TextPart(content=get_package_contents())])
+                        
+                        # Append to chat history
+                        chat_history.append(user_message)
+                        chat_history.append(model_message)
 
                     return result
                     
