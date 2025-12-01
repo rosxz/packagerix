@@ -3,13 +3,14 @@
 import re
 import subprocess
 from pathlib import Path
+from typing import Optional
 
 from vibenix.ui.conversation import coordinator_message, coordinator_error, coordinator_progress
-from vibenix.parsing import fetch_github_release_data, scrape_and_process, fill_src_attributes
+from vibenix.parsing import fetch_github_release_data, scrape_and_process, fill_src_attributes, get_store_path
 from vibenix.flake import init_flake, get_package_contents
 from vibenix.nix import execute_build_and_add_to_stack, revert_packaging_to_solution
 from vibenix.packaging_flow.model_prompts import (
-    pick_template, summarize_github,
+    pick_template, summarize_github, summarize_project_source,
     analyze_package_failure, classify_packaging_failure, PackagingFailure,
     summarize_build, choose_builders, compare_template_builders, get_model_prompt_manager
 )
@@ -40,10 +41,14 @@ def get_nixpkgs_source_path() -> str:
 
 
 
-def analyze_project(project_page: str) -> str:
+def analyze_project(project_page: Optional[str]=None,
+                    source_info: Optional[tuple[str, str]]=None) -> str:
     """Analyze the project using the model."""
-    # summarize_github already has the @ask_model decorator
-    return summarize_github(project_page)
+    if project_page:
+        return summarize_github(project_page)
+    if source_info:
+        return summarize_project_source(*source_info)
+    raise ValueError("No project information provided for analysis.")
 
 def get_release_data_and_version(url, rev=None):
     """Fetch release data and compute version string with proper logging."""
@@ -131,7 +136,7 @@ def read_fetcher_file(fetcher: str) -> tuple[str, str]:
             content = "".join(line for line in f if line.strip() and not line.startswith("#")).rstrip()
         ccl_logger.write_kv("fetcher", content)
 
-        # Instantiate fetcher to pull contents to nix store
+        # Instantiate fetcher to pull contents to nix store TODO theres probably definetly a better way
         cmd = [
             'nix',
             'build',
@@ -202,9 +207,9 @@ def package_project(output_dir=None, project_url=None, revision=None, fetcher=No
         ccl_logger.leave_attribute()
     
     # Step 1: Get project URL (includes welcome message)
-    if project_url is None:
-        project_url = get_project_url()
-    else:
+    if not (project_url or fetcher):
+        project_url = get_project_url() # Interactive mode (none)
+    else: # (purl or both)
         # When URL is provided via CLI, still show welcome but skip prompt
         coordinator_message("Welcome to vibenix!")
     
@@ -214,7 +219,8 @@ def package_project(output_dir=None, project_url=None, revision=None, fetcher=No
     # Log vibenix settings
     ccl_logger.log_vibenix_settings()
 
-    ccl_logger.write_kv("project_url", project_url)
+    if project_url:
+        ccl_logger.write_kv("project_url", project_url)
 
     # Obtain the project fetcher
     if fetcher: 
@@ -223,27 +229,56 @@ def package_project(output_dir=None, project_url=None, revision=None, fetcher=No
         if revision:
             coordinator_error("Ignoring revision parameter in favor of provided fetcher.")
     else:
+        if not project_url:
+            coordinator_error("No project URL nor fetcher provided, either is required for Vibenix to proceed.")
+            return
         coordinator_progress("Obtaining project fetcher from the provided URL")
         version, fetcher = run_nurl(project_url, revision)
 
-    coordinator_progress(f"Fetching project information from {project_url}")
-    
-    # Step 2: Scrape project page
-    try:
-        project_page = scrape_and_process(project_url)
-    except Exception as e:
-        coordinator_error(f"Failed to fetch project page: {e}")
-        return
-    
-    # Step 3: Analyze project
-    coordinator_message("I found the project information. Let me analyze it.")
-    ccl_logger.log_project_summary_begin()
-    summary = analyze_project(project_page)
-    ccl_logger.log_project_summary_end(summary)
-    
+    # Step 2: Create additional (runtime-initialized) tools for model
+    store_path, nixpkgs_path = get_store_path(fetcher), get_nixpkgs_source_path()
+    project_functions = create_source_function_calls(store_path, "project_")
+    nixpkgs_functions = create_source_function_calls(nixpkgs_path, "nixpkgs_")
+    from vibenix.tools.search_related_packages import get_builder_functions, _create_find_similar_builder_patterns
+    available_builders = get_builder_functions()
+    find_similar_builder_patterns = _create_find_similar_builder_patterns(available_builders)
+    additional_functions = project_functions + nixpkgs_functions + [get_builder_functions, find_similar_builder_patterns]
+    # Initialize said tools via settings manager
+    get_settings_manager().initialize_additional_tools(additional_functions)
+
+    # Step 3: Analyze project to obtain summary used for model prompts
+    if get_settings_manager().get_setting_enabled("scrape_project_page"):
+        # Scrape project page
+        if not project_url:
+            coordinator_error("Project URL is required to scrape project page, which is enabled in Vibenix settings.")
+            return
+        coordinator_message(f"Scraping project page from {project_url}")
+        try:
+            project_page = scrape_and_process(project_url)
+        except Exception as e:
+            coordinator_error(f"Failed to fetch project page: {e}")
+            return
+        
+        coordinator_message("I found the project information. Let me analyze it.")
+        ccl_logger.log_project_summary_begin()
+        summary = analyze_project(project_page=project_page)
+        ccl_logger.log_project_summary_end(summary)
+    else:
+        # Use project source root's README.md + root directory file list as information sources
+        coordinator_message("Using project source files to analyze the project.")
+        try:
+            from vibenix.tools.file_tools import get_project_source_info
+            source_info = get_project_source_info(store_path)
+        except Exception as e:
+            coordinator_error(f"Failed to acquire project summary from source: {e}")
+            return
+
+        ccl_logger.log_project_summary_begin()
+        summary = analyze_project(source_info=source_info)
+        ccl_logger.log_project_summary_end(summary)
+
     if not summary:
-        coordinator_message("Failed to analyze project. Proceeding with empty project summary.")
-        summary = ""
+        coordinator_error("Model failed to produce a project summary.")
 
     # Step 4: Initialize flake
     coordinator_progress("Setting up a temporary Nix flake for packaging")
@@ -253,7 +288,8 @@ def package_project(output_dir=None, project_url=None, revision=None, fetcher=No
     ccl_logger.log_template_selected_begin()
     template_type = pick_template(summary)
     if not template_type:
-        raise RuntimeError("Model failed to pick a template type.")
+        coordinator_error("Model failed to pick a template type.")
+        return
     coordinator_message(f"Selected template: {template_type.value}")
     template_filename = f"{template_type.value}.nix"
     template_path = config.template_dir / template_filename
@@ -271,27 +307,17 @@ def package_project(output_dir=None, project_url=None, revision=None, fetcher=No
     # Extract pname (repo name) from the fetcher
     repo_match = re.search(r'repo\s*=\s*"(.*?)"', fetcher)
     if not repo_match:
-        raise ValueError("Could not extract repo name from fetcher")
+        coordinator_error("Could not extract repo name from fetcher")
+        return
     pname = repo_match.group(1)
     
-    initial_code, store_path = fill_src_attributes(starting_template, pname, version, fetcher)
-    nixpkgs_path = get_nixpkgs_source_path()
-    # Create functions for both the project source and nixpkgs
-    project_functions = create_source_function_calls(store_path, "project_")
-    nixpkgs_functions = create_source_function_calls(nixpkgs_path, "nixpkgs_")
-
-    # Compare chosen template with builders from model response
-    from vibenix.tools.search_related_packages import get_builder_functions, _create_find_similar_builder_patterns
-    available_builders = get_builder_functions()
-    find_similar_builder_patterns = _create_find_similar_builder_patterns(available_builders)
-    additional_functions = project_functions + nixpkgs_functions + [get_builder_functions, find_similar_builder_patterns]
-    get_settings_manager().initialize_additional_tools(additional_functions)
+    initial_code = fill_src_attributes(starting_template, pname, version, fetcher)
 
     if get_settings_manager().get_setting_enabled("build_summary"):
         build_summary = summarize_build(summary)
         if not build_summary:
             coordinator_error("Model failed to produce a build summary.")
-            raise RuntimeError("Model failed to produce a build summary.")
+            return
         summary += f"\n\nBuild Summary:\n{build_summary}"
 
     if get_settings_manager().get_setting_enabled("compare_template_builders"):
@@ -335,7 +361,7 @@ def package_project(output_dir=None, project_url=None, revision=None, fetcher=No
         ccl_logger.log_session_end(signal=None, total_cost=get_model_prompt_manager().get_session_cost())
         close_logger()
         if output_dir:
-            save_package_output(candidate.code, project_url, output_dir)
+            save_package_output(candidate.code, output_dir)
         return candidate.code  
     else:
         max_iterations = get_settings_manager().get_setting_value("packaging_loop.max_iterations")
@@ -361,7 +387,7 @@ def package_project(output_dir=None, project_url=None, revision=None, fetcher=No
     return None
 
 
-def save_package_output(code: str, project_url: str, output_dir: str):
+def save_package_output(code: str, output_dir: str):
     """Save the package.nix file to the output directory."""
     import os
     import re

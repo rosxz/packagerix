@@ -100,8 +100,8 @@ def extract_src_attributes(src_attr, release=None):
 
     return version, repo, hash, src_attr
 
-def fill_src_attributes(template, pname, version, src_fetcher):
-    """Fill the pname, version and src attributes in a given template."""
+def get_store_path(src_fetcher):
+    """Get the Nix store path for a given src_fetcher (from the hash)."""
     # Extract hash from the fetcher to compute store path
     hash_match = re.search(r'hash\s*=\s*"(.*?)"', src_fetcher)
     if not hash_match:
@@ -114,8 +114,11 @@ def fill_src_attributes(template, pname, version, src_fetcher):
     store_path = subprocess.run(["nix-store", "--print-fixed-path", "sha256",
                                  "--recursive", hash, "source"],
                                  capture_output=True, text=True)
-    store_path = str(store_path.stdout).strip()
+    return str(store_path.stdout).strip()
+    
 
+def fill_src_attributes(template, pname, version, src_fetcher):
+    """Fill the pname, version and src attributes in a given template."""
     jinja_template = Template(template)
     filled_template = jinja_template.render(
         pname=pname,
@@ -127,7 +130,7 @@ def fill_src_attributes(template, pname, version, src_fetcher):
     
     logger.info(f"Filled template: \n{filled_template}")
     
-    return filled_template, store_path
+    return filled_template
 
 def fetch_combined_project_data(url):
     """Fetch both HTML and API data for a GitHub project."""

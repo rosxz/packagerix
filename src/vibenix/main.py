@@ -115,8 +115,8 @@ def run_terminal_ui(output_dir=None, project_url=None, revision=None, fetcher=No
     # Set up terminal UI adapter
     set_ui_adapter(TerminalUIAdapter())
     
-    # If project URL is provided, skip interactive configuration
-    if project_url:
+    # If project URL or Nix fetcher are provided, skip interactive configuration
+    if (project_url or fetcher):
         from vibenix.model_config import load_saved_configuration, initialize_model_config
         from vibenix.ui.raw_terminal.terminal_vibenix_settings import ensure_settings_configured
 
@@ -211,6 +211,7 @@ def main():
     
     parser.add_argument(
         "project_url",
+        default=None,
         nargs="?",
         help="GitHub project URL to package (only works with --raw)"
     )
@@ -245,8 +246,8 @@ def main():
         
         if args.raw:
             logger.info("Starting vibenix in terminal mode")
-            if args.output_dir and not args.project_url:
-                parser.error("--output-dir requires a project URL to be provided")
+            if args.output_dir and not (args.project_url or args.fetcher):
+                parser.error("--output-dir requires a project URL or Nix fetcher to be provided")
             run_terminal_ui(output_dir=args.output_dir, project_url=args.project_url,
                             revision=args.revision, fetcher=args.fetcher)
         else:

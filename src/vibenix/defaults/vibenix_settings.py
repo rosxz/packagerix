@@ -113,6 +113,7 @@ DEFAULT_VIBENIX_SETTINGS = {
         "build_summary": True,
         "compare_template_builders": True,
         "template_notes": False,
+        "scrape_project_page": False,
         "packaging_loop": {
             "max_iterations": 40,
             "max_consecutive_non_build_errors": 99,
