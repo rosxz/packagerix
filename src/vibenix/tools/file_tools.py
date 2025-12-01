@@ -196,3 +196,22 @@ def create_source_function_calls(store_path: str, prefix: str = "") -> List[Call
         funcs[i] = func
     
     return funcs
+
+
+def get_project_source_info(store_path: str) -> tuple[str, str]:
+    """Get basic info about the project source at the given store path."""
+    readme_path = Path(store_path) / "README.md"
+    if readme_path.exists():
+        readme_content = readme_path.read_text()
+    else:
+        raise FileNotFoundError("README.md not found in project source root dir.")
+    root_files = subprocess.run(
+        ["ls", "-lha", str(Path(store_path))],
+        capture_output=True,
+        text=True,
+        check=True
+    )
+    if not root_files.stdout or root_files.returncode != 0:
+        raise RuntimeError("Failed to list root directory files.")
+    root_file_list = root_files.stdout
+    return readme_content, root_file_list

@@ -44,6 +44,14 @@ def summarize_github(project_page: str) -> str:
     ...
 
 
+@ask_model_prompt('summarize_project_source.md')
+def summarize_project_source(
+    project_readme: str,
+    project_root_file_list: str) -> str:
+    """Summarize a project based on key source files and directory structure."""
+    ...
+
+
 @ask_model_prompt('refinement/evaluate_code.md')
 def evaluate_code(code: str, previous_code: str, feedback: str) -> RefinementExit:
     """Evaluate whether refinement feedback has been successfully implemented."""
