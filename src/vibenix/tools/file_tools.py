@@ -10,13 +10,14 @@ from vibenix.ccl_log import get_logger, log_function_call
 MAX_LINES_TO_READ = 200
 MAX_LINE_LENGTH = 300
 
-def create_source_function_calls(store_path: str, prefix: str = "") -> List[Callable]:
+def create_source_function_calls(store_path: str, prefix: str = "", dynamic_path: bool = False) -> List[Callable]:
     """
     Create a list of source analysis related function calls.
     
     Args:
         store_path: The root directory path
         prefix: Optional prefix to add to function names (e.g., "nixpkgs_" or "project_")
+        dynamic_path: If True, allows updating the root directory path dynamically by returning, as the last method, a helper function.
     """
     root_dir = Path(store_path).resolve()
     
@@ -34,6 +35,12 @@ def create_source_function_calls(store_path: str, prefix: str = "") -> List[Call
             raise ValueError(f"Path '{path}' is outside the allowed root directory '{root_dir}'")
         
         return target_path
+
+    def _update_store_path(new_path: str):
+        """Helper function to update the store path.
+        Should only be used with care."""
+        nonlocal root_dir
+        root_dir = Path(new_path).resolve()
     
     def _is_text_file(path: Path) -> bool:
         """Helper function to check if a file is text using magika."""
@@ -194,6 +201,9 @@ def create_source_function_calls(store_path: str, prefix: str = "") -> List[Call
         # Apply logging decorator
         func = log_function_call(func.__name__)(func) 
         funcs[i] = func
+
+    if dynamic_path:
+        funcs.append(_update_store_path)
     
     return funcs
 

@@ -15,10 +15,13 @@ def _error_pagination(page: int) -> str:
     """Paginate error messages to show a specific page."""
     
     try:
-        from vibenix.config import config
-        if config.error_stack is None or len(config.error_stack) == 0:
+        from vibenix import config
+        if config.solution_stack is None or len(config.solution_stack) == 0:
             return "No errors available to paginate through."
-        error = config.error_stack[-1]
+        result = config.solution_stack[-1].result
+        if result.success or result.error is None:
+            return "No errors available to paginate through."
+        error = result.error
         return error.truncated(page=page)
         
     except Exception as e:

@@ -6,14 +6,15 @@ from collections import deque
 from typing import List, TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from vibenix.errors import NixBuildResult
+    from vibenix.packaging_flow.Solution import Solution
+    #from vibenix.errors import NixBuildResult
 
-error_stack: List['NixBuildResult']
+solution_stack: List['Solution']
 build_timeout: str
 
 def init():
-    global error_stack
-    error_stack = []
+    global solution_stack
+    solution_stack = []
 
     global template_dir
 

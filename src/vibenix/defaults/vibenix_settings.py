@@ -4,10 +4,12 @@ from typing import Dict, List, Callable, Optional, Any, Union, Set
 from vibenix.tools import (
     SEARCH_TOOLS,
     EDIT_TOOLS,
+    OUT_PATH_TOOLS,
     search_nix_functions,
     search_nixpkgs_manual_documentation,
 )
 from vibenix.tools.file_tools import create_source_function_calls
+from vibenix.tools.out_path_file_tools import create_out_path_file_tools
 
 
 def deep_merge(original, update):
@@ -48,14 +50,7 @@ def deep_diff(original, updated):
 def get_names(funcs: List[Union[Callable, str]]) -> List[str]:
     return [func.__name__ if callable(func) else func for func in funcs]
 
-from tempfile import mkdtemp
-tempdir = mkdtemp()
-PROJECT_TOOLS = get_names(create_source_function_calls(tempdir, "project_"))
-NIXPKGS_TOOLS = get_names(create_source_function_calls(tempdir, "nixpkgs_"))
-GET_BUILDER_TOOLS = ['get_builder_functions']
-FIND_SIMILAR_BUILDER_PATTERNS = ['find_similar_builder_patterns']
-ADDITIONAL_TOOLS = GET_BUILDER_TOOLS + FIND_SIMILAR_BUILDER_PATTERNS + PROJECT_TOOLS + NIXPKGS_TOOLS
-ALL_TOOLS = get_names(SEARCH_TOOLS + EDIT_TOOLS) + ADDITIONAL_TOOLS
+
 ALL_PROMPTS = [
     "pick_template",
     "summarize_github",
@@ -72,40 +67,52 @@ ALL_PROMPTS = [
     "compare_template_builders",
 ]
 
-# Default mapping of prompts to their tools
+from tempfile import mkdtemp
+tempdir = mkdtemp()
+PROJECT_TOOLS = get_names(create_source_function_calls(tempdir, "project_"))
+NIXPKGS_TOOLS = get_names(create_source_function_calls(tempdir, "nixpkgs_"))
+GET_BUILDER_TOOLS = ['get_builder_functions']
+FIND_SIMILAR_BUILDER_PATTERNS = ['find_similar_builder_patterns']
+# that require runtime initialization
+ADDITIONAL_TOOLS = GET_BUILDER_TOOLS + FIND_SIMILAR_BUILDER_PATTERNS + PROJECT_TOOLS + NIXPKGS_TOOLS
+
+def _build_tool_name_map() -> Dict[str, Callable]:
+    """Build a mapping from tool names to actual functions/callables."""
+    from vibenix.agent import tool_wrapper
+
+    tool_map = {}
+    for func in SEARCH_TOOLS + EDIT_TOOLS + OUT_PATH_TOOLS:
+        tool_map[func.__name__] = tool_wrapper(func)
+    for func in ADDITIONAL_TOOLS:
+        tool_map[func] = None
+    return tool_map
+TOOL_NAME_MAP = _build_tool_name_map()
+ALL_TOOLS = list(TOOL_NAME_MAP.keys())
+
+
 DEFAULT_PROMPT_TOOLS: Dict[str, List[str]] = {prompt: [] for prompt in ALL_PROMPTS}
 DEFAULT_PROMPT_TOOLS.update(
     {
-        'get_feedback': get_names(SEARCH_TOOLS),
-        'refine_code': get_names(SEARCH_TOOLS + EDIT_TOOLS),
-        'fix_build_error': get_names(SEARCH_TOOLS + EDIT_TOOLS),
+        'get_feedback': get_names(SEARCH_TOOLS) + ADDITIONAL_TOOLS,
+        'refine_code': ALL_TOOLS, # access to out path
+        'fix_build_error': get_names(SEARCH_TOOLS + EDIT_TOOLS) + ADDITIONAL_TOOLS,
         'fix_hash_mismatch': get_names(EDIT_TOOLS),
-        'analyze_package_failure': get_names(SEARCH_TOOLS),
-        'compare_template_builders': get_names([search_nix_functions, search_nixpkgs_manual_documentation]+EDIT_TOOLS),
-    }
-)
-# Just strings, get callables at runtime
-DEFAULT_PROMPT_ADD_TOOLS: Dict[str, List[str]] = {prompt: [] for prompt in ALL_PROMPTS}
-DEFAULT_PROMPT_ADD_TOOLS.update(
-    {
-        'get_feedback': ADDITIONAL_TOOLS,
-        'fix_build_error': ADDITIONAL_TOOLS,
-        'analyze_package_failure': ADDITIONAL_TOOLS,
+        'analyze_package_failure': get_names(SEARCH_TOOLS) + ADDITIONAL_TOOLS,
+        'compare_template_builders': get_names([search_nix_functions, search_nixpkgs_manual_documentation]+EDIT_TOOLS)
+            + PROJECT_TOOLS + NIXPKGS_TOOLS + GET_BUILDER_TOOLS,
         'summarize_build': PROJECT_TOOLS,
         'choose_builders': PROJECT_TOOLS + NIXPKGS_TOOLS,
-        'compare_template_builders': PROJECT_TOOLS + NIXPKGS_TOOLS + GET_BUILDER_TOOLS,
     }
 )
 
-
+### Settings ##################################################################
 DEFAULT_VIBENIX_SETTINGS = {
     # Individual tool toggles (disable specific tools globally)
     # Empty: All tools enabled by default 
     "tools": {tool: True for tool in ALL_TOOLS},
     
     # Per-prompt tool configuration
-    # Values are lists of function objects (join default_prompt_tools + default_prompt_add_tools)
-    "prompt_tools": {prompt: DEFAULT_PROMPT_TOOLS[prompt]+DEFAULT_PROMPT_ADD_TOOLS[prompt] for prompt in ALL_PROMPTS},
+    "prompt_tools": {prompt: DEFAULT_PROMPT_TOOLS[prompt] for prompt in ALL_PROMPTS},
     
     # General behavior, misc
     "behaviour": {
@@ -133,27 +140,16 @@ DEFAULT_VIBENIX_SETTINGS = {
         }
     }
 }
+###############################################################################
 
 
 class VibenixSettingsManager:
     """Manages vibenix settings and resolves prompt tools."""
     
-    def __init__(self, settings: Optional[Dict[str, Any]] = {}):
+    def __init__(self, settings: Optional[Dict[str, Any]] = {}, tool_name_map: Dict[str, Union[None, Callable]] = TOOL_NAME_MAP):
         # Merge provided settings with DEFAULT_VIBENIX_SETTINGS in one line
         self.settings = deep_merge(DEFAULT_VIBENIX_SETTINGS.copy(), settings)
-        self._tool_name_map = self._build_tool_name_map()
-
-
-    def _build_tool_name_map(self) -> Dict[str, Callable]:
-        """Build a mapping from tool names to actual functions/callables."""
-        from vibenix.agent import tool_wrapper
-
-        tool_map = {}
-        for func in SEARCH_TOOLS + EDIT_TOOLS:
-            tool_map[func.__name__] = tool_wrapper(func)
-        for func in ADDITIONAL_TOOLS: # just strings, need to initialize afterwards
-            tool_map[func] = None
-        return tool_map
+        self._tool_name_map = tool_name_map
 
     def initialize_additional_tools(self, tools: List[Callable]):
         """Initialize the additional tools in the tool name map."""
@@ -460,7 +456,7 @@ def settings_from_json_format(json_settings: Dict[str, Any]) -> Dict[str, Any]:
         for prompt_name, tool_names in settings["prompt_tools"].items():
             if isinstance(tool_names, list):
                 for name in tool_names:
-                    if name not in ALL_TOOLS:
+                    if name not in get_settings_manager().list_all_tools():
                         raise ValueError(f"Tool name '{name}' in prompt '{prompt_name}' is not recognized.")
                     else:
                         prompt_tools.setdefault(prompt_name, []).append(name)

@@ -203,6 +203,9 @@ class ModelCodeResponse(BaseModel):
     """Model response with full updated packaging code."""
     code: str
 
+    def __str__(self):
+        return self.code
+
 # Usage class for tracking tokens
 @dataclass
 class Usage:

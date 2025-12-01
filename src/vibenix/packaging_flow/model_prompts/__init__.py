@@ -76,6 +76,7 @@ def refine_code(
     feedback: str,
     project_page: Optional[str] = None,
     template_notes: Optional[str] = None,
+    chat_history: Optional[List] = None
 ) -> ModelCodeResponse:
     """Refine a nix package based on feedback."""
     ...

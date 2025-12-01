@@ -9,7 +9,6 @@ from vibenix.defaults.vibenix_settings import (
     get_settings_manager,
     load_settings,
     DEFAULT_VIBENIX_SETTINGS,
-    ADDITIONAL_TOOLS,
     PROJECT_TOOLS,
     NIXPKGS_TOOLS,
     SEARCH_TOOLS,
@@ -158,7 +157,6 @@ def configure_prompt_tools_menu() -> None:
 def configure_single_prompt_tools(prompt_name: str) -> None:
     """Configure tools for a single prompt."""
     selected_tools = set()
-    selected_additional_tools = set()
     
     selected_tools = set(get_settings_manager().get_prompt_tools(prompt_name, filter_disabled=False))
     all_tools = ALL_TOOLS.copy()

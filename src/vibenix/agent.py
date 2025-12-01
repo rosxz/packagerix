@@ -4,7 +4,7 @@ This module provides the core agent functionality using pydantic-ai.
 """
 
 import asyncio
-from typing import Callable, Any
+from typing import Callable, Any, List, Optional
 from pydantic_ai import Agent, UnexpectedModelBehavior, capture_run_messages, RunContext
 from pydantic_ai.usage import UsageLimits
 from tenacity import retry, stop_after_attempt, wait_exponential, retry_if_exception_type, RetryError
@@ -17,6 +17,7 @@ from vibenix.model_config import DEFAULT_USAGE_LIMITS
 import logging
 import inspect
 from functools import wraps
+from pydantic_ai.messages import ModelMessage
 
 logger = logging.getLogger(__name__)
 
@@ -55,7 +56,7 @@ class VibenixAgent:
       wait=wait_exponential(multiplier=3, max=60),
       before_sleep=lambda retry_state: _capture_failed_usage_before_retry(retry_state, _global_failed_messages)
     )
-    async def run_async(self, prompt: str) -> tuple[Any, Usage]:
+    async def run_async(self, prompt: str, message_history: Optional[List[ModelMessage]]=None) -> tuple[Any, Usage]:
         """Run the agent asynchronously and return response with usage."""
         global _global_failed_messages
         
@@ -66,7 +67,7 @@ class VibenixAgent:
         # Capture messages to calculate usage on failure
         with capture_run_messages() as messages:
             try:
-                result = await self.agent.run(prompt, usage_limits=usage_limits)
+                result = await self.agent.run(prompt, usage_limits=usage_limits, message_history=message_history)
             except (UsageLimitExceeded, UnexpectedModelBehavior) as e:
                 # Store messages globally for the before_sleep callback
                 _global_failed_messages = list(messages)
@@ -85,7 +86,7 @@ class VibenixAgent:
         
         return output, usage
     
-    def run(self, prompt: str) -> tuple[str, Usage]:
+    def run(self, prompt: str, message_history: Optional[List[ModelMessage]]=None) -> tuple[str, Usage]:
         """Run the agent synchronously."""
         # Create event loop if needed
         try:
@@ -94,7 +95,7 @@ class VibenixAgent:
             loop = asyncio.new_event_loop()
             asyncio.set_event_loop(loop)
         
-        return loop.run_until_complete(self.run_async(prompt))
+        return loop.run_until_complete(self.run_async(prompt, message_history))
     
     @retry(
       retry=retry_if_exception_type((UsageLimitExceeded, UnexpectedModelBehavior)),
@@ -103,7 +104,7 @@ class VibenixAgent:
       before_sleep=lambda retry_state: _capture_failed_usage_before_retry(retry_state, _global_failed_messages),
       retry_error_callback=lambda retry_state: _capture_failed_usage_before_retry(retry_state, _global_failed_messages)
     )
-    async def run_stream_async(self, prompt: str) -> tuple[str, Usage]:
+    async def run_stream_async(self, prompt: str, message_history: Optional[List[ModelMessage]]=None) -> tuple[str, Usage]:
         """Run the agent with streaming and return complete response with usage."""
         global _global_failed_messages
         
@@ -119,7 +120,7 @@ class VibenixAgent:
             # Capture messages to calculate usage on failure
             with capture_run_messages() as messages:
                 try:
-                    result = await self.agent.run(prompt, usage_limits=usage_limits)
+                    result = await self.agent.run(prompt, usage_limits=usage_limits, message_history=message_history)
                 except (UsageLimitExceeded, UnexpectedModelBehavior) as e:
                     # Store messages globally for the before_sleep callback
                     _global_failed_messages = list(messages)
@@ -152,7 +153,7 @@ class VibenixAgent:
             # Capture messages to calculate usage on failure
             with capture_run_messages() as messages:
                 try:
-                    async with self.agent.run_stream(prompt, usage_limits=usage_limits) as result:
+                    async with self.agent.run_stream(prompt, usage_limits=usage_limits, message_history=message_history) as result:
                         output = await result.get_output()
                         full_response = str(output)
                 except (UsageLimitExceeded, UnexpectedModelBehavior) as e:
@@ -172,7 +173,7 @@ class VibenixAgent:
                 
                 return full_response, usage
     
-    def run_stream(self, prompt: str) -> tuple[str, Usage]:
+    def run_stream(self, prompt: str, message_history: Optional[List[ModelMessage]]=None) -> tuple[str, Usage]:
         """Run the agent with streaming synchronously."""
         try:
             loop = asyncio.get_event_loop()
@@ -180,7 +181,7 @@ class VibenixAgent:
             loop = asyncio.new_event_loop()
             asyncio.set_event_loop(loop)
         
-        return loop.run_until_complete(self.run_stream_async(prompt))
+        return loop.run_until_complete(self.run_stream_async(prompt, message_history))
 
 def _capture_failed_usage_before_retry(retry_state, failed_messages=None):
     """Capture usage from failed request and add to iteration tracking before retry."""

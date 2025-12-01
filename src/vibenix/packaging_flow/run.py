@@ -344,7 +344,7 @@ def package_project(output_dir=None, project_url=None, revision=None, fetcher=No
         coordinator_message("Build succeeded!")
         if get_settings_manager().get_setting_enabled("refinement"):
             packaging_usage = get_model_prompt_manager().get_session_usage()
-            candidate = refine_package(candidate, summary)
+            candidate = refine_package(candidate, summary, template_notes)
             ccl_logger.write_kv("refined_package", candidate.code)
 
             refinement_usage = get_model_prompt_manager().get_session_usage() - packaging_usage
