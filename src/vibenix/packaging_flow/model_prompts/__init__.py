@@ -93,7 +93,8 @@ def fix_build_error(
     is_dependency_build_error: bool = False,
     is_syntax_error: bool = False,
     attempted_tool_calls: List = [],
-    tool_call_collector: List = None
+    tool_call_collector: List = None,
+    chat_history: Optional[List] = None,
 ) -> ModelCodeResponse:
     """Fix a build error in Nix code."""
     ...

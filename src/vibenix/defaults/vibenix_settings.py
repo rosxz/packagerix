@@ -285,6 +285,10 @@ class VibenixSettingsManager:
         enabled = []
         # Get list of disabled tool names
         enabled_tools = self.settings.get("tools", {})
+        # if edit_tools disabled, filter out all edit tools
+        if not self.get_setting_enabled("edit_tools"):
+            for edit_tool in get_names(EDIT_TOOLS):
+                enabled_tools[edit_tool] = False
         
         for tool_name in tools:
             if tool_name not in enabled_tools:

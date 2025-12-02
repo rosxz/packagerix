@@ -26,40 +26,40 @@ def refine_package(curr: Solution, project_page: str, template_notes: str) -> So
     ccl_logger = get_logger()
     ccl_logger.enter_attribute("refine_package", log_start=True)
 
-    chat_history = [] # List to keep track of (user_prompt -> final model response) over the course of refinement
-
     coordinator_message("Starting refinement process for the package.")
     iteration = 0
     while True:
+        chat_history = [] # List to keep track of (user_prompt -> final model response) over the course of refinement
+        # We reset it for each feedback from user
+
         # Prompt user for package error (if any) to proceed with refinement
-        user_input = get_ui_adapter().ask_user_multiline(f'''The flake containing the package is present at '{config.flake_dir}'.
+        feedback_input = get_ui_adapter().ask_user_multiline(f'''The flake containing the package is present at '{config.flake_dir}'.
 Build output should be present at '{get_build_output_path()}'.
 Please provide feedback on the current packaging code (press CTRL-D to finish): ''')
-        if not user_input.strip():
+        if not feedback_input.strip():
             coordinator_message("No further feedback provided, ending refinement process.")
             break
-        feedback = user_input.strip()
+        feedback = feedback_input.strip()
 
-        while True: # loop to avoid reprompting user for the same feedback
+        while True: # while the feedback isn't fully addressed (avoid reprompting user), regardless of build success
             ccl_logger.log_iteration_start(iteration)
             ccl_logger.write_kv("code", curr.code)
 
             ccl_logger.write_kv("feedback", str(feedback))
             coordinator_message(f"Refining package based on user feedback...")
             refine_code(view_package_contents(prompt="refine_code"), feedback, project_page, chat_history=chat_history)
-            # TODO BUILD LOG IS NOT BEING PASSED! ignore this for now
 
             updated_code = get_package_contents()
             ccl_logger.write_kv("refined_code", updated_code)
             attempt = execute_build_and_add_to_stack(updated_code)
 
+            refining_error = attempt.result.error
             # Verify the updated code still builds
             while not attempt.result.success:
                 coordinator_error(f"Refinement caused a regression ({attempt.result.error.type}), attempting to fix errors introduced.")
 
                 ccl_logger.enter_attribute("refinement_fix")
                 max_iterations = get_settings_manager().get_setting_value("refinement.max_iterations")
-                #pp_and_feedback = project_page + f"\n```\nRefrain from making changes that are contradcitory to fixing the following underlying issue:```\n{feedback}"
                 _, attempt, _ = packaging_loop(attempt, project_page, template_notes, max_iterations)
                 ccl_logger.leave_attribute()
 
@@ -73,6 +73,17 @@ Please provide feedback on the current packaging code (press CTRL-D to finish): 
                         break
 
             if attempt.result.success:
+                if refining_error:
+                    from pydantic_ai.messages import ModelRequest, ModelResponse, UserPromptPart, TextPart
+
+                    error_msg = f"The refined code introduced a errors during build: {enum_str(refining_error.type)}.\nError details:\n{refining_error.truncated()}\n\n Please fix them."
+                    user_message = ModelRequest(parts=[UserPromptPart(content=error_msg)])
+                    model_message = ModelResponse(parts=[TextPart(content=attempt.code)])
+
+                    chat_history.append(user_message)
+                    chat_history.append(model_message)
+                    refining_error = None
+
                 coordinator_progress("Refined packaging code successfuly builds.")
                 coordinator_message(f'''The flake containing the package is present at '{config.flake_dir}'.
 Build output should be present at '{get_build_output_path()}'.''')
@@ -81,6 +92,8 @@ Build output should be present at '{get_build_output_path()}'.''')
                     curr = attempt
                     iteration += 1
                     break
+                else:
+                    feedback = "The current packaging expression does not fully or partially resolve the feedback received, try again."
             iteration += 1
 
     if iteration > 0:

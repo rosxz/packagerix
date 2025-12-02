@@ -193,13 +193,9 @@ class ModelPromptManager:
                         from pydantic_ai.messages import ModelRequest, ModelResponse, UserPromptPart, TextPart
                         from vibenix.flake import get_package_contents
                         
-                        # Create user request message with the rendered prompt
                         user_message = ModelRequest(parts=[UserPromptPart(content=rendered_prompt)])
-                        
-                        # Create model response message with package contents
                         model_message = ModelResponse(parts=[TextPart(content=get_package_contents())])
                         
-                        # Append to chat history
                         chat_history.append(user_message)
                         chat_history.append(model_message)
 
