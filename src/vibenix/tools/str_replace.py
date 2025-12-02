@@ -37,6 +37,9 @@ def _str_replace(old_str: str, new_str: str, occurrence: int = 1) -> str:
         if count == 0:
             return f"Error: Text not found in packaging expression."
 
+        if old_str == new_str:
+            return f"Error: `old_str` and `new_str` are identical; no changes made."
+
         # Validate occurrence parameter
         if occurrence < 1:
             error_msg = f"Error: `occurrence` must be >= 1, got {occurrence}"

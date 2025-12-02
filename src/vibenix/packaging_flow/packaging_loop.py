@@ -12,6 +12,8 @@ from vibenix.packaging_flow.model_prompts import get_model_prompt_manager
 from vibenix.ccl_log import get_logger, enum_str
 from vibenix.defaults import get_settings_manager
 
+from typing import List
+from pydantic_ai import ModelMessage
 
 settings_manager = get_settings_manager()
 MAX_ITERATIONS = settings_manager.get_setting_value("packaging_loop.max_iterations")
@@ -21,7 +23,7 @@ MAX_CONSECUTIVE_REBUILDS_WITHOUT_PROGRESS = settings_manager.get_setting_value("
 MAX_CONSECUTIVE_NON_BUILD_ERRORS = settings_manager.get_setting_value("packaging_loop.max_consecutive_non_build_errors")
 
 def packaging_loop(best: Solution, summary: str, template_notes: str,
-    max_iterations: int = MAX_ITERATIONS):
+    max_iterations: int = MAX_ITERATIONS, chat_history: List[ModelMessage] = []):
     """Loop that receives a Solution (code and build result), and iteratively
     attempts to fix the errors until a successful build is a achieved or a
     limit of (failing, etc.) iterations is reached."""
@@ -93,7 +95,8 @@ def packaging_loop(best: Solution, summary: str, template_notes: str,
                 is_dependency_error,
                 is_syntax_error,
                 attempted_tool_calls,
-                iteration_tool_calls
+                iteration_tool_calls,
+                chat_history=chat_history
             )
             
             # Add this iteration's tool calls to the attempted list
