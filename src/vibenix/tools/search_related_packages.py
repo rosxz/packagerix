@@ -6,19 +6,19 @@ Includes:
 """
 
 import os
+import subprocess
 from typing import List, Set, Dict, Any, Optional
 from vibenix.ccl_log import get_logger, log_function_call
 from vibenix.tools.search_nixpkgs_manual_documentation import _list_language_frameworks
 
 
-def get_nixpkgs_source_path() -> str:
-    """Get the nixpkgs source path from the template flake."""
+def _get_nixpkgs_source_path() -> str:
+    """Internal function to get the nixpkgs source path from the initialized flake."""
     from vibenix import config
-    import subprocess
     try:
         result = subprocess.run(
             ["nix", "build", ".#nixpkgs-src", "--no-link", "--print-out-paths"],
-            cwd=config.template_dir,
+            cwd=config.flake_dir,
             capture_output=True,
             text=True,
             check=True
@@ -54,7 +54,7 @@ def _get_builder_functions(do_print: bool = False) -> List[str]:
         except (json.JSONDecodeError, KeyError) as e:
             print(f"⚠️ Cache file corrupted, regenerating: {e}")
     try:
-        nixpkgs_path = get_nixpkgs_source_path()
+        nixpkgs_path = _get_nixpkgs_source_path()
     except Exception as e:
         raise RuntimeError(f"Failed to get nixpkgs source path: {e}")
     
@@ -322,7 +322,7 @@ def _create_find_similar_builder_patterns(cache: List[str] = []):
 
 def _get_builder_combinations(chosen_builders: List[str], keyword: str = None) -> str:
     try:
-        nixpkgs_path = get_nixpkgs_source_path()
+        nixpkgs_path = _get_nixpkgs_source_path()
     except Exception as e:
         raise RuntimeError(f"Failed to get nixpkgs source path: {e}")
 

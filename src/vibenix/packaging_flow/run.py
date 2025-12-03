@@ -24,12 +24,15 @@ from vibenix.tools.view import _view as view_package_contents
 from vibenix.defaults.vibenix_settings import get_settings_manager
 
 
-def get_nixpkgs_source_path() -> str:
-    """Get the nixpkgs source path from the template flake."""
+def _get_nixpkgs_source_path() -> str:
+    """Internal function to get the nixpkgs source path from the initialized flake.
+
+    This is the implementation without decorators, used internally and by tool wrappers.
+    """
     try:
         result = subprocess.run(
             ["nix", "build", ".#nixpkgs-src", "--no-link", "--print-out-paths"],
-            cwd=config.template_dir,
+            cwd=config.flake_dir,
             capture_output=True,
             text=True,
             check=True
@@ -38,6 +41,11 @@ def get_nixpkgs_source_path() -> str:
     except subprocess.CalledProcessError as e:
         coordinator_error(f"Failed to get nixpkgs source path: {e}")
         raise
+
+
+def get_nixpkgs_source_path() -> str:
+    """Get the nixpkgs source path from the initialized flake."""
+    return _get_nixpkgs_source_path()
 
 
 
@@ -123,7 +131,11 @@ def run_nurl(url, rev=None):
 
 
 def read_fetcher_file(fetcher: str) -> tuple[str, str]:
-    """Read the fetcher file content."""
+    """Read the fetcher file content and extract version (URL-based mode).
+
+    This function is used in URL-based mode where version needs to be extracted
+    from the fetcher content.
+    """
     from pathlib import Path
     try:
         ccl_logger = get_logger()
@@ -167,6 +179,86 @@ def read_fetcher_file(fetcher: str) -> tuple[str, str]:
         raise
 
 
+def read_fetcher_file_csv_mode(fetcher_path: str) -> str:
+    """Read the fetcher file content (CSV-based mode).
+
+    This function is used in CSV-based mode where pname and version are provided
+    explicitly, so we only need to read and evaluate the fetcher content.
+    """
+    from pathlib import Path
+    try:
+        ccl_logger = get_logger()
+        ccl_logger.enter_attribute("load_fetcher_csv", log_start=True)
+        ccl_logger.write_kv("path", fetcher_path)
+
+        path = Path(fetcher_path)
+        with open(path, 'r') as f:
+            # Ignore comments and empty lines
+            content = "".join(line for line in f if line.strip() and not line.startswith("#")).rstrip()
+        ccl_logger.write_kv("fetcher", content)
+
+        # Instantiate fetcher to pull contents to nix store
+        cmd = [
+            'nix',
+            'build',
+            '--impure',
+            '--expr',
+            f"let pkgs = (builtins.getFlake (toString ./.)).inputs.nixpkgs.legacyPackages.${{builtins.currentSystem}}; in\nwith pkgs; {content}"
+        ]
+        try:
+            result = subprocess.run(cmd, cwd=config.template_dir, capture_output=True, text=True, check=True)
+            if result.returncode != 0:
+                ccl_logger.write_kv("nix_eval_error", result.stderr)
+                ccl_logger.leave_attribute(log_end=True)
+                raise RuntimeError(f"{result.stderr}")
+        except (subprocess.TimeoutExpired, subprocess.CalledProcessError) as e:
+            raise RuntimeError(f"Failed to evaluate project fetcher: {e}")
+
+        ccl_logger.leave_attribute(log_end=True)
+        return content
+    except FileNotFoundError:
+        coordinator_error(f"Fetcher file '{fetcher_path}' not found.")
+        raise
+    except Exception as e:
+        coordinator_error(f"Error reading fetcher file: {e}")
+        raise
+
+
+def evaluate_fetcher_content(content: str) -> str:
+    """Evaluate fetcher content directly (CSV dataset mode).
+
+    This function is used when fetcher content is provided directly from CSV,
+    not from a file. Pname and version are provided explicitly.
+    """
+    try:
+        ccl_logger = get_logger()
+        ccl_logger.enter_attribute("evaluate_fetcher_csv", log_start=True)
+        ccl_logger.write_kv("fetcher", content)
+
+        # Instantiate fetcher to pull contents to nix store
+        cmd = [
+            'nix',
+            'build',
+            '--impure',
+            '--expr',
+            f"let pkgs = (builtins.getFlake (toString ./.)).inputs.nixpkgs.legacyPackages.${{builtins.currentSystem}}; in\nwith pkgs; {content}"
+        ]
+        try:
+            result = subprocess.run(cmd, cwd=config.flake_dir, capture_output=True, text=True, check=True)
+            if result.returncode != 0:
+                ccl_logger.write_kv("nix_eval_error", result.stderr)
+                ccl_logger.leave_attribute(log_end=True)
+                raise RuntimeError(f"{result.stderr}")
+        except (subprocess.TimeoutExpired, subprocess.CalledProcessError) as e:
+            raise RuntimeError(f"Failed to evaluate project fetcher: {e}")
+
+        ccl_logger.leave_attribute(log_end=True)
+        return content
+    except Exception as e:
+        coordinator_error(f"Error evaluating fetcher content: {e}")
+        raise
+
+
 def compare_template(available_builders, initial_code,
                      find_similar_builder_patterns, summary) -> str:
     """Prompt LLM to compare template with set of builders it thinks are relevant,
@@ -192,12 +284,29 @@ def compare_template(available_builders, initial_code,
     return initial_code
 
 
-def package_project(output_dir=None, project_url=None, revision=None, fetcher=None):
-    """Main coordinator function for packaging a project."""
+def package_project(output_dir=None, project_url=None, revision=None, fetcher=None,
+                    csv_pname=None, csv_version=None, fetcher_content=None):
+    """Main coordinator function for packaging a project.
+
+    Supports two modes:
+    - URL-based mode: project_url is provided, fetcher/version are derived
+    - CSV-based mode: csv_pname and csv_version are provided with fetcher or fetcher_content
+
+    Args:
+        fetcher_content: Direct fetcher content string (alternative to fetcher file path)
+    """
     # Initialize CCL logger
-    log_file = Path(output_dir) / "run.ccl" if output_dir else Path("run.ccl")
+    if output_dir:
+        output_path = Path(output_dir)
+        output_path.mkdir(parents=True, exist_ok=True)
+        log_file = output_path / "run.ccl"
+    else:
+        log_file = Path("run.ccl")
     ccl_logger = init_logger(log_file)
-    
+
+    # Determine if we're in CSV-based mode
+    csv_mode = csv_pname is not None and csv_version is not None
+
     # Log vibenix version info
     git_info = get_git_info()
     if git_info["commit_hash"]:
@@ -205,14 +314,14 @@ def package_project(output_dir=None, project_url=None, revision=None, fetcher=No
         ccl_logger.write_kv("git_hash", git_info["commit_hash"])
         ccl_logger.write_kv("dirty", "true" if git_info["is_dirty"] else "false")
         ccl_logger.leave_attribute()
-    
+
     # Step 1: Get project URL (includes welcome message)
-    if not (project_url or fetcher):
+    if not (project_url or fetcher or csv_mode):
         project_url = get_project_url() # Interactive mode (none)
-    else: # (purl or both)
-        # When URL is provided via CLI, still show welcome but skip prompt
+    else: # (purl or fetcher or csv_mode)
+        # When URL/fetcher/CSV is provided via CLI, still show welcome but skip prompt
         coordinator_message("Welcome to vibenix!")
-    
+
     # Log model configuration
     from vibenix.model_config import get_model_config
     ccl_logger.log_model_config(get_model_config())
@@ -222,21 +331,40 @@ def package_project(output_dir=None, project_url=None, revision=None, fetcher=No
     if project_url:
         ccl_logger.write_kv("project_url", project_url)
 
-    # Obtain the project fetcher
-    if fetcher: 
-        coordinator_progress(f"Using provided fetcher: {fetcher}")
-        version, fetcher = read_fetcher_file(fetcher)
+    # Initialize flake early (needed for fetcher evaluation in CSV mode)
+    coordinator_progress("Setting up a temporary Nix flake for packaging")
+    init_flake()
+    coordinator_message(f"Working on temporary flake at {config.flake_dir}")
+
+    # Obtain the project fetcher and version based on mode
+    if csv_mode:
+        # CSV dataset mode: pname, version, and fetcher_content provided from CSV
+        coordinator_progress(f"Using CSV dataset: pname={csv_pname}, version={csv_version}")
+        ccl_logger.write_kv("csv_mode", "true")
+        ccl_logger.write_kv("csv_pname", csv_pname)
+        ccl_logger.write_kv("csv_version", csv_version)
+        # fetcher_content is already set from CSV parsing in main.py
+        fetcher_content = evaluate_fetcher_content(fetcher_content)
+        pname = csv_pname
+        version = csv_version
+    elif fetcher:
+        # Legacy fetcher file mode (URL-based): version extracted from file
+        coordinator_progress(f"Using provided fetcher file: {fetcher}")
+        version, fetcher_content = read_fetcher_file(fetcher)
+        pname = None  # Will be extracted from fetcher later
         if revision:
             coordinator_error("Ignoring revision parameter in favor of provided fetcher.")
     else:
+        # URL-based mode: derive fetcher from URL
         if not project_url:
             coordinator_error("No project URL nor fetcher provided, either is required for Vibenix to proceed.")
             return
         coordinator_progress("Obtaining project fetcher from the provided URL")
-        version, fetcher = run_nurl(project_url, revision)
+        version, fetcher_content = run_nurl(project_url, revision)
+        pname = None  # Will be extracted from fetcher later
 
     # Step 2: Create additional (runtime-initialized) tools for model
-    store_path, nixpkgs_path = get_store_path(fetcher), get_nixpkgs_source_path()
+    store_path, nixpkgs_path = get_store_path(fetcher_content), get_nixpkgs_source_path()
     project_functions = create_source_function_calls(store_path, "project_")
     nixpkgs_functions = create_source_function_calls(nixpkgs_path, "nixpkgs_")
     from vibenix.tools.search_related_packages import get_builder_functions, _create_find_similar_builder_patterns
@@ -280,11 +408,7 @@ def package_project(output_dir=None, project_url=None, revision=None, fetcher=No
     if not summary:
         coordinator_error("Model failed to produce a project summary.")
 
-    # Step 4: Initialize flake
-    coordinator_progress("Setting up a temporary Nix flake for packaging")
-    init_flake()
-    coordinator_message(f"Working on temporary flake at {config.flake_dir}")
-    
+    # Step 4: Pick template
     ccl_logger.log_template_selected_begin()
     template_type = pick_template(summary)
     if not template_type:
@@ -304,14 +428,15 @@ def package_project(output_dir=None, project_url=None, revision=None, fetcher=No
 
     # Step 6.a: Manual src setup
     coordinator_message("Setting up the src attribute in the template...")
-    # Extract pname (repo name) from the fetcher
-    repo_match = re.search(r'repo\s*=\s*"(.*?)"', fetcher)
-    if not repo_match:
-        coordinator_error("Could not extract repo name from fetcher")
-        return
-    pname = repo_match.group(1)
+    # Extract pname from fetcher if not already set (URL-based mode)
+    if pname is None:
+        repo_match = re.search(r'repo\s*=\s*"(.*?)"', fetcher_content)
+        if not repo_match:
+            coordinator_error("Could not extract repo name from fetcher")
+            return
+        pname = repo_match.group(1)
     
-    initial_code = fill_src_attributes(starting_template, pname, version, fetcher)
+    initial_code = fill_src_attributes(starting_template, pname, version, fetcher_content)
 
     if get_settings_manager().get_setting_enabled("build_summary"):
         build_summary = summarize_build(summary)
@@ -412,11 +537,14 @@ def save_package_output(code: str, output_dir: str):
     coordinator_message(f"Saved package to: {package_file}")
 
 
-def run_packaging_flow(output_dir=None, project_url=None, revision=None, fetcher=None):
+def run_packaging_flow(output_dir=None, project_url=None, revision=None, fetcher=None,
+                       csv_pname=None, csv_version=None, fetcher_content=None):
     """Run the complete packaging flow."""
     try:
         result = package_project(output_dir=output_dir, project_url=project_url,
-                                revision=revision, fetcher=fetcher)
+                                revision=revision, fetcher=fetcher,
+                                csv_pname=csv_pname, csv_version=csv_version,
+                                fetcher_content=fetcher_content)
         if result:
             coordinator_message("Packaging completed successfully!")
             coordinator_message(f"Final package code:\n```nix\n{result}\n```")

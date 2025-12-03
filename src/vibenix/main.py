@@ -15,6 +15,7 @@ from typing import Optional
 from functools import wraps
 import hashlib
 import json
+import csv
 
 config.init()
 
@@ -100,23 +101,33 @@ def mock_input (ask : str, reply: str):
     logger.info(reply + "\n")
     return reply
 
-def run_terminal_ui(output_dir=None, project_url=None, revision=None, fetcher=None):
-    """Run the terminal-based interface."""
+def run_terminal_ui(output_dir=None, project_url=None, revision=None, fetcher=None,
+                    csv_pname=None, csv_version=None, fetcher_content=None):
+    """Run the terminal-based interface.
+
+    Args:
+        output_dir: Directory to save successful package.nix files
+        project_url: GitHub project URL to package (URL-based mode)
+        revision: Project revision (commit hash, tag, or release name)
+        fetcher: Path to .nix file with fetcher for the project source
+        csv_pname: Package name from CSV format (CSV-based mode)
+        csv_version: Package version from CSV format (CSV-based mode)
+        fetcher_content: Direct fetcher content (alternative to fetcher file path)
+    """
     from vibenix.ui.logging_config import enable_console_logging
     enable_console_logging()
-    
+
     set_ui_mode(False)
-    
+
     # Use the coordinator pattern for CLI
     from vibenix.ui.conversation import set_ui_adapter, TerminalUIAdapter
     from vibenix.packaging_flow.run import run_packaging_flow
-    # TODO: Use hardcoded model configuration
-    
+
     # Set up terminal UI adapter
     set_ui_adapter(TerminalUIAdapter())
-    
-    # If project URL or Nix fetcher are provided, skip interactive configuration
-    if (project_url or fetcher):
+
+    # If project URL, Nix fetcher, or CSV mode are provided, skip interactive configuration
+    if (project_url or fetcher or csv_pname):
         from vibenix.model_config import load_saved_configuration, initialize_model_config
         from vibenix.ui.raw_terminal.terminal_vibenix_settings import ensure_settings_configured
 
@@ -134,34 +145,36 @@ def run_terminal_ui(output_dir=None, project_url=None, revision=None, fetcher=No
         # Interactive mode - prompt for configuration if needed
         from vibenix.ui.raw_terminal.terminal_model_config import ensure_model_configured
         from vibenix.ui.raw_terminal.terminal_vibenix_settings import ensure_settings_configured
-        
+
         if not ensure_model_configured():
             logger.error("Model configuration required to continue")
             sys.exit(1)
-        
+
         # Ensure settings are configured (loads existing or prompts user)
         ensure_settings_configured()
-        
+
         # Initialize after configuration is complete
         from vibenix.model_config import initialize_model_config
         initialize_model_config()
-    
+
     # Run the packaging flow in background thread (like textual UI)
     import threading
-    
+
     def run_coordinator():
         try:
             run_packaging_flow(output_dir=output_dir, project_url=project_url,
-                               revision=revision, fetcher=fetcher)
+                               revision=revision, fetcher=fetcher,
+                               csv_pname=csv_pname, csv_version=csv_version,
+                               fetcher_content=fetcher_content)
         except Exception as e:
             logger.error(f"Error in packaging flow: {e}")
             import traceback
             traceback.print_exc()
-    
+
     coordinator_thread = threading.Thread(target=run_coordinator)
     coordinator_thread.daemon = True
     coordinator_thread.start()
-    
+
     # Wait for completion
     coordinator_thread.join()
 
@@ -228,7 +241,30 @@ def main():
         default=None,
         help="Path to .nix file with fetcher for the project source code (only works with --raw)."
     )
-    
+
+    parser.add_argument(
+        "--csv-dataset",
+        type=str,
+        default=None,
+        metavar="CSV_FILE",
+        help="Path to CSV dataset file containing package info (only works with --raw). Requires --csv-package."
+    )
+
+    parser.add_argument(
+        "--csv-package",
+        type=str,
+        default=None,
+        metavar="PACKAGE_NAME",
+        help="Package name to look up in the CSV dataset (only works with --raw). Requires --csv-dataset."
+    )
+
+    parser.add_argument(
+        "--nixpkgs-commit",
+        type=str,
+        default=None,
+        help="Nixpkgs commit hash to use for building (only works with --raw). Overrides value from CSV if provided."
+    )
+
     parser.add_argument(
         "--version",
         action="version",
@@ -246,10 +282,55 @@ def main():
         
         if args.raw:
             logger.info("Starting vibenix in terminal mode")
-            if args.output_dir and not (args.project_url or args.fetcher):
-                parser.error("--output-dir requires a project URL or Nix fetcher to be provided")
+
+            # Handle CSV dataset mode if provided
+            csv_pname = None
+            csv_version = None
+            fetcher_content = None
+
+            if args.csv_dataset or args.csv_package:
+                # Both flags must be provided together
+                if not args.csv_dataset or not args.csv_package:
+                    parser.error("--csv-dataset and --csv-package must be used together")
+
+                # Parse CSV dataset and extract package info
+                logger.info(f"Loading package '{args.csv_package}' from CSV dataset: {args.csv_dataset}")
+
+                with open(args.csv_dataset, 'r') as f:
+                    reader = csv.DictReader(f)
+                    package_found = False
+
+                    for row in reader:
+                        if row['package_name'] == args.csv_package:
+                            package_found = True
+                            csv_pname = row['pname']
+                            csv_version = row['version']
+                            fetcher_content = row['fetcher']
+
+                            # Set nixpkgs commit from CSV if not overridden by CLI
+                            if not args.nixpkgs_commit:
+                                config.nixpkgs_commit = row['nixpkgs_target_bump']
+
+                            logger.info(f"Found package: pname={csv_pname}, version={csv_version}")
+                            logger.info(f"Using nixpkgs commit: {config.nixpkgs_commit}")
+                            break
+
+                    if not package_found:
+                        logger.error(f"Package '{args.csv_package}' not found in CSV dataset")
+                        sys.exit(1)
+
+            # Set nixpkgs commit if provided via CLI (overrides CSV value)
+            if args.nixpkgs_commit:
+                config.nixpkgs_commit = args.nixpkgs_commit
+
+            # Validate output-dir requires some input mode
+            if args.output_dir and not (args.project_url or args.fetcher or csv_pname):
+                parser.error("--output-dir requires a project URL, Nix fetcher, or CSV dataset to be provided")
+
             run_terminal_ui(output_dir=args.output_dir, project_url=args.project_url,
-                            revision=args.revision, fetcher=args.fetcher)
+                            revision=args.revision, fetcher=args.fetcher,
+                            csv_pname=csv_pname, csv_version=csv_version,
+                            fetcher_content=fetcher_content)
         else:
             if args.output_dir:
                 parser.error("--output-dir only works with --raw mode")

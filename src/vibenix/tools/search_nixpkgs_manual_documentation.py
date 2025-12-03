@@ -7,13 +7,13 @@ from typing import List
 from vibenix.ccl_log import get_logger, log_function_call
 
 
-def get_nixpkgs_source_path() -> str:
-    """Get the nixpkgs source path from the template flake."""
+def _get_nixpkgs_source_path() -> str:
+    """Internal function to get the nixpkgs source path from the initialized flake."""
     from vibenix import config
     try:
         result = subprocess.run(
             ["nix", "build", ".#nixpkgs-src", "--no-link", "--print-out-paths"],
-            cwd=config.template_dir,
+            cwd=config.flake_dir,
             capture_output=True,
             text=True,
             check=True
@@ -38,7 +38,7 @@ def list_language_frameworks() -> List[str]:
 
 def _list_language_frameworks() -> List[str]:
     try:
-        nixpkgs_path = get_nixpkgs_source_path()
+        nixpkgs_path = _get_nixpkgs_source_path()
     except Exception as e:
         raise RuntimeError(f"Failed to get nixpkgs source path: {e}")
     
@@ -77,7 +77,7 @@ def search_nixpkgs_manual_documentation(framework_or_keyword: str, page: int = 1
     print(f"📞 Function called: search_nixpkgs_manual_documentation with framework_or_keyword: {framework_or_keyword}") # , section_name: {section_name}
     
     try:
-        nixpkgs_path = get_nixpkgs_source_path()
+        nixpkgs_path = _get_nixpkgs_source_path()
     except Exception as e:
         raise RuntimeError(f"Failed to get nixpkgs source path: {e}")
     
@@ -145,7 +145,7 @@ def search_keyword_in_documentation(keyword: str) -> str:
 
 def _search_keyword_in_documentation(keyword: str) -> str:
     try:
-        nixpkgs_path = get_nixpkgs_source_path()
+        nixpkgs_path = _get_nixpkgs_source_path()
     except Exception as e:
         raise RuntimeError(f"Failed to get nixpkgs source path: {e}")
     
