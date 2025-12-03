@@ -36,7 +36,7 @@ on:
         required: false
         type: string
       dataset_manual:
-        description: 'Dataset directory name in research/ (e.g., packaging_requests, october_25_dataset)'
+        description: 'Dataset directory/file path. URL-based: packaging_requests. CSV-based: single_fetcher_2025-08-01_2025-11-20.csv'
         required: false
         default: 'packaging_requests'
         type: string
@@ -92,7 +92,9 @@ jobs:
           nix develop -c python -c '''
           from vibenix.tools.search_related_packages import _get_builder_functions
           from vibenix import config
+          from vibenix.flake import init_flake
           config.init()
+          init_flake()
           _get_builder_functions()'''
 
       - name: Upload cache artifact
@@ -108,45 +110,71 @@ jobs:
           import csv
           import json
           import random
-          
+          import os
+
           matrix_data = []
-          
-          # Determine dataset directory and CSV file
-          dataset_dir = 'research/${{ github.event.inputs.dataset_manual || 'packaging_requests' }}'
-          
-          # Select CSV file based on csv_file choice
-          csv_file_choice = '${{ github.event.inputs.csv_file || 'implementation' }}'
-          if csv_file_choice == 'implementation':
-              csv_file = f'{dataset_dir}/used_during_implementation.csv'
-          else:  # evaluation
-              csv_file = f'{dataset_dir}/post_project_evaluation.csv'
-          
-          with open(csv_file, 'r') as f:
-              reader = csv.DictReader(f)
-              for row in reader:
-                  if row['repo_url']:  # Skip entries without repo URLs
-                      clean_name = row['repo_url'].replace('https://github.com/', '')
-                      matrix_data.append({
-                          'issue_number': row['issue_number'],
-                          'repo_url': row['repo_url'],
-                          'repo_name': clean_name
-                      })
-          
+          dataset_path = '${{ github.event.inputs.dataset_manual || 'packaging_requests' }}'
+
+          # Detect dataset type: if it ends with .csv, it's the new CSV format
+          if dataset_path.endswith('.csv'):
+              # New CSV-based format with pname, version, fetcher columns
+              csv_file = f'research/{dataset_path}'
+
+              # Validate use_cached_fetchers is true for CSV-based datasets
+              use_cached = '${{ github.event.inputs.use_cached_fetchers || 'true' }}' == 'true'
+              if not use_cached:
+                  raise ValueError('CSV-based datasets require use_cached_fetchers to be true')
+
+              with open(csv_file, 'r') as f:
+                  reader = csv.DictReader(f)
+                  for row in reader:
+                      if row['package_name']:  # Skip entries without package names
+                          matrix_data.append({
+                              'package_name': row['package_name'],
+                              'pname': row['pname'],
+                              'version': row['version'],
+                              'dataset_type': 'csv-based',
+                              'csv_dataset_path': csv_file
+                          })
+          else:
+              # Original URL-based format from directory
+              dataset_dir = f'research/{dataset_path}'
+
+              # Select CSV file based on csv_file choice
+              csv_file_choice = '${{ github.event.inputs.csv_file || 'implementation' }}'
+              if csv_file_choice == 'implementation':
+                  csv_file = f'{dataset_dir}/used_during_implementation.csv'
+              else:  # evaluation
+                  csv_file = f'{dataset_dir}/post_project_evaluation.csv'
+
+              with open(csv_file, 'r') as f:
+                  reader = csv.DictReader(f)
+                  for row in reader:
+                      if row['repo_url']:  # Skip entries without repo URLs
+                          clean_name = row['repo_url'].replace('https://github.com/', '')
+                          matrix_data.append({
+                              'issue_number': row['issue_number'],
+                              'repo_url': row['repo_url'],
+                              'repo_name': clean_name,
+                              'dataset_type': 'url-based',
+                              'dataset_dir': dataset_dir
+                          })
+
           # Randomize if requested
           randomize = '${{ github.event.inputs.randomize }}' == 'true'
           if randomize:
               random.shuffle(matrix_data)
-          
+
           # GitHub Actions has a matrix size limit, so we might need to batch
           max_packages = int('${{ github.event.inputs.max_packages || 5 }}')
           if max_packages == 0:
               matrix = {'include': matrix_data}
           else:
               matrix = {'include': matrix_data[:max_packages]}
-          
+
           with open('matrix.json', 'w') as f:
               json.dump(matrix, f)
-          
+
           # Set output for GitHub Actions
           print(f'matrix={json.dumps(matrix)}')
           "
@@ -155,7 +183,7 @@ jobs:
   build-test-packages:
     needs: setup
     runs-on: ubuntu-latest
-    name: Package ${{ matrix.repo_name }}
+    name: Package ${{ matrix.repo_name || matrix.package_name }}
     timeout-minutes: 45
     strategy:
       matrix: ${{ fromJson(needs.setup.outputs.matrix) }}
@@ -264,40 +292,53 @@ jobs:
       - name: Process package request
         id: process
         run: |
-          echo "Processing issue #${{ matrix.issue_number }} - ${{ matrix.repo_url }}"
-          
+          # Determine dataset type and set appropriate variables
+          if [ "${{ matrix.dataset_type }}" = "csv-based" ]; then
+            echo "Processing CSV-based package: ${{ matrix.package_name }}"
+            identifier="${{ matrix.package_name }}"
+            log_file="${identifier}.log"
+
+            # CSV-based datasets always use the fetcher from CSV
+            vibenix_args="--csv-dataset ${{ matrix.csv_dataset_path }} --csv-package ${{ matrix.package_name }}"
+          else
+            echo "Processing URL-based issue #${{ matrix.issue_number }} - ${{ matrix.repo_url }}"
+            identifier="${{ matrix.issue_number }}"
+            log_file="${identifier}.log"
+
+            # Prepare fetcher argument if use_cached_fetchers is true
+            fetcher_arg=""
+            if [ "${{ github.event.inputs.use_cached_fetchers || 'true' }}" = "true" ]; then
+              # Extract repo owner and name from URL
+              repo_path=$(echo "${{ matrix.repo_url }}" | sed 's|https://github.com/||')
+              repo_owner=$(echo "$repo_path" | cut -d'/' -f1)
+              repo_name=$(echo "$repo_path" | cut -d'/' -f2)
+              fetcher_file="${{ matrix.dataset_dir }}/fetchers/${repo_owner},${repo_name}.nix"
+
+              # Check if fetcher file exists
+              if [ -f "$fetcher_file" ]; then
+                fetcher_arg="--fetcher $fetcher_file"
+                echo "Using cached fetcher: $fetcher_file"
+              else
+                echo "Cached fetcher not found: $fetcher_file"
+              fi
+            fi
+
+            vibenix_args="$fetcher_arg ${{ matrix.repo_url }}"
+          fi
+
           # Set default status
           echo "status=failed" >> $GITHUB_OUTPUT
-          
+
           # Create output directory for this run
           mkdir -p output
-          
-          # Prepare fetcher argument if use_cached_fetchers is true
-          fetcher_arg=""
-          if [ "${{ github.event.inputs.use_cached_fetchers || 'true' }}" = "true" ]; then
-            # Extract repo owner and name from URL (e.g., https://github.com/owner/repo -> owner,repo)
-            repo_path=$(echo "${{ matrix.repo_url }}" | sed 's|https://github.com/||')
-            repo_owner=$(echo "$repo_path" | cut -d'/' -f1)
-            repo_name=$(echo "$repo_path" | cut -d'/' -f2)
-            fetcher_file="research/${{ github.event.inputs.dataset_manual || 'packaging_requests' }}/fetchers/${repo_owner},${repo_name}.nix"
-            
-            # Check if fetcher file exists
-            if [ -f "$fetcher_file" ]; then
-              fetcher_arg="--fetcher $fetcher_file"
-              echo "Using cached fetcher: $fetcher_file"
-            else
-              echo "Cached fetcher not found: $fetcher_file"
-            fi
-          fi
 
           # Run vibenix with raw output and save results
           set -o pipefail
           nix develop .# -c python -m vibenix \
             --raw \
             --output-dir output \
-            $fetcher_arg \
-            "${{ matrix.repo_url }}" \
-            2>&1 | tee "${{ matrix.issue_number }}.log"
+            $vibenix_args \
+            2>&1 | tee "$log_file"
           exit_code=$?
           
           # Check if the command succeeded AND produced a package.nix file
@@ -325,30 +366,39 @@ jobs:
             echo "status=failed" >> $GITHUB_OUTPUT
             echo "Exit code: $exit_code"
             echo "=== Combined log ==="
-            head -n 50 "${{ matrix.issue_number }}.log" || echo "No log found"
+            head -n 50 "$log_file" || echo "No log found"
             exit $exit_code  # Propagate the original exit code
           fi
-          
+
       - name: Prepare artifact directory
         if: always()
         run: |
-          mkdir -p artifact-${{ matrix.issue_number }}
-          cp ${{ matrix.issue_number }}.log artifact-${{ matrix.issue_number }}/
-          if [ -d output ]; then
-            cp -r output/* artifact-${{ matrix.issue_number }}/
+          # Determine identifier based on dataset type
+          if [ "${{ matrix.dataset_type }}" = "csv-based" ]; then
+            identifier="${{ matrix.package_name }}"
+            name_sanitized="${{ matrix.pname }}"
+          else
+            identifier="${{ matrix.issue_number }}"
+            name_sanitized=$(echo "${{ matrix.repo_name }}" | tr '/' '-')
           fi
-          cp ~/.vibenix/config.json artifact-${{ matrix.issue_number }}/
-          
-          # Create artifact name with sanitized repo name
-          repo_name_sanitized=$(echo "${{ matrix.repo_name }}" | tr '/' '-')
-          echo "artifact_name=vibenix-output-${{ matrix.issue_number }}-${repo_name_sanitized}" >> $GITHUB_ENV
+
+          mkdir -p artifact-${identifier}
+          cp ${identifier}.log artifact-${identifier}/ 2>/dev/null || true
+          if [ -d output ]; then
+            cp -r output/* artifact-${identifier}/
+          fi
+          cp ~/.vibenix/config.json artifact-${identifier}/ 2>/dev/null || true
+
+          # Create artifact name
+          echo "artifact_name=vibenix-output-${identifier}-${name_sanitized}" >> $GITHUB_ENV
+          echo "identifier=${identifier}" >> $GITHUB_ENV
           
       - name: Upload results
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: ${{ env.artifact_name }}
-          path: artifact-${{ matrix.issue_number }}/
+          path: artifact-${{ env.identifier }}/
           retention-days: 1
           
       - name: Create summary
@@ -362,18 +412,30 @@ jobs:
             status_emoji="❌"
             status_text="FAILED"
           fi
-          
-          echo "## ${status_emoji} Issue #${{ matrix.issue_number }}" >> $GITHUB_STEP_SUMMARY
-          echo "- Repository: ${{ matrix.repo_url }}" >> $GITHUB_STEP_SUMMARY
-          echo "- Packaging Request: https://github.com/NixOS/nixpkgs/issues/${{ matrix.issue_number }}" >> $GITHUB_STEP_SUMMARY
+
+          # Determine identifier and log file based on dataset type
+          if [ "${{ matrix.dataset_type }}" = "csv-based" ]; then
+            identifier="${{ matrix.package_name }}"
+            log_file="${identifier}.log"
+            echo "## ${status_emoji} Package: ${{ matrix.pname }}" >> $GITHUB_STEP_SUMMARY
+            echo "- Package name: ${{ matrix.package_name }}" >> $GITHUB_STEP_SUMMARY
+            echo "- Version: ${{ matrix.version }}" >> $GITHUB_STEP_SUMMARY
+          else
+            identifier="${{ matrix.issue_number }}"
+            log_file="${identifier}.log"
+            echo "## ${status_emoji} Issue #${{ matrix.issue_number }}" >> $GITHUB_STEP_SUMMARY
+            echo "- Repository: ${{ matrix.repo_url }}" >> $GITHUB_STEP_SUMMARY
+            echo "- Packaging Request: https://github.com/NixOS/nixpkgs/issues/${{ matrix.issue_number }}" >> $GITHUB_STEP_SUMMARY
+          fi
+
           echo "- Provider: ${{ steps.provider.outputs.provider }}" >> $GITHUB_STEP_SUMMARY
           echo "- Model: ${{ github.event.inputs.model || 'gemini/gemini-2.5-flash' }}" >> $GITHUB_STEP_SUMMARY
           echo "- Status: ${status_emoji} **${status_text}**" >> $GITHUB_STEP_SUMMARY
           if [ -n "${{ steps.process.outputs.package_name }}" ]; then
-            echo "- Package name: ${{ steps.process.outputs.package_name }}" >> $GITHUB_STEP_SUMMARY
+            echo "- Generated package name: ${{ steps.process.outputs.package_name }}" >> $GITHUB_STEP_SUMMARY
           fi
-          if [ -f "${{ matrix.issue_number }}.log" ]; then
-            echo "- Log size: $(wc -c < ${{ matrix.issue_number }}.log) bytes" >> $GITHUB_STEP_SUMMARY
+          if [ -f "$log_file" ]; then
+            echo "- Log size: $(wc -c < $log_file) bytes" >> $GITHUB_STEP_SUMMARY
           fi
           if [ -f "output/${{ steps.process.outputs.package_name }}/package.nix" ]; then
             echo "- Generated package.nix: ✓" >> $GITHUB_STEP_SUMMARY
@@ -386,10 +448,10 @@ jobs:
               echo "- Total API cost: \$$total_cost" >> $GITHUB_STEP_SUMMARY
             fi
           fi
-          if [ -f "${{ matrix.issue_number }}.log" ] && [ -s "${{ matrix.issue_number }}.log" ]; then
+          if [ -f "$log_file" ] && [ -s "$log_file" ]; then
             echo "### Log excerpt:" >> $GITHUB_STEP_SUMMARY
             echo '<pre>' >> $GITHUB_STEP_SUMMARY
-            tail -n 50 "${{ matrix.issue_number }}.log" >> $GITHUB_STEP_SUMMARY
+            tail -n 50 "$log_file" >> $GITHUB_STEP_SUMMARY
             echo '</pre>' >> $GITHUB_STEP_SUMMARY
           fi
           
