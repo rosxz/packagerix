@@ -1,6 +1,6 @@
 Important notes for packaging Go applications:
 
-1. Use buildGoModule for Go modules (Go 1.11+), buildGoPackage for older projects
+1. Use buildGoModule for Go modules (Go 1.11+)
 2. vendorHash management:
    - Set to lib.fakeHash initially, then update with the correct hash from build error
    - Use null if the project has no vendor dependencies

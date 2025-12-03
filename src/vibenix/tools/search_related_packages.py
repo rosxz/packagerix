@@ -104,6 +104,7 @@ def _extract_builders(path: str, cache: List[str] = None) -> List[str]:
         'mkMergedOptionModule',
         'mkRemovedOptionModule',
         'mkRenamedOptionModule',
+        'buildGoPackage', # Deprecated, removed from nixpkgs, use buildGoModule instead
     ]
     # Hardcoded mappings
     helper = { "rust":  "rustPlatform", "dprint": "dprint-plugins", "open": "openmodelica",
