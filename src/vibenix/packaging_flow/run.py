@@ -157,7 +157,7 @@ def read_fetcher_file(fetcher: str) -> tuple[str, str]:
             f"let pkgs = (builtins.getFlake (toString ./.)).inputs.nixpkgs.legacyPackages.${{builtins.currentSystem}}; in\nwith pkgs; {content}"
         ]
         try:
-            result = subprocess.run(cmd, cwd=config.template_dir, capture_output=True, text=True, check=True)
+            result = subprocess.run(cmd, cwd=config.flake_dir, capture_output=True, text=True, check=True)
             if result.returncode != 0:
                 ccl_logger.write_kv("nix_eval_error", result.stderr)
                 ccl_logger.leave_attribute(log_end=True)
@@ -206,7 +206,7 @@ def read_fetcher_file_csv_mode(fetcher_path: str) -> str:
             f"let pkgs = (builtins.getFlake (toString ./.)).inputs.nixpkgs.legacyPackages.${{builtins.currentSystem}}; in\nwith pkgs; {content}"
         ]
         try:
-            result = subprocess.run(cmd, cwd=config.template_dir, capture_output=True, text=True, check=True)
+            result = subprocess.run(cmd, cwd=config.flake_dir, capture_output=True, text=True, check=True)
             if result.returncode != 0:
                 ccl_logger.write_kv("nix_eval_error", result.stderr)
                 ccl_logger.leave_attribute(log_end=True)

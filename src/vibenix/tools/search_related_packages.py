@@ -256,7 +256,7 @@ def _find_qualified_path(function_name: str, helper_map: dict, langs: List[str])
             f"let pkgs = (builtins.getFlake (toString ./.)).inputs.nixpkgs.legacyPackages.${{builtins.currentSystem}}; candidates = [{" ".join(f"{{name=\"{path}\"; set=(let r = builtins.tryEval ({path}{" or null" if path != "pkgs" else ""}); in if r.success then r.value else null);}}" for path in paths)}]; found = builtins.filter (c: c.set != null && c.set ? {function_name}) candidates; in if found != [] then (builtins.head found).name else false"
         ]
         try:
-            result = subprocess.run(cmd, cwd=config.template_dir, capture_output=True, text=True, check=True)
+            result = subprocess.run(cmd, cwd=config.flake_dir, capture_output=True, text=True, check=True)
             if result.returncode == 0 and result.stdout.strip() != 'false':
                 return f"{result.stdout.strip().strip('"')}.{function_name}"
         except (subprocess.TimeoutExpired, subprocess.CalledProcessError) as e:
