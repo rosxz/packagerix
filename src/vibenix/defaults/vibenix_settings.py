@@ -359,9 +359,17 @@ class VibenixSettingsManager:
         self.settings["tools"] = all_tools
 
     # Prompt tools
+    def list_all_tools(self) -> List[str]:
+        """Get a list of all available tool names.
+
+        Returns:
+            List of all tool names
+        """
+        return list(self._tool_name_map.keys())
+
     def list_all_prompts(self) -> List[str]:
         """Get a list of all configured prompt names.
-        
+
         Returns:
             List of prompt names (managed by settings)
         """
