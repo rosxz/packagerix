@@ -21,6 +21,7 @@ def refine_package(curr: Solution, project_page: str, template_notes: str) -> So
     from vibenix.defaults import get_settings_manager
     # Max iterations for refinement's internal packaging loop (fix build errors)
     max_iterations = get_settings_manager().get_setting_value("refinement.max_iterations")
+    use_chat_history = get_settings_manager().get_setting_value("refinement.chat_history")
 
     from vibenix.ccl_log import get_logger, close_logger
     ccl_logger = get_logger()
@@ -29,8 +30,11 @@ def refine_package(curr: Solution, project_page: str, template_notes: str) -> So
     coordinator_message("Starting refinement process for the package.")
     iteration = 0
     while True:
-        chat_history = [] # List to keep track of (user_prompt -> final model response) over the course of refinement
-        # We reset it for each feedback from user
+        if use_chat_history:
+            chat_history = [] # List to keep track of (user_prompt -> final model response) over the course of refinement
+            # We reset it for each feedback from user
+        else:
+            chat_history = None
 
         # Prompt user for package error (if any) to proceed with refinement
         feedback_input = get_ui_adapter().ask_user_multiline(f'''The flake containing the package is present at '{config.flake_dir}'.
@@ -73,7 +77,7 @@ Please provide feedback on the current packaging code (press CTRL-D to finish): 
                         break
 
             if attempt.result.success:
-                if refining_error:
+                if refining_error and use_chat_history:
                     from pydantic_ai.messages import ModelRequest, ModelResponse, UserPromptPart, TextPart
 
                     error_msg = f"The refined code introduced a errors during build: {enum_str(refining_error.type)}.\nError details:\n{refining_error.truncated()}\n\n Please fix them."
