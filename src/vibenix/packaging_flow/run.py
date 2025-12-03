@@ -224,16 +224,24 @@ def read_fetcher_file_csv_mode(fetcher_path: str) -> str:
         raise
 
 
-def evaluate_fetcher_content(content: str) -> str:
+def evaluate_fetcher_content(content: str, version: str = None) -> str:
     """Evaluate fetcher content directly (CSV dataset mode).
 
     This function is used when fetcher content is provided directly from CSV,
     not from a file. Pname and version are provided explicitly.
+
+    Args:
+        content: The fetcher expression
+        version: Package version to use in the evaluation context
     """
     try:
         ccl_logger = get_logger()
         ccl_logger.enter_attribute("evaluate_fetcher_csv", log_start=True)
         ccl_logger.write_kv("fetcher", content)
+
+        # Wrap fetcher in an attrset with finalAttrs as an attribute to make finalAttrs.version available
+        version_attrs = f'version = "{version}"; finalAttrs.version = version;' if version else ''
+        wrapped_expr = f"rec {{ {version_attrs} src = {content}; }}"
 
         # Instantiate fetcher to pull contents to nix store
         cmd = [
@@ -241,7 +249,7 @@ def evaluate_fetcher_content(content: str) -> str:
             'build',
             '--impure',
             '--expr',
-            f"let pkgs = (builtins.getFlake (toString ./.)).inputs.nixpkgs.legacyPackages.${{builtins.currentSystem}}; in\nwith pkgs; {content}"
+            f"let pkgs = (builtins.getFlake (toString ./.)).inputs.nixpkgs.legacyPackages.${{builtins.currentSystem}}; in\nwith pkgs; ({wrapped_expr}).src"
         ]
         try:
             result = subprocess.run(cmd, cwd=config.flake_dir, capture_output=True, text=True, check=True)
@@ -344,7 +352,7 @@ def package_project(output_dir=None, project_url=None, revision=None, fetcher=No
         ccl_logger.write_kv("csv_pname", csv_pname)
         ccl_logger.write_kv("csv_version", csv_version)
         # fetcher_content is already set from CSV parsing in main.py
-        fetcher_content = evaluate_fetcher_content(fetcher_content)
+        fetcher_content = evaluate_fetcher_content(fetcher_content, csv_version)
         pname = csv_pname
         version = csv_version
     elif fetcher:
