@@ -128,6 +128,7 @@ DEFAULT_VIBENIX_SETTINGS = {
         },
         "refinement": {
             "enabled": True,
+            "chat_history": True,
             "max_iterations": 3,
         },
         "edit_tools": True,
@@ -192,84 +193,84 @@ class VibenixSettingsManager:
         setting = self.get_setting_value(setting_name)
         if isinstance(setting, bool):
             return setting
-        elif isinstance(setting, dict):
-            enabled = setting.get("enabled")
-            if enabled is not None:
-                return enabled
-            else:
-                raise ValueError(f"Wrong usage of get_setting_enabled for '{setting_name}'.")
-        raise ValueError(f"Setting '{setting_name}' is neither bool nor dict.")
+        raise ValueError(f"Setting '{setting_name}' is not a boolean (toggleable).")
 
     def set_setting_enabled(self, setting_name: str, enabled: bool):
-        behaviour_settings = self.settings.get("behaviour", {})
-        setting = behaviour_settings.get(setting_name)
-
-        if isinstance(setting, bool):
-            self.set_setting_value(setting_name, enabled)
-        elif isinstance(setting, dict):
-            if "enabled" in setting:
-                setting["enabled"] = enabled
-            else:
-                raise ValueError(f"Wrong usage of set_setting_enabled for '{setting_name}'.")
+        self.get_setting_enabled(setting_name)  # Validate it's toggleable
+        self.set_setting_value(setting_name, enabled)
 
     def get_setting_value(self, value_path: str) -> Any:
-        """Get a specific value from a behaviour setting that is a dict.
+        """Get a specific value from a behaviour setting.
         
         Args:
-            value_path: Dot-separated path to the value (e.g., "refinement.iterations")
+            value_path: Dot-separated path to the value (e.g., "refinement.max_iterations")
             
         Returns:
-            The value associated with the key in the behaviour setting dict
+            The value at the specified path
         """
         behaviour_settings = self.settings.get("behaviour", {})
         parts = value_path.split(".")
-        setting_name = parts[0]
-        setting = behaviour_settings.get(setting_name)
-
-        key = None
-        while len(parts) > 1:
-            if isinstance(setting, dict):
-                key = parts[1]
-                setting = setting.get(key)
-                parts = parts[1:]
+        current = behaviour_settings
+        
+        for part in parts[:-1]:
+            if isinstance(current, dict) and part in current:
+                current = current[part]
             else:
-                raise ValueError(f"Behaviour setting '{setting_name}' is not a dict.")
-
-        return setting
+                raise ValueError(f"Setting path '{value_path}' not found.")
+        final_key = parts[-1]
+        if isinstance(current, dict) and final_key in current:
+            current = current[final_key]
+        else:
+            raise ValueError(f"Setting path '{value_path}' not found.")
+        
+        return current
 
     def list_all_behaviour_settings(self) -> List[str]:
-        """Get the names of all behaviour settings."""
-        return list(self.settings.get("behaviour", {}).keys())
-
-    def set_setting_value(self, value_path: str, value: bool):
-        """Set the enabled status of a behaviour setting.
-           This is a helper method used by dynamically generated set_*_enabled methods.
+        """Get the names of all behaviour settings, including nested keys with dot notation.
+        
+        Returns:
+            List of setting paths (e.g., ["progress_evaluation", "packaging_loop.max_iterations"])
         """
         behaviour_settings = self.settings.get("behaviour", {})
+        settings_list = []
         
+        def extract_paths(settings_dict: Dict, prefix: str = ""):
+            """Recursively extract all paths from a nested dictionary."""
+            for key, value in settings_dict.items():
+                current_path = f"{prefix}.{key}" if prefix else key
+                
+                if isinstance(value, dict):
+                    extract_paths(value, current_path)
+                else:
+                    settings_list.append(current_path)
+        
+        extract_paths(behaviour_settings)
+        return settings_list
+    
+    def set_setting_value(self, value_path: str, value: Any):
+        """Set a value in behaviour settings using dot-separated path.
+        
+        Args:
+            value_path: Dot-separated path to the value (e.g., "refinement.max_iterations")
+            value: The value to set
+        """
+        behaviour_settings = self.settings.get("behaviour", {})
         parts = value_path.split(".")
-        setting_name = parts[0]
-        setting = behaviour_settings.get(setting_name)
-
-        if isinstance(setting, bool):
-            if len(parts) == 1:
-                self.settings["behaviour"][setting_name] = value
-                return
-            
-        key = None
-        while len(parts) > 1:
-            if isinstance(setting, dict):
-                key = parts[1]
-                setting = setting.get(key)
-                parts = parts[1:]
+        current = behaviour_settings
+        
+        # Navigate to parent of target
+        for part in parts[:-1]:
+            if isinstance(current, dict) and part in current:
+                current = current[part]
             else:
-                raise ValueError(f"Behaviour setting '{setting_name}' is not a dict.")
-        if key is None:
-            raise ValueError(f"Error setting value for '{value_path}'.")
-        if isinstance(setting, dict):
-            setting[key] = value
+                raise ValueError(f"Setting path '{value_path}' not found.")
+        
+        # Set the final value
+        final_key = parts[-1]
+        if isinstance(current, dict) and final_key in current:
+            current[final_key] = value
         else:
-            raise ValueError(f"Behaviour setting '{setting_name}' is not a dict.")
+            raise ValueError(f"Setting path '{value_path}' not found.")
 
 
     # Global tool management
