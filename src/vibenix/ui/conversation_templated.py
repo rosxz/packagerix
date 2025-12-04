@@ -69,10 +69,11 @@ class ModelPromptManager:
     def add_session_tool_usage(self, tool_name: str, completion: int=0, prompt: int=0, cache_read: int=0):
         """Add usage from a tool call to the tool call usage."""
         if tool_name not in self._session_tool_usage:
-            self._session_tool_usage[tool_name] = Usage(model=self._model)
-        self._session_tool_usage[tool_name].completion_tokens += completion
-        self._session_tool_usage[tool_name].prompt_tokens += prompt
-        self._session_tool_usage[tool_name].cache_read_tokens += cache_read
+            self._session_tool_usage[tool_name] = {"usage": Usage(model=self._model), "count": 0}
+        self._session_tool_usage[tool_name]["usage"].completion_tokens += completion
+        self._session_tool_usage[tool_name]["usage"].prompt_tokens += prompt
+        self._session_tool_usage[tool_name]["usage"].cache_read_tokens += cache_read
+        self._session_tool_usage[tool_name]["count"] += 1
 
     def set_current_prompt(self, prompt: str):
         """Set the current prompt being used."""

@@ -62,8 +62,7 @@ def evaluate_code(code: str, previous_code: str, feedback: str) -> RefinementExi
 def get_feedback(
     code: str,
     project_page: Optional[str] = None,
-    iteration: int = 0,
-    max_iterations: int = 0,
+    chat_history: Optional[List] = None
 ) -> str:
     """Get feedback on a successfully built package."""
     ...

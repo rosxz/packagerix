@@ -277,9 +277,13 @@ class CCLLogger:
         self.enter_attribute("tool_cost")
         from vibenix.ui.conversation_templated import get_model_prompt_manager
         session_tool_usage = get_model_prompt_manager().get_session_tool_usage()
-        for tool_name, usage in session_tool_usage.items():
+        for tool_name, data in session_tool_usage.items():
             self.enter_attribute(tool_name)
-            self.write_kv("input_tokens", str(usage.prompt_tokens))
+            self.write_kv("count", str(data["count"]))
+            self.write_kv("input_tokens", str(data["usage"].prompt_tokens))
+            self.write_kv("output_tokens", str(data["usage"].completion_tokens))
+            # No cache reads for tools unfortunately (this is all a very very rough estimate)
+            self.write_kv("cost", f"{data["usage"].calculate_cost():.6f}")
             self.leave_attribute()
         self.leave_attribute()
 

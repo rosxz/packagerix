@@ -5,6 +5,7 @@ from vibenix.tools import (
     SEARCH_TOOLS,
     EDIT_TOOLS,
     OUT_PATH_TOOLS,
+    VM_TOOLS,
     search_nix_functions,
     search_nixpkgs_manual_documentation,
 )
@@ -81,7 +82,7 @@ def _build_tool_name_map() -> Dict[str, Callable]:
     from vibenix.agent import tool_wrapper
 
     tool_map = {}
-    for func in SEARCH_TOOLS + EDIT_TOOLS + OUT_PATH_TOOLS:
+    for func in SEARCH_TOOLS + EDIT_TOOLS + OUT_PATH_TOOLS + VM_TOOLS:
         tool_map[func.__name__] = tool_wrapper(func)
     for func in ADDITIONAL_TOOLS:
         tool_map[func] = None
@@ -93,8 +94,8 @@ ALL_TOOLS = list(TOOL_NAME_MAP.keys())
 DEFAULT_PROMPT_TOOLS: Dict[str, List[str]] = {prompt: [] for prompt in ALL_PROMPTS}
 DEFAULT_PROMPT_TOOLS.update(
     {
-        'get_feedback': get_names(SEARCH_TOOLS) + ADDITIONAL_TOOLS,
-        'refine_code': ALL_TOOLS, # access to out path
+        'get_feedback': get_names(SEARCH_TOOLS + VM_TOOLS) + ADDITIONAL_TOOLS, # Access to run_in_vm tools
+        'refine_code': get_names(SEARCH_TOOLS + EDIT_TOOLS + OUT_PATH_TOOLS), # Access to out path tools
         'fix_build_error': get_names(SEARCH_TOOLS + EDIT_TOOLS) + ADDITIONAL_TOOLS,
         'fix_hash_mismatch': get_names(EDIT_TOOLS),
         'analyze_package_failure': get_names(SEARCH_TOOLS) + ADDITIONAL_TOOLS,

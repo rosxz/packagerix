@@ -250,7 +250,7 @@ def tool_wrapper(original_func):
     """Decorator to wrap tool functions for usage tracking."""
     @wraps(original_func)
     def wrapper(*args, **kwargs):
-        """Wrapper to track tool usage (currently quite limited)."""
+        """Wrapper to track tool usage (currently limited in accuracy)."""
         from vibenix.ui.conversation_templated import get_model_prompt_manager
 
         # Call the original function and get the result
@@ -260,8 +260,14 @@ def tool_wrapper(original_func):
         import tiktoken
         encoder = tiktoken.encoding_for_model("gpt-4-1106-preview")
         tool_in = len(encoder.encode(str(result)))
+        # Estimate tokens str forming: "function_name(arg1, arg2, karg1=value1, ...)"
+        tool_call_str = f"{original_func.__name__}(" + ", ".join(
+            [str(a) for a in args] +
+            [f"{k}={v}" for k, v in kwargs.items()]
+        ) + ")"
+        tool_out = len(encoder.encode(tool_call_str)) # Call is done as output tokens (reasoning)
         
-        get_model_prompt_manager().add_session_tool_usage(original_func.__name__, prompt=tool_in)
+        get_model_prompt_manager().add_session_tool_usage(original_func.__name__, prompt=tool_in, completion=tool_out)
         return result
 
     return wrapper

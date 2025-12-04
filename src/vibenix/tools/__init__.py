@@ -12,6 +12,7 @@ from vibenix.tools.insert_line_after import insert_line_after
 from vibenix.tools.error_pagination import error_pagination
 from vibenix.tools.build_package import build_package
 from vibenix.tools.out_path_file_tools import create_out_path_file_tools
+from vibenix.tools.vm_test import run_in_vm
 
 # Export all functions so they can be imported from this module
 __all__ = [
@@ -25,6 +26,7 @@ __all__ = [
     'view',
     'error_pagination',
     'build_package',
+    'run_in_vm',
 ]
 
 # Standard search functions for all prompts that need them
@@ -37,3 +39,4 @@ SEARCH_TOOLS = [
 ]
 EDIT_TOOLS = [error_pagination, str_replace, insert_line_after, view]
 OUT_PATH_TOOLS = create_out_path_file_tools()
+VM_TOOLS = [run_in_vm]
