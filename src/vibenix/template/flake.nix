@@ -69,6 +69,13 @@
             in 
               [ pkg ] ++ (if pythonWithPkg.success then [ pythonWithPkg.value ] else [ pkgs.python3 ]);
 
+          # Create symlink to the package in test user's home
+          system.activationScripts.packageSymlink = ''
+            mkdir -p /home/test
+            ln -sfn ${self.packages.${system}.default} /home/test/package
+            chown -h test:users /home/test/package
+          '';
+
           # Basic VM settings
           virtualisation = {
             graphics = false;

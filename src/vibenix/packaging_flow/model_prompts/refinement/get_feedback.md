@@ -8,7 +8,7 @@ The following Nix code successfuly builds the respective project.
 
 Please identify ONE, if any exists, concrete improvement to the packaging code, namely (check in this order):
     1. Remove unnecessary comments, and empty attributes or lists, etc. Do not remove dependencies or other specific values;
-    2. Identify missing dependencies, especially via running the package;
+    2. Identify missing dependencies, especially via running each of the package's binaries;
     3. Ensure the Nix builder function has `doInstallCheck = true;` and the respective `installCheckPhase = { ... };` attribute.
        This attribute should be set to, at least, programatically verify a very basic execution of the program, and that the expected
        binaries and libraries are, respectively, executable and present.

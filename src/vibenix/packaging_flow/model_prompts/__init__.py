@@ -38,12 +38,6 @@ def pick_template(project_page: str) -> TemplateType:
     ...
 
 
-@ask_model_prompt('summarize_project.md')
-def summarize_github(project_page: str) -> str:
-    """Summarize a GitHub project page."""
-    ...
-
-
 @ask_model_prompt('summarize_project_source.md')
 def summarize_project_source(
     project_readme: str,
@@ -161,13 +155,6 @@ def analyze_package_failure(
     ...
 
 
-@ask_model_prompt('summarize_build.md')
-def summarize_build(
-    summary: Optional[str] = None) -> str:
-    """Summarize the build process and identify relations between the components."""
-    ...
-
-
 @ask_model_prompt('choose_builders.md')
 def choose_builders(
     available_builders: List[str],
@@ -188,7 +175,6 @@ def compare_template_builders(
 
 __all__ = [
     "pick_template",
-    "summarize_github",
     "evaluate_code",
     "get_feedback",
     "refine_code",

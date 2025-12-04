@@ -18,7 +18,7 @@ from vibenix.tools.vm_test import _spawn_vm, _shutdown_vm
 
 from vibenix import config
 
-def refine_package(curr: Solution, project_page: str, template_notes: str) -> Solution:
+def refine_package(curr: Solution, project_page: str) -> Solution:
     """Refinement cycle to improve the packaging."""
     from vibenix.defaults import get_settings_manager
     # Max iterations for refinement's internal packaging loop (fix build errors)
@@ -65,7 +65,7 @@ def refine_package(curr: Solution, project_page: str, template_notes: str) -> So
 
             ccl_logger.enter_attribute("refinement_packaging_loop")
             max_iterations = get_settings_manager().get_setting_value("refinement.max_iterations")
-            _, attempt, _ = packaging_loop(attempt, project_page, template_notes, max_iterations)
+            _, attempt, _ = packaging_loop(attempt, project_page, max_iterations)
             ccl_logger.leave_attribute()
 
         if not attempt.result.success:

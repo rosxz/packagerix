@@ -204,11 +204,10 @@ class CCLLogger:
         self.enter_attribute("select_template")
 
 
-    def log_template_selected_end(self, template_type: str, template_content: str, notes: str | None, indent_level: int = 0):
+    def log_template_selected_end(self, template_type: str, template_content: str, indent_level: int = 0):
         """Log template selection."""
         self.write_kv("template_type", enum_str(template_type))
         self.write_kv("template", template_content)
-        self.write_kv("notes", notes if notes else "")
         self.leave_attribute()
 
     def log_initial_build(self, code: str, result: NixBuildResult, indent_level: int = 0):

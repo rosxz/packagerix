@@ -72,8 +72,6 @@ Remember that:
 {% endif %}
 {% include 'snippets/project_info_section.md' %}
 
-{% include 'snippets/template_note_section.md' %}
-
 If the error message does not give you enough information to make progress, and to verify your actions, look at relevant files in the proejct directory,
 and try to compare your approach with similar packages in nixpkgs.
 

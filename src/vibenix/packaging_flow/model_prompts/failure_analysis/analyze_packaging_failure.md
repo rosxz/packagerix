@@ -24,8 +24,6 @@ Error:
 
 {% include 'snippets/project_info_section.md' %}
 
-{% include 'snippets/template_note_section.md' %}
-
 Known errors:
 - `error: evaluation aborted with the following error message: 'lib.customisation.callPackageWith: Function called without required argument "package_name" at /nix/store/[...]`:
    This error indicates that one of the function arguments you specified at the top of the file was not found and is incorrect.

@@ -22,7 +22,7 @@ MAX_CONSECUTIVE_REBUILDS_WITHOUT_PROGRESS = settings_manager.get_setting_value("
 # or just get rid of it
 MAX_CONSECUTIVE_NON_BUILD_ERRORS = settings_manager.get_setting_value("packaging_loop.max_consecutive_non_build_errors")
 
-def packaging_loop(best: Solution, summary: str, template_notes: str,
+def packaging_loop(best: Solution, summary: str,
     max_iterations: int = MAX_ITERATIONS, chat_history: List[ModelMessage] = []):
     """Loop that receives a Solution (code and build result), and iteratively
     attempts to fix the errors until a successful build is a achieved or a
@@ -90,7 +90,6 @@ def packaging_loop(best: Solution, summary: str, template_notes: str,
                 view_package_contents(prompt="fix_build_error"),
                 error_truncated, 
                 summary, 
-                template_notes, 
                 has_broken_log_output,
                 is_dependency_error,
                 is_syntax_error,

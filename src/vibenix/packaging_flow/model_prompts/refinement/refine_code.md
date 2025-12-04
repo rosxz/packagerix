@@ -16,8 +16,6 @@ Here is the user's feedback:
 
 {% include 'snippets/project_info_section.md' %}
 
-{% include 'snippets/template_note_section.md' %}
-
 Note: The meta attribute is irrelevant, do not include it.
 Note: Do not change any other arguments of fetchFromGitHub or another fetcher if it has an actual hash already.
 Note: If you need to introduce a new hash, use lib.fakeHash as a placeholder, and automated process will replace this with the actual hash."""

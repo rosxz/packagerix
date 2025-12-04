@@ -54,8 +54,7 @@ def get_names(funcs: List[Union[Callable, str]]) -> List[str]:
 
 ALL_PROMPTS = [
     "pick_template",
-    "summarize_github",
-    "evaluate_code",
+    "summarize_project_source",
     "get_feedback",
     "refine_code",
     "fix_build_error",
@@ -63,9 +62,8 @@ ALL_PROMPTS = [
     "evaluate_progress",
     "classify_packaging_failure",
     "analyze_package_failure",
-    "summarize_build",
-    "choose_builders",
     "compare_template_builders",
+    "choose_builders",
 ]
 
 from tempfile import mkdtemp
@@ -94,6 +92,7 @@ ALL_TOOLS = list(TOOL_NAME_MAP.keys())
 DEFAULT_PROMPT_TOOLS: Dict[str, List[str]] = {prompt: [] for prompt in ALL_PROMPTS}
 DEFAULT_PROMPT_TOOLS.update(
     {
+        'summarize_project_source': PROJECT_TOOLS,
         'get_feedback': get_names(SEARCH_TOOLS + VM_TOOLS) + ADDITIONAL_TOOLS, # Access to run_in_vm tools
         'refine_code': get_names(SEARCH_TOOLS + EDIT_TOOLS + OUT_PATH_TOOLS), # Access to out path tools
         'fix_build_error': get_names(SEARCH_TOOLS + EDIT_TOOLS) + ADDITIONAL_TOOLS,
@@ -101,7 +100,6 @@ DEFAULT_PROMPT_TOOLS.update(
         'analyze_package_failure': get_names(SEARCH_TOOLS) + ADDITIONAL_TOOLS,
         'compare_template_builders': get_names([search_nix_functions, search_nixpkgs_manual_documentation]+EDIT_TOOLS)
             + PROJECT_TOOLS + NIXPKGS_TOOLS + GET_BUILDER_TOOLS,
-        'summarize_build': PROJECT_TOOLS,
         'choose_builders': PROJECT_TOOLS + NIXPKGS_TOOLS,
     }
 )
@@ -118,10 +116,7 @@ DEFAULT_VIBENIX_SETTINGS = {
     # General behavior, misc
     "behaviour": {
         "progress_evaluation": True,
-        "build_summary": True,
         "compare_template_builders": True,
-        "template_notes": False,
-        "scrape_project_page": False,
         "packaging_loop": {
             "max_iterations": 20,
             "max_consecutive_non_build_errors": 99,
@@ -407,7 +402,7 @@ class VibenixSettingsManager:
         """
         # Get the configured tools for this prompt
         prompt_tools_config = self.settings.get("prompt_tools", {})
-        tool_spec = prompt_tools_config.get(prompt_name, [])
+        tool_spec = prompt_tools_config.get(prompt_name, []) # TODO complain if prompt not found
         
         # Filter based on enabled/disabled settings
         if filter_disabled:

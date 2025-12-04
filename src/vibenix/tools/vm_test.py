@@ -12,8 +12,8 @@ import paramiko
 
 from vibenix.ccl_log import log_function_call
 
-# Suppress paramiko's verbose logging (SSH banner errors during connection attempts)
-logging.getLogger("paramiko").setLevel(logging.WARNING)
+logging.getLogger("paramiko").setLevel(logging.CRITICAL)
+logging.getLogger("paramiko.transport").setLevel(logging.CRITICAL)
 
 
 # SSH connection settings
@@ -103,7 +103,16 @@ class VMSession:
             errors = channel.recv_stderr(65536).decode('utf-8', errors='replace')
             channel.close()
             
-            return (output + errors).rstrip() if errors else output.rstrip()
+            result = (output + errors).rstrip() if errors else output.rstrip()
+            
+            # Filter out resize error and limit output
+            lines = result.split('\n')
+            lines = [l for l in lines if not l.startswith("resize:  can't open")]
+            if len(lines) > 500:
+                lines = lines[:500]
+                lines.append(f"... (truncated, {len(result.split(chr(10))) - 500} more lines)")
+            lines = [line[:200] + ('...' if len(line) > 200 else '') for line in lines]
+            return '\n'.join(lines)
         except socket.timeout:
             return f"Error: Command timed out after {timeout}s"
         except (paramiko.SSHException, EOFError, socket.error, OSError) as e:
@@ -259,25 +268,6 @@ def _shutdown_vm() -> str:
     return "VM shutdown."
 
 
-@log_function_call("run_in_vm")
-def run_in_vm(command: str) -> str:
-    """Execute a command in a headless, isolated VM containing the package of interest in the system's global environment.
-
-    Arguments:
-        command: The command to execute inside the VM.
-        timeout: Maximum time to wait for command execution.
-    Returns:
-        The command output or error message.
-    """
-    if not _vm:
-        return "Error: Unable to run command, no VM session found."
-    
-    if not _vm.is_running():
-        return "Error: Unable to run command, no VM session found."
-    
-    return _vm.run_command(command, timeout=30)
-
-
 def _get_vm_status() -> str:
     """Get VM status."""
     if not _vm:
@@ -285,3 +275,21 @@ def _get_vm_status() -> str:
     if _vm.is_running():
         return "VM running" + (" (SSH ready)" if _vm.booted else " (booting)")
     return "VM stopped."
+
+
+@log_function_call("run_in_vm")
+def run_in_vm(command: str) -> str:
+    """Execute a command in bash shell on a headless, isolated VM containing the package of interest in the system's global environment.
+    Do not use Nix variables like $pkgs or $out, they are not defined in this context.
+    The built package is available at /home/test/package (~/package) inside the VM.
+
+    Arguments:
+        command: The command to execute inside a bash shell.
+    """
+    if not _vm:
+        return "Error: Unable to run command, no VM session found."
+    
+    if not _vm.is_running():
+        return "Error: Unable to run command, no VM session found."
+    
+    return _vm.run_command(command, timeout=60)

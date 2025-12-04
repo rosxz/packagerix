@@ -10,9 +10,9 @@ from vibenix.parsing import fetch_github_release_data, scrape_and_process, fill_
 from vibenix.flake import init_flake, get_package_contents
 from vibenix.nix import execute_build_and_add_to_stack, revert_packaging_to_solution
 from vibenix.packaging_flow.model_prompts import (
-    pick_template, summarize_github, summarize_project_source,
+    pick_template, summarize_project_source,
     analyze_package_failure, classify_packaging_failure, PackagingFailure,
-    summarize_build, choose_builders, compare_template_builders, get_model_prompt_manager
+    choose_builders, compare_template_builders, get_model_prompt_manager
 )
 from vibenix.packaging_flow.refinement import refine_package
 from vibenix.packaging_flow.user_prompts import get_project_url
@@ -49,11 +49,8 @@ def get_nixpkgs_source_path() -> str:
 
 
 
-def analyze_project(project_page: Optional[str]=None,
-                    source_info: Optional[tuple[str, str]]=None) -> str:
+def analyze_project(source_info: Optional[tuple[str, str]]=None) -> str:
     """Analyze the project using the model."""
-    if project_page:
-        return summarize_github(project_page)
     if source_info:
         return summarize_project_source(*source_info)
     raise ValueError("No project information provided for analysis.")
@@ -403,35 +400,18 @@ def package_project(output_dir=None, project_url=None, revision=None, fetcher=No
     get_settings_manager().initialize_additional_tools(additional_functions)
 
     # Step 3: Analyze project to obtain summary used for model prompts
-    if get_settings_manager().get_setting_enabled("scrape_project_page"):
-        # Scrape project page
-        if not project_url:
-            coordinator_error("Project URL is required to scrape project page, which is enabled in Vibenix settings.")
-            return
-        coordinator_message(f"Scraping project page from {project_url}")
-        try:
-            project_page = scrape_and_process(project_url)
-        except Exception as e:
-            coordinator_error(f"Failed to fetch project page: {e}")
-            return
-        
-        coordinator_message("I found the project information. Let me analyze it.")
-        ccl_logger.log_project_summary_begin()
-        summary = analyze_project(project_page=project_page)
-        ccl_logger.log_project_summary_end(summary)
-    else:
-        # Use project source root's README.md + root directory file list as information sources
-        coordinator_message("Using project source files to analyze the project.")
-        try:
-            from vibenix.tools.file_tools import get_project_source_info
-            source_info = get_project_source_info(store_path)
-        except Exception as e:
-            coordinator_error(f"Failed to acquire project summary from source: {e}")
-            return
+    # Use project source root's README.md + root directory file list as information sources
+    coordinator_message("Using project source files to analyze the project.")
+    try:
+        from vibenix.tools.file_tools import get_project_source_info
+        source_info = get_project_source_info(store_path)
+    except Exception as e:
+        coordinator_error(f"Failed to acquire project summary from source: {e}")
+        return
 
-        ccl_logger.log_project_summary_begin()
-        summary = analyze_project(source_info=source_info)
-        ccl_logger.log_project_summary_end(summary)
+    ccl_logger.log_project_summary_begin()
+    summary = analyze_project(source_info=source_info)
+    ccl_logger.log_project_summary_end(summary)
 
     if not summary:
         coordinator_error("Model failed to produce a project summary.")
@@ -447,12 +427,7 @@ def package_project(output_dir=None, project_url=None, revision=None, fetcher=No
     template_path = config.template_dir / template_filename
     starting_template = template_path.read_text()
     
-    # Load optional notes file
-    notes_filename = f"{template_type.value}.notes"
-    notes_path = config.template_dir / notes_filename
-    template_notes = notes_path.read_text() if notes_path.exists() else None
-    ccl_logger.log_template_selected_end(template_type, starting_template, template_notes)
-    template_notes = template_notes if get_settings_manager().get_setting_enabled("template_notes") else None
+    ccl_logger.log_template_selected_end(template_type, starting_template)
 
     # Step 6.a: Manual src setup
     coordinator_message("Setting up the src attribute in the template...")
@@ -465,13 +440,6 @@ def package_project(output_dir=None, project_url=None, revision=None, fetcher=No
         pname = repo_match.group(1)
     
     initial_code = fill_src_attributes(starting_template, pname, version, fetcher_content)
-
-    if get_settings_manager().get_setting_enabled("build_summary"):
-        build_summary = summarize_build(summary)
-        if not build_summary:
-            coordinator_error("Model failed to produce a build summary.")
-            return
-        summary += f"\n\nBuild Summary:\n{build_summary}"
 
     if get_settings_manager().get_setting_enabled("compare_template_builders"):
         initial_code = compare_template(available_builders, initial_code, find_similar_builder_patterns, summary)
@@ -487,7 +455,6 @@ def package_project(output_dir=None, project_url=None, revision=None, fetcher=No
     candidate, best, status = packaging_loop(
         best,
         summary,
-        template_notes
     )
 
     # Log the raw package code before refinement or analysis
@@ -497,7 +464,7 @@ def package_project(output_dir=None, project_url=None, revision=None, fetcher=No
         coordinator_message("Build succeeded!")
         if get_settings_manager().get_setting_enabled("refinement.enabled"):
             packaging_usage = get_model_prompt_manager().get_session_usage()
-            candidate = refine_package(candidate, summary, template_notes)
+            candidate = refine_package(candidate, summary)
             ccl_logger.write_kv("refined_package", candidate.code)
 
             refinement_usage = get_model_prompt_manager().get_session_usage() - packaging_usage
@@ -526,7 +493,7 @@ def package_project(output_dir=None, project_url=None, revision=None, fetcher=No
     
     ccl_logger.enter_attribute("analyze_failure")
     revert_packaging_to_solution(best) # TODO do this differently later, not just best
-    details = analyze_package_failure(best.code, best.result.error.truncated(), summary, template_notes) # TODO best.code
+    details = analyze_package_failure(best.code, best.result.error.truncated(), summary) # TODO best.code
     ccl_logger.write_kv("description", str(details))
     packaging_failure = classify_packaging_failure(details)
     ccl_logger.write_kv("failure_type", enum_str(packaging_failure))
