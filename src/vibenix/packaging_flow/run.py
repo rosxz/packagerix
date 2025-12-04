@@ -243,13 +243,27 @@ def evaluate_fetcher_content(content: str, version: str = None, pname: str = Non
         # Wrap fetcher in an attrset with finalAttrs as an attribute to make finalAttrs.version and finalAttrs.pname available
         wrapped_expr = f'rec {{ pname = "{pname}"; finalAttrs.pname = pname; version = "{version}"; finalAttrs.version = version; src = {content}; }}'
 
-        # Instantiate fetcher to pull contents to nix store
+        # Build a minimal derivation that unpacks the source
+        # This ensures we get the actual unpacked source directory, even if the fetcher returns a tarball
+        nix_expr = f"""
+let pkgs = (builtins.getFlake (toString ./.)).inputs.nixpkgs.legacyPackages.${{builtins.currentSystem}};
+in with pkgs; stdenv.mkDerivation {{
+  inherit (({wrapped_expr})) pname version src;
+  dontBuild = true;
+  dontConfigure = true;
+  dontFixup = true;
+  installPhase = ''
+    cp -r . $out
+  '';
+}}
+"""
         cmd = [
             'nix',
             'build',
             '--impure',
+            '--print-out-paths',
             '--expr',
-            f"let pkgs = (builtins.getFlake (toString ./.)).inputs.nixpkgs.legacyPackages.${{builtins.currentSystem}}; in\nwith pkgs; ({wrapped_expr}).src"
+            nix_expr
         ]
         try:
             result = subprocess.run(cmd, cwd=config.flake_dir, capture_output=True, text=True, check=True)
@@ -257,11 +271,15 @@ def evaluate_fetcher_content(content: str, version: str = None, pname: str = Non
                 ccl_logger.write_kv("nix_eval_error", result.stderr)
                 ccl_logger.leave_attribute(log_end=True)
                 raise RuntimeError(f"{result.stderr}")
+
+            # Extract the store path from the output
+            store_path = result.stdout.strip()
+            ccl_logger.write_kv("fetcher_store_path", store_path)
         except (subprocess.TimeoutExpired, subprocess.CalledProcessError) as e:
             raise RuntimeError(f"Failed to evaluate project fetcher: {e}")
 
         ccl_logger.leave_attribute(log_end=True)
-        return content
+        return content, store_path
     except Exception as e:
         coordinator_error(f"Error evaluating fetcher content: {e}")
         raise
@@ -352,7 +370,7 @@ def package_project(output_dir=None, project_url=None, revision=None, fetcher=No
         ccl_logger.write_kv("csv_pname", csv_pname)
         ccl_logger.write_kv("csv_version", csv_version)
         # fetcher_content is already set from CSV parsing in main.py
-        fetcher_content = evaluate_fetcher_content(fetcher_content, csv_version, csv_pname)
+        fetcher_content, store_path = evaluate_fetcher_content(fetcher_content, csv_version, csv_pname)
         pname = csv_pname
         version = csv_version
     elif fetcher:
@@ -362,6 +380,7 @@ def package_project(output_dir=None, project_url=None, revision=None, fetcher=No
         pname = None  # Will be extracted from fetcher later
         if revision:
             coordinator_error("Ignoring revision parameter in favor of provided fetcher.")
+        store_path = get_store_path(fetcher_content)
     else:
         # URL-based mode: derive fetcher from URL
         if not project_url:
@@ -370,9 +389,10 @@ def package_project(output_dir=None, project_url=None, revision=None, fetcher=No
         coordinator_progress("Obtaining project fetcher from the provided URL")
         version, fetcher_content = run_nurl(project_url, revision)
         pname = None  # Will be extracted from fetcher later
+        store_path = get_store_path(fetcher_content)
 
     # Step 2: Create additional (runtime-initialized) tools for model
-    store_path, nixpkgs_path = get_store_path(fetcher_content), get_nixpkgs_source_path()
+    nixpkgs_path = get_nixpkgs_source_path()
     project_functions = create_source_function_calls(store_path, "project_")
     nixpkgs_functions = create_source_function_calls(nixpkgs_path, "nixpkgs_")
     from vibenix.tools.search_related_packages import get_builder_functions, _create_find_similar_builder_patterns
