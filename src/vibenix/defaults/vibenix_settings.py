@@ -122,7 +122,7 @@ DEFAULT_VIBENIX_SETTINGS = {
         "template_notes": False,
         "scrape_project_page": False,
         "packaging_loop": {
-            "max_iterations": 40,
+            "max_iterations": 20,
             "max_consecutive_non_build_errors": 99,
             "max_consecutive_rebuilds_without_progress": 10,
         },
