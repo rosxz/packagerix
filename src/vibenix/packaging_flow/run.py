@@ -224,7 +224,7 @@ def read_fetcher_file_csv_mode(fetcher_path: str) -> str:
         raise
 
 
-def evaluate_fetcher_content(content: str, version: str = None) -> str:
+def evaluate_fetcher_content(content: str, version: str = None, pname: str = None) -> str:
     """Evaluate fetcher content directly (CSV dataset mode).
 
     This function is used when fetcher content is provided directly from CSV,
@@ -233,15 +233,15 @@ def evaluate_fetcher_content(content: str, version: str = None) -> str:
     Args:
         content: The fetcher expression
         version: Package version to use in the evaluation context
+        pname: Package name to use in the evaluation context
     """
     try:
         ccl_logger = get_logger()
         ccl_logger.enter_attribute("evaluate_fetcher_csv", log_start=True)
         ccl_logger.write_kv("fetcher", content)
 
-        # Wrap fetcher in an attrset with finalAttrs as an attribute to make finalAttrs.version available
-        version_attrs = f'version = "{version}"; finalAttrs.version = version;' if version else ''
-        wrapped_expr = f"rec {{ {version_attrs} src = {content}; }}"
+        # Wrap fetcher in an attrset with finalAttrs as an attribute to make finalAttrs.version and finalAttrs.pname available
+        wrapped_expr = f'rec {{ pname = "{pname}"; finalAttrs.pname = pname; version = "{version}"; finalAttrs.version = version; src = {content}; }}'
 
         # Instantiate fetcher to pull contents to nix store
         cmd = [
@@ -352,7 +352,7 @@ def package_project(output_dir=None, project_url=None, revision=None, fetcher=No
         ccl_logger.write_kv("csv_pname", csv_pname)
         ccl_logger.write_kv("csv_version", csv_version)
         # fetcher_content is already set from CSV parsing in main.py
-        fetcher_content = evaluate_fetcher_content(fetcher_content, csv_version)
+        fetcher_content = evaluate_fetcher_content(fetcher_content, csv_version, csv_pname)
         pname = csv_pname
         version = csv_version
     elif fetcher:
