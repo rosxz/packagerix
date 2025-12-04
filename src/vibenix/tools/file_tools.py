@@ -208,15 +208,44 @@ def create_source_function_calls(store_path: str, prefix: str = "", dynamic_path
     return funcs
 
 
+def find_readme(store_path: Path) -> Path | None:
+    """
+    Find a README file in the given directory using GitHub's heuristic.
+
+    Looks for files named README with various extensions in a case-insensitive manner.
+    Returns the first match found, or None if no README exists.
+    """
+    # Check common README filenames (following GitHub's detection order)
+    readme_names = [
+        "README.md", "README.markdown", "README.mdown", "README.mkdn",
+        "README.rst", "README.txt", "README",
+        "readme.md", "readme.markdown", "readme.mdown", "readme.mkdn",
+        "readme.rst", "readme.txt", "readme",
+        "Readme.md", "Readme.markdown", "Readme.rst", "Readme.txt", "Readme"
+    ]
+
+    for name in readme_names:
+        readme_path = store_path / name
+        if readme_path.exists() and readme_path.is_file():
+            return readme_path
+
+    return None
+
+
 def get_project_source_info(store_path: str) -> tuple[str, str]:
     """Get basic info about the project source at the given store path."""
-    readme_path = Path(store_path) / "README.md"
-    if readme_path.exists():
-        readme_content = readme_path.read_text()
+    store_path_obj = Path(store_path)
+
+    # Try to find a README file using flexible detection
+    readme_path = find_readme(store_path_obj)
+
+    if readme_path:
+        readme_content = readme_path.read_text(encoding='utf-8', errors='replace')
     else:
-        raise FileNotFoundError("README.md not found in project source root dir.")
+        readme_content = "[No README file found in project source root directory]"
+
     root_files = subprocess.run(
-        ["ls", "-lha", str(Path(store_path))],
+        ["ls", "-lha", str(store_path_obj)],
         capture_output=True,
         text=True,
         check=True
