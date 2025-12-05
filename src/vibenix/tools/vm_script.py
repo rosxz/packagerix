@@ -14,7 +14,7 @@ logging.getLogger("paramiko").setLevel(logging.CRITICAL)
 logging.getLogger("paramiko.transport").setLevel(logging.CRITICAL)
 
 
-def _run_script_in_vm(script: str, system_packages: str, flake_path: str = ".", timeout: float = 30) -> str:
+def _run_script_in_vm(script: str, system_packages: str, flake_path: str = ".", timeout: float = 300) -> str:
     """Run a shell script in a VM that starts, executes the script, and shuts down.
 
     Args:
