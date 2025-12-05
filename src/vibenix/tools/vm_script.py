@@ -54,6 +54,9 @@ def _run_script_in_vm(script: str, system_packages: str, flake_path: str = ".", 
     script_file.write_text(script)
     script_file.chmod(0o755)
 
+    from vibenix.flake import stage_all_files
+    stage_all_files()
+
     print(f"🚀 Starting VM to execute script")
 
     # Create a pseudo-terminal for the VM

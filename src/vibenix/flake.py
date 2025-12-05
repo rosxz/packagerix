@@ -84,6 +84,10 @@ def get_package_contents() -> str:
     with open(file_path, 'r') as file:
         return file.read()
 
+def stage_all_files() -> None:
+    repo = git.Repo(config.flake_dir.as_posix())
+    repo.git.add('-A')
+
 def get_package_path() -> str:
     file_path = config.flake_dir / "package.nix"
     return file_path.as_posix()
