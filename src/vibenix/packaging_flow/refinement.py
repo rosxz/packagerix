@@ -14,8 +14,6 @@ from vibenix.packaging_flow.packaging_loop import packaging_loop
 from vibenix.packaging_flow.model_prompts import model_prompt_manager
 from vibenix.nix import get_build_output_path
 
-from vibenix.tools.vm_test import _spawn_vm, _shutdown_vm
-
 from vibenix import config
 
 def refine_package(curr: Solution, project_page: str) -> Solution:
@@ -37,14 +35,8 @@ def refine_package(curr: Solution, project_page: str) -> Solution:
             chat_history = [] # List to keep track of (user_prompt -> final model response) over the course of refinement
             # We reset it for each feedback from user
 
-        # Create vm session for automated testing
-        try:
-            _spawn_vm(str(config.flake_dir))
-        except Exception as e:
-            coordinator_error(f"Failed to start VM for testing: {e}")
-            return curr
+        # Get feedback (VM will be started/stopped automatically by run_in_vm calls)
         feedback = get_feedback(curr, project_page, chat_history=chat_history).strip()
-        _shutdown_vm()
 
         ccl_logger.log_iteration_start(iteration)
         ccl_logger.write_kv("code", curr.code)

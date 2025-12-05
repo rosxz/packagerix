@@ -15,7 +15,16 @@ Please identify ONE, if any exists, concrete improvement to the packaging code, 
 
 Please reply with a concise description of the feedback you identify, and not the full updated packaging code.
 
-**IMPORTANT**: To get more information on the current state of the package, use the tool `run_in_vm` to run CLI commands inside an isolated, headless VM containing the package in the system's global environment.
+**IMPORTANT**: To get more information on the current state of the package, use the tool `run_in_vm` to run shell scripts inside an isolated, headless VM containing the package in the system's global environment.
+
+**Each invocation of `run_in_vm` starts a fresh VM** that boots, executes your script, and shuts down. The VM has **no network access** and **no Nix binary**.
+
+The `run_in_vm` tool accepts two parameters:
+1. `script` (required): A complete shell script (without shebang) that will be executed and the output returned.
+2. `system_packages` (optional, default: "[ pkg ]"): A Nix list expression controlling how the package is installed in the VM.
+   - Use "[ pkg ]" (default) to install just the package itself
+   - Use "[ pkg (pkgs.python3.withPackages (ps: [ pkg ])) ]" to install the package and a Python environment containing it
+   - The expression has access to `pkg` (the built package) and `pkgs` (nixpkgs)
 
 Above improving the package, prioritize not breaking the build by limitting the scope of the improvement identified.
 If you do not identify any substantial feedback, if the package seems to work to a reasonable standard (avoid advanced setups), then please reply with an empty response.

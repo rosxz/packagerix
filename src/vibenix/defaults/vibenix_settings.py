@@ -125,7 +125,7 @@ DEFAULT_VIBENIX_SETTINGS = {
         "refinement": {
             "enabled": True,
             "chat_history": True,
-            "max_iterations": 3,
+            "max_iterations": 2,
         },
         "edit_tools": True,
         # Snippets to add to prompts dynamically

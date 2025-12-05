@@ -15,15 +15,34 @@ def init_flake():
     # Create the flake directory
     os.makedirs(config.flake_dir, mode=0o755, exist_ok=True)
 
-    # Copy only the necessary files
-    files_to_copy = ['flake.nix', 'package.nix']
+    # Create VM task directory for scripts and output
+    vm_task_dir = config.flake_dir / "vm-task"
+    os.makedirs(vm_task_dir, mode=0o755, exist_ok=True)
 
-    for filename in files_to_copy:
-        src = config.template_dir / filename
-        dst = config.flake_dir / filename
-        if src.exists():
-            shutil.copy2(src, dst)
-            os.chmod(dst, 0o644)
+    # Copy default packages.nix to flake directory (not vm-task subdir)
+    default_packages_src = config.template_dir / 'packages.nix'
+    default_packages_dst = config.flake_dir / 'packages.nix'
+    if default_packages_src.exists():
+        shutil.copy2(default_packages_src, default_packages_dst)
+        os.chmod(default_packages_dst, 0o644)
+
+    # Copy package.nix directly
+    package_nix_src = config.template_dir / 'package.nix'
+    package_nix_dst = config.flake_dir / 'package.nix'
+    if package_nix_src.exists():
+        shutil.copy2(package_nix_src, package_nix_dst)
+        os.chmod(package_nix_dst, 0o644)
+
+    # Template flake.nix with the flake directory path
+    flake_nix_src = config.template_dir / 'flake.nix'
+    flake_nix_dst = config.flake_dir / 'flake.nix'
+    if flake_nix_src.exists():
+        with open(flake_nix_src, 'r') as f:
+            template = Template(f.read())
+        flake_content = template.render(flake_dir=str(config.flake_dir))
+        with open(flake_nix_dst, 'w') as f:
+            f.write(flake_content)
+        os.chmod(flake_nix_dst, 0o644)
 
     # Generate flake.lock from template
     template_path = config.template_dir / 'flake.lock.j2'
