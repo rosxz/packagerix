@@ -28,27 +28,26 @@ def refine_package(curr: Solution, project_page: str) -> Solution:
     ccl_logger.enter_attribute("refine_package", log_start=True)
 
     coordinator_message("Starting refinement process for the package.")
+
     chat_history = None
+    if use_chat_history:
+        chat_history = [] # List to keep track of (user_prompt -> final model response) over the course of refinement
+
     iteration = 0
     while iteration < 3: # TODO make configurable
-        if use_chat_history:
-            chat_history = [] # List to keep track of (user_prompt -> final model response) over the course of refinement
-            # We reset it for each feedback from user
+        ccl_logger.log_iteration_start(iteration)
+        ccl_logger.write_kv("code", curr.code)
 
         # Get feedback (VM will be started/stopped automatically by run_in_vm calls)
         feedback = get_feedback(curr, project_page, chat_history=chat_history).strip()
-
-        ccl_logger.log_iteration_start(iteration)
-        ccl_logger.write_kv("code", curr.code)
         ccl_logger.write_kv("feedback", str(feedback))
 
         coordinator_message(f"Refining package based on feedback...")
         refine_code(view_package_contents(prompt="refine_code"), feedback, project_page, chat_history=chat_history)
-
         updated_code = get_package_contents()
         ccl_logger.write_kv("refined_code", updated_code)
-        attempt = execute_build_and_add_to_stack(updated_code)
 
+        attempt = execute_build_and_add_to_stack(updated_code)
         # Verify the updated code still builds
         refining_error = None
         if not attempt.result.success:
@@ -69,7 +68,7 @@ def refine_package(curr: Solution, project_page: str) -> Solution:
             if refining_error and use_chat_history:
                 from pydantic_ai.messages import ModelRequest, ModelResponse, UserPromptPart, TextPart
 
-                error_msg = f"The refined code introduced a errors during build: {enum_str(refining_error.type)}.\nError details:\n{refining_error.truncated()}\n\n Please fix them."
+                error_msg = f"The refined code introduced errors during build: {enum_str(refining_error.type)}.\nError details:\n{refining_error.truncated()}\n\n Please fix them."
                 user_message = ModelRequest(parts=[UserPromptPart(content=error_msg)])
                 model_message = ModelResponse(parts=[TextPart(content=attempt.code)])
 
