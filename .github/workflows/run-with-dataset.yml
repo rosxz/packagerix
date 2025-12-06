@@ -321,7 +321,7 @@ jobs:
           fi
 
           # Set Github token in nix config
-          echo "NIX_CONFIG='access-tokens = github.com=${{ secrets.GH_TOKEN }}'" >> $GITHUB_ENV
+          echo "NIX_CONFIG=access-tokens = github.com=${{ secrets.GH_TOKEN }}" >> $GITHUB_ENV
       
       - name: Process package request
         id: process
