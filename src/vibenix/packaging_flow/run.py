@@ -246,6 +246,7 @@ def evaluate_fetcher_content(content: str, version: str = None, pname: str = Non
 let pkgs = (builtins.getFlake (toString ./.)).inputs.nixpkgs.legacyPackages.${{builtins.currentSystem}};
 in with pkgs; stdenv.mkDerivation {{
   inherit (({wrapped_expr})) pname version src;
+  sourceRoot = ".";
   dontBuild = true;
   dontConfigure = true;
   dontFixup = true;
