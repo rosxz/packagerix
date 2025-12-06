@@ -78,7 +78,7 @@
             in
               # Validate that the result is a list (safety check against sandbox escapes)
               assert builtins.isList result;
-              result + defaultUtils;
+              result ++ defaultUtils;
 
           # Create symlink to the package in test user's home
           system.activationScripts.packageSymlink = ''
