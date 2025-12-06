@@ -264,16 +264,29 @@ in with pkgs; stdenv.mkDerivation {{
         ]
         try:
             result = subprocess.run(cmd, cwd=config.flake_dir, capture_output=True, text=True, check=True)
-            if result.returncode != 0:
-                ccl_logger.write_kv("nix_eval_error", result.stderr)
-                ccl_logger.leave_attribute(log_end=True)
-                raise RuntimeError(f"{result.stderr}")
-
             # Extract the store path from the output
             store_path = result.stdout.strip()
             ccl_logger.write_kv("fetcher_store_path", store_path)
-        except (subprocess.TimeoutExpired, subprocess.CalledProcessError) as e:
-            raise RuntimeError(f"Failed to evaluate project fetcher: {e}")
+
+            # If the store path contains only a single directory (ignoring hidden files),
+            # navigate into it automatically so README detection and file tools work correctly
+            from pathlib import Path
+            store_path_obj = Path(store_path)
+            entries = list(store_path_obj.iterdir())
+            non_hidden_dirs = [e for e in entries if e.is_dir() and not e.name.startswith('.')]
+
+            if len(non_hidden_dirs) == 1 and len([e for e in entries if not e.name.startswith('.')]) == 1:
+                # Only one non-hidden directory exists - use it as the source root
+                store_path = str(non_hidden_dirs[0])
+                ccl_logger.write_kv("auto_navigated_to", store_path)
+        except subprocess.CalledProcessError as e:
+            ccl_logger.write_kv("nix_eval_error", e.stderr)
+            ccl_logger.leave_attribute(log_end=True)
+            raise RuntimeError(f"Failed to evaluate project fetcher: {e.stderr}")
+        except subprocess.TimeoutExpired as e:
+            ccl_logger.write_kv("nix_eval_timeout", str(e))
+            ccl_logger.leave_attribute(log_end=True)
+            raise RuntimeError(f"Timeout evaluating project fetcher: {e}")
 
         ccl_logger.leave_attribute(log_end=True)
         return content, store_path

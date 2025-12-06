@@ -13,6 +13,9 @@ from vibenix.ccl_log import log_function_call
 logging.getLogger("paramiko").setLevel(logging.CRITICAL)
 logging.getLogger("paramiko.transport").setLevel(logging.CRITICAL)
 
+# Track if VM has been warmed up (first build can take a long time)
+_vm_warmed_up = False
+
 
 def _run_script_in_vm(script: str, system_packages: str, flake_path: str = ".", timeout: float = 300) -> str:
     """Run a shell script in a VM that starts, executes the script, and shuts down.
@@ -75,8 +78,6 @@ def _run_script_in_vm(script: str, system_packages: str, flake_path: str = ".", 
 
     # Close slave fd in parent process
     os.close(slave_fd)
-
-    print(f"Process started with PID {process.pid}")
 
     # Wait for the VM to complete (it will shutdown automatically)
     # Collect VM console output for debugging
@@ -144,6 +145,9 @@ def run_in_vm(*, script: str, system_packages: str = "[ pkg ]") -> str:
     The VM will start up, execute your script, write output to a file, and shut down automatically.
     The script runs as the 'test' user in the VM. The built package is available at /home/test/package.
 
+    The VM includes common utilities: bash, coreutils, findutils, grep, sed, awk, which, file, tree,
+    procps, util-linux, git and compression tools (gzip, bzip2, xz, zip/unzip).
+
     Arguments:
         script: Shell script content to execute (without #!/bin/sh shebang line).
                 The script will be executed with /bin/sh and output captured automatically.
@@ -156,10 +160,37 @@ def run_in_vm(*, script: str, system_packages: str = "[ pkg ]") -> str:
     Returns:
         The stdout and stderr output from the script execution.
     """
+    # Display function call with truncated script
+    script_preview = script[:50] + "..." if len(script) > 50 else script
+    script_preview = script_preview.replace('\n', '\\n')
+    print(f"📞 Function called: run_in_vm with script: '{script_preview}', system_packages: {system_packages}")
+
     from vibenix import config
+    global _vm_warmed_up
 
     try:
-        return _run_script_in_vm(script, system_packages, str(config.flake_dir))
+        # Perform warmup on first call with a longer timeout
+        if not _vm_warmed_up:
+            print("🔥 Warming up VM (first run may take longer)...")
+            warmup_script = "echo 'VM warmup successful'"
+            result = _run_script_in_vm(warmup_script, "[ pkg ]", str(config.flake_dir), timeout=300)
+
+            # Only mark as warmed up if successful
+            if "Error:" not in result:
+                _vm_warmed_up = True
+                print("✅ VM warmed up successfully")
+
+                # Clean up the VM disk image after warmup to save space
+                from pathlib import Path
+                qcow2_file = Path(config.flake_dir) / "nixos.qcow2"
+                if qcow2_file.exists():
+                    qcow2_file.unlink()
+            else:
+                # Warmup failed, return the error
+                return result
+
+        # Use shorter timeout for actual script execution (VM is already built)
+        return _run_script_in_vm(script, system_packages, str(config.flake_dir), timeout=30)
     except FileNotFoundError:
         return "Error: nixos-shell not found. Please ensure nixos-shell is installed."
     except Exception as e:

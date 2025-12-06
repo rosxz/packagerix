@@ -19,6 +19,8 @@ Please reply with a concise description of the feedback you identify, and not th
 
 **Each invocation of `run_in_vm` starts a fresh VM** that boots, executes your script, and shuts down. The VM has **no network access** and **no Nix binary**.
 
+The VM includes common utilities: bash, coreutils, findutils, grep, sed, awk, which, file, tree, procps, git and compression tools (gzip, bzip2, xz, zip/unzip).
+
 The `run_in_vm` tool accepts two parameters:
 1. `script` (required): A complete shell script (without shebang) that will be executed and the output returned.
 2. `system_packages` (optional, default: "[ pkg ]"): A Nix list expression controlling how the package is installed in the VM.

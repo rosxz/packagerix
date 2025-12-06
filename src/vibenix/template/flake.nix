@@ -37,115 +37,11 @@
       pkgs // { stdenv = ciStdenv; }) ./package.nix {};
     packages.x86_64-linux.nixpkgs-src = nixpkgs.outPath;
 
-    # VM configuration for nixos-shell testing with SSH
-    nixosConfigurations.vm = nixpkgs.lib.nixosSystem {
-      inherit system;
-      modules = [
-        ({ modulesPath, ... }: {
-          imports = [
-            "${modulesPath}/profiles/minimal.nix"
-            #"${modulesPath}/profiles/headless.nix"
-          ];
-
-          # Use same nixpkgs in VM's NIX_PATH
-          nix.nixPath = [ "nixpkgs=${nixpkgs.outPath}" ];
-          nix.registry.nixpkgs.flake = nixpkgs;
-
-          # Minimal VM configuration
-          documentation = {
-            enable = false;
-            doc.enable = false;
-            man.enable = false;
-            info.enable = false;
-            nixos.enable = false;
-          };
-
-          # Include the package being tested
-          environment.systemPackages =
-            let
-              pkg = self.packages.${system}.default;
-              # Try to create Python with the package; falls back to just pkg if it's not a Python package
-              pythonWithPkg = builtins.tryEval (pkgs.python3.withPackages (ps: [ pkg ]));
-            in
-              [ pkg ] ++ (if pythonWithPkg.success then [ pythonWithPkg.value ] else [ pkgs.python3 ]);
-
-          # Create symlink to the package in test user's home
-          system.activationScripts.packageSymlink = ''
-            mkdir -p /home/test
-            ln -sfn ${self.packages.${system}.default} /home/test/package
-            chown -h test:users /home/test/package
-          '';
-
-          # Basic VM settings
-          virtualisation = {
-            graphics = false;
-            #memorySize = 1024;
-          };
-
-          users.users.test = {
-            isNormalUser = true;
-            extraGroups = [ "wheel" ];
-            password = "test";
-          };
-          users.users.root.hashedPassword = "*"; # Disable root user
-          users.mutableUsers = false;
-
-          # CI/Non-interactive environment variables
-          environment.sessionVariables = {
-            CI = "true";
-            DEBIAN_FRONTEND = "noninteractive";
-            NONINTERACTIVE = "1";
-            TERM = "dumb";
-            NO_COLOR = "1";
-            FORCE_COLOR = "0";
-            CLICOLOR = "0";
-            CLICOLOR_FORCE = "0";
-            PROGRESS_NO_TRUNC = "1";
-          };
-
-          # Prevent mounting home directory for better isolation
-          nixos-shell.mounts.mountHome = false;
-
-          nix = {
-            settings.experimental-features = [ "nix-command" "flakes" ];
-            settings.substituters = [ "https://cache.nixos.org" ];
-            settings.trusted-public-keys = [ "cache.nixos.org-1:6NCHdD59X431o0gWypbMrAURkbJ16ZPMQFGspcDShjY=" ];
-          };
-
-          # Enable sudo without password for testing
-          security.sudo.wheelNeedsPassword = false;
-
-          # SSH and Port Forwarding to allow running commands on the VM
-          services.openssh.enable = true;
-          virtualisation.forwardPorts = [
-            { from = "host"; host.port = 2222; guest.port = 22; }
-          ];
-        })
-      ];
-    };
-
     # VM configuration for script-based testing (simpler, stateless)
     nixosConfigurations.vm-script = nixpkgs.lib.nixosSystem {
       inherit system;
       modules = [
-        ({ modulesPath, ... }: {
-         # imports = [
-         #   "${modulesPath}/profiles/minimal.nix"
-         # ];
-
-          # Use same nixpkgs in VM's NIX_PATH
-          nix.nixPath = [ "nixpkgs=${nixpkgs.outPath}" ];
-          nix.registry.nixpkgs.flake = nixpkgs;
-
-          # Minimal VM configuration
-          documentation = {
-            enable = false;
-            doc.enable = false;
-            man.enable = false;
-            info.enable = false;
-            nixos.enable = false;
-          };
-
+        ({ config, modulesPath, ... }: {
           # Include the package being tested
           # Import packages configuration (written by Python in flake directory)
           environment.systemPackages =
@@ -153,11 +49,36 @@
               pkg = self.packages.${system}.default;
               # Import the packages file with pkg and pkgs in scope
               result = builtins.scopedImport { inherit pkgs pkg; } ./packages.nix;
+              # Default utilities commonly needed for testing packages
+              defaultUtils = with pkgs; [
+                bash
+                coreutils
+                # Text processing and inspection
+                findutils
+                gnugrep
+                gnused
+                gawk
+                which
+                file
+                tree
+                # Process and system inspection
+                procps
+                util-linux
+                # Network utilities (useful even without network access)
+                iproute2
+                # Compression and archives
+                gzip
+                bzip2
+                xz
+                unzip
+                zip
+                # Version control (for packages that use it in tests)
+                git
+              ];
             in
               # Validate that the result is a list (safety check against sandbox escapes)
               assert builtins.isList result;
-              # Add bash and coreutils for script execution
-              result ++ [ pkgs.bash pkgs.coreutils ];
+              result + defaultUtils;
 
           # Create symlink to the package in test user's home
           system.activationScripts.packageSymlink = ''
@@ -222,6 +143,8 @@
               Type = "oneshot";
               User = "root"; # Need root to write to /task and poweroff
             };
+            # Set PATH to include all system packages (reuse systemPackages definition)
+            path = config.environment.systemPackages;
             script = ''
               set -x
               # Wait for /task to be available
@@ -246,6 +169,26 @@
               fi
               sync  # Ensure output is written
               systemctl poweroff
+            '';
+          };
+
+          # Safety timeout: force shutdown if VM hasn't completed within timeout
+          systemd.timers.vm-timeout = {
+            wantedBy = [ "timers.target" ];
+            timerConfig = {
+              OnBootSec = "{{ vm_timeout }}s";
+              AccuracySec = "1s";
+            };
+          };
+
+          systemd.services.vm-timeout = {
+            serviceConfig = {
+              Type = "oneshot";
+            };
+            script = ''
+              echo "VM timeout reached, forcing shutdown" >> /task/output.txt 2>&1 || true
+              sync
+              systemctl poweroff --force
             '';
           };
         })
