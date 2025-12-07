@@ -4,9 +4,9 @@ on:
   workflow_dispatch:
     inputs:
       package_ids:
-        description: 'Package IDs to build (e.g., "1-10,12,19"). Max 120 IDs. Leave empty for default (1-5)'
+        description: 'Package IDs to build (e.g., "1-10,12,19"). Max 120 IDs. Leave empty for default (1-30)'
         required: false
-        default: ''
+        default: '1-30'
         type: string
       use_cached_fetchers:
         description: 'Use cached fetchers for package requests'
