@@ -53,13 +53,6 @@ on:
         required: false
         default: '1'
         type: number
-  push:
-    branches:
-      - main
-    paths:
-      - 'research/packaging_requests/used_during_implementation.csv'
-      - 'src/**'
-      - '.github/workflows/train-on-dataset.yml'
 
 jobs:
   setup:
