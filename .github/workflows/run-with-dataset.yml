@@ -13,8 +13,8 @@ on:
         required: false
         default: true
         type: boolean
-      randomize:
-        description: 'Randomize package selection'
+      use_alternate_gemini_key:
+        description: 'Use alternate Gemini API key'
         required: false
         default: false
         type: boolean
@@ -196,11 +196,6 @@ jobs:
                               'dataset_dir': dataset_dir
                           })
 
-              # For URL-based datasets, randomize if requested and limit to 5 by default
-              randomize = '${{ github.event.inputs.randomize }}' == 'true'
-              if randomize:
-                  random.shuffle(matrix_data)
-
               # Limit to 5 for URL-based (legacy behavior)
               matrix_data = matrix_data[:5]
 
@@ -307,7 +302,12 @@ jobs:
           if [ "${{ steps.provider.outputs.provider }}" = "anthropic" ]; then
             echo "ANTHROPIC_API_KEY=${{ secrets.ANTHROPIC_API_KEY }}" >> $GITHUB_ENV
           elif [ "${{ steps.provider.outputs.provider }}" = "gemini" ]; then
-            echo "GEMINI_API_KEY=${{ secrets.GEMINI_API_KEY }}" >> $GITHUB_ENV
+            # Check if alternate Gemini key should be used
+            if [ "${{ github.event.inputs.use_alternate_gemini_key }}" = "true" ]; then
+              echo "GEMINI_API_KEY=${{ secrets.GEMINI_API_KEY2 }}" >> $GITHUB_ENV
+            else
+              echo "GEMINI_API_KEY=${{ secrets.GEMINI_API_KEY }}" >> $GITHUB_ENV
+            fi
           elif [ "${{ steps.provider.outputs.provider }}" = "ollama" ]; then
             # For Ollama via OpenAI endpoint, set a dummy API key if needed
             echo "OPENAI_API_KEY=dummy" >> $GITHUB_ENV
