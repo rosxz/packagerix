@@ -119,7 +119,7 @@ DEFAULT_VIBENIX_SETTINGS = {
 
     # General behavior, misc
     "behaviour": {
-        "progress_evaluation": True,
+        "progress_evaluation": False,
         "compare_template_builders": True,
         "packaging_loop": {
             "max_iterations": 20,
