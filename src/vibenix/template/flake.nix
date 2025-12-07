@@ -10,25 +10,39 @@
     system = "x86_64-linux";
     pkgs = import nixpkgs { inherit system; };
     ciStdenv = pkgs.stdenv // {
-      mkDerivation = args: pkgs.stdenv.mkDerivation (args // {
-        preBuild = ''
-          ${args.preBuild or ""}
-          # CI/Non-interactive environment
-          export CI=true
-          export DEBIAN_FRONTEND=noninteractive
-          export NONINTERACTIVE=1
-          
-          # Terminal and color control
-          export TERM=dumb
-          export NO_COLOR=1
-          export FORCE_COLOR=0
-          export CLICOLOR=0
-          export CLICOLOR_FORCE=0
-          
-          # Disable progress bars and spinners
-          export PROGRESS_NO_TRUNC=1
-        '';
-      });
+      mkDerivation = args:
+        let
+          # Define our preBuild additions once
+          ciPreBuild = original: ''
+            ${original}
+            # CI/Non-interactive environment
+            export CI=true
+            export DEBIAN_FRONTEND=noninteractive
+            export NONINTERACTIVE=1
+
+            # Terminal and color control
+            export TERM=dumb
+            export NO_COLOR=1
+            export FORCE_COLOR=0
+            export CLICOLOR=0
+            export CLICOLOR_FORCE=0
+
+            # Disable progress bars and spinners
+            export PROGRESS_NO_TRUNC=1
+          '';
+
+          # Wrapper that adds CI environment to any attribute set
+          addCIEnv = attrs: attrs // {
+            preBuild = ciPreBuild (attrs.preBuild or "");
+          };
+
+          # Wrap the args appropriately
+          wrappedArgs =
+            if builtins.isFunction args
+            then (finalAttrs: addCIEnv (args finalAttrs))
+            else addCIEnv args;
+        in
+        pkgs.stdenv.mkDerivation wrappedArgs;
     };
   in
    {
