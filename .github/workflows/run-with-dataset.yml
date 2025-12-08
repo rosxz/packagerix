@@ -4,7 +4,7 @@ on:
   workflow_dispatch:
     inputs:
       package_ids:
-        description: 'Package IDs to build (e.g., "1-10,12,19"). Max 120 IDs. Leave empty for default (1-30)'
+        description: 'Package IDs to build (e.g., "1-10,12,19"). Max 254 IDs. Leave empty for default (1-30)'
         required: false
         default: '1-30'
         type: string
@@ -183,8 +183,8 @@ jobs:
                   # Parse the ID range specification
                   try:
                       selected_ids = parse_id_ranges(package_ids_input)
-                      # Validate constraints (max 120 IDs, valid range 1-532)
-                      validate_id_range_constraints(selected_ids, max_count=120, valid_range=(1, 532))
+                      # Validate constraints (max 254 IDs, valid range 1-532)
+                      validate_id_range_constraints(selected_ids, max_count=254, valid_range=(1, 532))
                   except ValueError as e:
                       raise ValueError(f'Invalid package_ids input: {e}')
               else:
