@@ -242,7 +242,7 @@ jobs:
   build-test-packages:
     needs: setup
     runs-on: ubuntu-latest
-    name: ${{ matrix.id || matrix.issue_number }}: ${{ matrix.repo_name || matrix.package_name }}
+    name: "${{ matrix.id || matrix.issue_number }}: ${{ matrix.repo_name || matrix.package_name }}"
     timeout-minutes: 45
     strategy:
       matrix: ${{ fromJson(needs.setup.outputs.matrix) }}
