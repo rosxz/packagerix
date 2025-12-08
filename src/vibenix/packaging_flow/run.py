@@ -251,7 +251,24 @@ in with pkgs; stdenv.mkDerivation {{
   dontConfigure = true;
   dontFixup = true;
   installPhase = ''
-    cp -r source/. $out
+    shopt -s dotglob nullglob
+    entries=(*)
+    # Filter out env-vars file
+    filtered=()
+    for entry in "''${{entries[@]}}"; do
+      if [[ "''$entry" != "env-vars" ]]; then
+        filtered+=("''$entry")
+      fi
+    done
+    # If there's exactly one directory, copy its contents
+    if [[ ''${{#filtered[@]}} -eq 1 && -d "''${{filtered[0]}}" ]]; then
+      cp -r "''${{filtered[0]}}/." $out
+    else
+      # Multiple items or not a single directory, copy everything except env-vars
+      for entry in "''${{filtered[@]}}"; do
+        cp -r "''$entry" $out/
+      done
+    fi
   '';
 }}
 """
