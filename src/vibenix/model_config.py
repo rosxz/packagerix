@@ -237,10 +237,30 @@ def initialize_model_config():
             api_key = get_api_key("GEMINI_API_KEY")
             if not api_key:
                 raise ValueError("GEMINI_API_KEY not found in environment or secure storage. Run interactively to configure.")
-        
+
         logger.info(f"Using Gemini model: {model_name}")
-        provider = GoogleProvider(api_key=api_key, http_client=create_retrying_client())
-        
+
+        # Create a google.genai.Client with our retrying transport
+        from google.genai import Client
+        from google.genai.types import HttpOptions
+        from pydantic_ai.models import get_user_agent
+
+        # Create the retrying client and extract its transport
+        retrying_client = create_retrying_client()
+
+        http_options = HttpOptions(
+            headers={'User-Agent': get_user_agent()},
+            async_client_args={'transport': retrying_client._transport}
+        )
+
+        gemini_client = Client(
+            api_key=api_key,
+            http_options=http_options
+        )
+
+        # Pass the configured client to GoogleProvider
+        provider = GoogleProvider(client=gemini_client)
+
         env_settings = load_model_settings_from_env("gemini")
         model_settings = create_gemini_settings(env_settings)
         _cached_model = GoogleModel(config["model_name"], provider=provider, settings=model_settings)
@@ -293,28 +313,67 @@ def calc_model_pricing(model: str, prompt_tokens: int, completion_tokens: int,
 
 
 def create_retrying_client():
-    """Create a client with smart retry handling for multiple error types."""
+    """Create a client with smart retry handling for rate limits and transient failures.
 
-    from pydantic_ai.exceptions import UnexpectedModelBehavior, UsageLimitExceeded
+    This follows pydantic-ai best practices:
+    - Respects Retry-After headers from 429 responses (when provided by API)
+    - Uses exponential backoff as fallback for better behavior with concurrent jobs
+    - Retries on network errors and server errors (5xx)
+    - Up to 10 retries with ~5.5 minutes total wait time to handle persistent rate limiting
+    """
+
     from pydantic_ai.retries import AsyncTenacityTransport, RetryConfig, wait_retry_after
     from httpx import AsyncClient, HTTPStatusError, Response
     from tenacity import retry_if_exception_type, stop_after_attempt, wait_exponential
 
     def should_retry_status(response: Response):
-        """Raise exceptions for retryable HTTP status codes."""
+        """Raise HTTPStatusError for retryable status codes (429, 5xx).
+
+        The wait_retry_after strategy will automatically extract and respect
+        Retry-After headers from 429 responses before they become exceptions.
+        """
         if response.status_code in (429, 502, 503, 504):
-            response.raise_for_status()  # This will raise HTTPStatusError
+            response.raise_for_status()
+
+    def log_retry_attempt(retry_state):
+        """Log retry attempts with wait time information."""
+        exception = retry_state.outcome.exception() if retry_state.outcome else None
+        attempt_number = retry_state.attempt_number
+
+        # Calculate wait time using the same strategy
+        wait_func = wait_retry_after(
+            fallback_strategy=wait_exponential(multiplier=3, min=3, max=60),
+            max_wait=300
+        )
+        wait_seconds = wait_func(retry_state)
+
+        # Check if we got a Retry-After header
+        retry_after_header = None
+        if isinstance(exception, HTTPStatusError):
+            retry_after_header = exception.response.headers.get('retry-after')
+
+        if retry_after_header:
+            logger.warning(
+                f"Rate limited by API (attempt {attempt_number}/10). "
+                f"Retry-After header: {retry_after_header}. Waiting {wait_seconds:.1f} seconds..."
+            )
+        else:
+            logger.warning(
+                f"Request failed (attempt {attempt_number}/10). "
+                f"Using exponential backoff: waiting {wait_seconds:.1f} seconds... "
+                f"Error: {type(exception).__name__}"
+            )
 
     transport = AsyncTenacityTransport(
-        # Create retry configuration for handling transient failures
-        config = RetryConfig(
-            retry=retry_if_exception_type((HTTPStatusError,  ConnectionError)),
+        config=RetryConfig(
+            retry=retry_if_exception_type((HTTPStatusError, ConnectionError)),
             wait=wait_retry_after(
-                fallback_strategy=wait_exponential(multiplier=5, min=3, max=60),
+                fallback_strategy=wait_exponential(multiplier=3, min=3, max=60),
                 max_wait=300
             ),
-            stop=stop_after_attempt(5),
+            stop=stop_after_attempt(10),
             reraise=True,
+            before_sleep=log_retry_attempt,
         ),
         validate_response=should_retry_status
     )
