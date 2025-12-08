@@ -246,13 +246,22 @@ def initialize_model_config():
         _cached_model = GoogleModel(config["model_name"], provider=provider, settings=model_settings)
     else:
         # Default to OpenAI-compatible models
-        api_key = os.environ.get("OPENAI_API_KEY", "dummy")
+        # Get OpenAI API key - check environment first (as override), then secure storage
+        from vibenix.secure_keys import get_api_key
+        api_key = os.environ.get("OPENAI_API_KEY")
+        if not api_key:
+            api_key = get_api_key("OPENAI_API_KEY")
+            if not api_key:
+                # For local/Ollama endpoints, API key is optional
+                logger.info("No OPENAI_API_KEY found in environment or secure storage, using 'dummy'")
+                api_key = "dummy"
+
         base_url = config.get("base_url")
-        
+
         # Log configuration details
         if "OPENAI_BASE_URL" in os.environ:
             logger.info(f"Set OPENAI_BASE_URL to {os.environ['OPENAI_BASE_URL']}")
-        
+
         logger.info(f"Using OpenAI-compatible model: {model_name} at {base_url}")
         provider = OpenAIProvider(base_url=base_url, api_key=api_key, http_client=create_retrying_client())
         

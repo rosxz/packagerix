@@ -112,7 +112,16 @@ def show_model_config_terminal() -> Optional[Dict[str, str]]:
         if not openai_api_base:
             # Use default if not provided
             openai_api_base = "http://llama.digidow.ins.jku.at:11434/v1/"
-        api_key = os.environ.get("OPENAI_API_KEY", "dummy")
+
+        # Handle OpenAI API key
+        if not handle_api_key_terminal("OPENAI_API_KEY", "OpenAI", "https://platform.openai.com/api-keys"):
+            return None
+        # Get the API key for model selection
+        from vibenix.secure_keys import get_api_key
+        api_key = os.environ.get("OPENAI_API_KEY") or get_api_key("OPENAI_API_KEY")
+        if not api_key:
+            # For local/Ollama endpoints, API key is optional
+            api_key = "dummy"
     elif provider == "anthropic":
         # Handle Anthropic API key
         if not handle_api_key_terminal("ANTHROPIC_API_KEY", "Anthropic", "https://console.anthropic.com/"):
@@ -340,11 +349,11 @@ def choose_anthropic_model_terminal(api_key: str) -> Optional[str]:
 def save_configuration(provider: str, model: str, openai_api_base: str, model_settings: Dict[str, Any] = None):
     """Save the configuration for future use."""
     # Don't save model_settings - these should be in code only
-    
+
     # Save to config file
     config_data = {
         "provider": provider,
-        "model": f"{provider}/{model}",
+        "model": model,
         "backend": "pydantic-ai",
         "openai_api_base": openai_api_base
     }
