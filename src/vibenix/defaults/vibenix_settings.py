@@ -107,11 +107,13 @@ DEFAULT_PROMPT_TOOLS.update(
 ### Settings ##################################################################
 DEFAULT_VIBENIX_SETTINGS = {
     # Individual tool toggles (disable specific tools globally)
-    # Disabled by default: semantic search and nix function search
+    # Disabled by default: semantic search, nix function search, nixpkgs manual docs, similar builder patterns, error pagination
     "tools": {
         **{tool: True for tool in ALL_TOOLS},
         "search_nixpkgs_for_package_semantic": False,
         "search_nix_functions": False,
+        "search_nixpkgs_manual_documentation": False,
+        "find_similar_builder_patterns": False,
     },
 
     # Per-prompt tool configuration
@@ -119,8 +121,8 @@ DEFAULT_VIBENIX_SETTINGS = {
 
     # General behavior, misc
     "behaviour": {
-        "progress_evaluation": False,
-        "compare_template_builders": True,
+        "progress_evaluation": True,
+        "compare_template_builders": False,
         "packaging_loop": {
             "max_iterations": 20,
             "max_consecutive_non_build_errors": 99,
