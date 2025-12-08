@@ -251,7 +251,7 @@ in with pkgs; stdenv.mkDerivation {{
   dontConfigure = true;
   dontFixup = true;
   installPhase = ''
-    cp -r . $out
+    cp -r source/. $out
   '';
 }}
 """
