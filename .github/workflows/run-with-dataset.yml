@@ -40,19 +40,16 @@ on:
           - https://api.openai.com
           - https://openrouter.ai/api
           - http://hive.van-duck.ts.net:11434
-      dataset_manual:
-        description: 'Dataset directory/file path. URL-based: packaging_requests. CSV-based: single_fetcher_2025-08-01_2025-11-20.csv'
+      dataset:
+        description: 'Which dataset to use for testing'
         required: false
-        default: 'single_fetcher_2025-08-01_2025-11-20.csv'
-        type: string
-      csv_file:
-        description: 'Which CSV file to use within the dataset'
-        required: false
-        default: 'implementation'
+        default: 'Recent merges'
         type: choice
         options:
-          - implementation
-          - evaluation
+          - Recent merges
+          - Open pkg requests impl
+          - Open pkg requests eval
+          - October repo collection
       concurrent_jobs:
         description: 'Number of jobs to run in parallel (1 to avoid rate limits)'
         required: false
@@ -108,8 +105,7 @@ jobs:
           echo "- **Use cached fetchers**: ${{ github.event.inputs.use_cached_fetchers || 'true' }}" >> $GITHUB_STEP_SUMMARY
           echo "- **Gemini API key**: ${{ github.event.inputs.gemini_api_key || 'key1 (default)' }}" >> $GITHUB_STEP_SUMMARY
           echo "- **Model**: ${{ github.event.inputs.model || 'gemini/gemini-2.5-flash (default)' }}" >> $GITHUB_STEP_SUMMARY
-          echo "- **Dataset**: ${{ github.event.inputs.dataset_manual || 'single_fetcher_2025-08-01_2025-11-20.csv (default)' }}" >> $GITHUB_STEP_SUMMARY
-          echo "- **CSV file**: ${{ github.event.inputs.csv_file || 'implementation (default)' }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Dataset**: ${{ github.event.inputs.dataset || 'Recent merges (default)' }}" >> $GITHUB_STEP_SUMMARY
           echo "- **Concurrent jobs**: ${{ github.event.inputs.concurrent_jobs || '1 (default)' }}" >> $GITHUB_STEP_SUMMARY
 
           # Add API base URL if not default
@@ -147,10 +143,19 @@ jobs:
           from id_range_parser import parse_id_ranges, validate_id_range_constraints
 
           matrix_data = []
-          dataset_path = '${{ github.event.inputs.dataset_manual || 'packaging_requests' }}'
+
+          # Map dataset names to file paths
+          dataset_choice = '${{ github.event.inputs.dataset || 'Recent merges' }}'
+          dataset_map = {
+              'Recent merges': 'single_fetcher_2025-08-01_2025-11-20.csv',
+              'Open pkg requests impl': 'packaging_requests/used_during_implementation.csv',
+              'Open pkg requests eval': 'packaging_requests/post_project_evaluation.csv',
+              'October repo collection': 'october_25_dataset/used_during_implementation.csv'
+          }
+          dataset_path = dataset_map.get(dataset_choice, 'single_fetcher_2025-08-01_2025-11-20.csv')
 
           # Detect dataset type: if it ends with .csv, it's the new CSV format
-          if dataset_path.endswith('.csv'):
+          if dataset_path.endswith('.csv') and '/' not in dataset_path:
               # New CSV-based format with pname, version, fetcher columns and random_order ID
               csv_file = f'research/{dataset_path}'
 
@@ -203,14 +208,10 @@ jobs:
 
           else:
               # Original URL-based format from directory (legacy - doesn't use IDs)
-              dataset_dir = f'research/{dataset_path}'
-
-              # Select CSV file based on csv_file choice
-              csv_file_choice = '${{ github.event.inputs.csv_file || 'implementation' }}'
-              if csv_file_choice == 'implementation':
-                  csv_file = f'{dataset_dir}/used_during_implementation.csv'
-              else:  # evaluation
-                  csv_file = f'{dataset_dir}/post_project_evaluation.csv'
+              # dataset_path already includes the directory and filename
+              csv_file = f'research/{dataset_path}'
+              # Extract directory from the path
+              dataset_dir = f'research/{dataset_path.rsplit(\"/\", 1)[0]}'
 
               with open(csv_file, 'r') as f:
                   reader = csv.DictReader(f)
