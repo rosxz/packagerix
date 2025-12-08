@@ -242,7 +242,7 @@ jobs:
   build-test-packages:
     needs: setup
     runs-on: ubuntu-latest
-    name: Package ${{ matrix.repo_name || matrix.package_name }}
+    name: ${{ matrix.id || matrix.issue_number }}: ${{ matrix.repo_name || matrix.package_name }}
     timeout-minutes: 45
     strategy:
       matrix: ${{ fromJson(needs.setup.outputs.matrix) }}
@@ -486,13 +486,13 @@ jobs:
           if [ "${{ matrix.dataset_type }}" = "csv-based" ]; then
             identifier="${{ matrix.package_name }}"
             log_file="${identifier}.log"
-            echo "## ${status_emoji} Package: ${{ matrix.pname }}" >> $GITHUB_STEP_SUMMARY
+            echo "## ${{ matrix.id }}: ${status_emoji} Package: ${{ matrix.pname }}" >> $GITHUB_STEP_SUMMARY
             echo "- Package name: ${{ matrix.package_name }}" >> $GITHUB_STEP_SUMMARY
             echo "- Version: ${{ matrix.version }}" >> $GITHUB_STEP_SUMMARY
           else
             identifier="${{ matrix.issue_number }}"
             log_file="${identifier}.log"
-            echo "## ${status_emoji} Issue #${{ matrix.issue_number }}" >> $GITHUB_STEP_SUMMARY
+            echo "## ${{ matrix.issue_number }}: ${status_emoji} Issue #${{ matrix.issue_number }}" >> $GITHUB_STEP_SUMMARY
             echo "- Repository: ${{ matrix.repo_url }}" >> $GITHUB_STEP_SUMMARY
             echo "- Packaging Request: https://github.com/NixOS/nixpkgs/issues/${{ matrix.issue_number }}" >> $GITHUB_STEP_SUMMARY
           fi
