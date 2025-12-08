@@ -13,11 +13,15 @@ on:
         required: false
         default: true
         type: boolean
-      use_alternate_gemini_key:
-        description: 'Use alternate Gemini API key'
+      gemini_api_key:
+        description: 'Which Gemini API key to use'
         required: false
-        default: false
-        type: boolean
+        default: 'key1'
+        type: choice
+        options:
+          - key1
+          - key2
+          - key3
       model:
         description: 'Model to use (e.g., anthropic/claude-3-5-haiku-20241022, ollama/qwen2.5-coder:32b, gemini/gemini-2.5-flash, or openai/gpt-4.1-mini-2025-04-14)'
         required: false
@@ -97,7 +101,7 @@ jobs:
           echo "#### Workflow Inputs" >> $GITHUB_STEP_SUMMARY
           echo "- **Package IDs**: ${{ github.event.inputs.package_ids || '1-30 (default)' }}" >> $GITHUB_STEP_SUMMARY
           echo "- **Use cached fetchers**: ${{ github.event.inputs.use_cached_fetchers || 'true' }}" >> $GITHUB_STEP_SUMMARY
-          echo "- **Use alternate Gemini key**: ${{ github.event.inputs.use_alternate_gemini_key || 'false' }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Gemini API key**: ${{ github.event.inputs.gemini_api_key || 'key1 (default)' }}" >> $GITHUB_STEP_SUMMARY
           echo "- **Model**: ${{ github.event.inputs.model || 'gemini/gemini-2.5-flash (default)' }}" >> $GITHUB_STEP_SUMMARY
           echo "- **Dataset**: ${{ github.event.inputs.dataset_manual || 'single_fetcher_2025-08-01_2025-11-20.csv (default)' }}" >> $GITHUB_STEP_SUMMARY
           echo "- **CSV file**: ${{ github.event.inputs.csv_file || 'implementation (default)' }}" >> $GITHUB_STEP_SUMMARY
@@ -322,12 +326,18 @@ jobs:
           if [ "${{ steps.provider.outputs.provider }}" = "anthropic" ]; then
             echo "ANTHROPIC_API_KEY=${{ secrets.ANTHROPIC_API_KEY }}" >> $GITHUB_ENV
           elif [ "${{ steps.provider.outputs.provider }}" = "gemini" ]; then
-            # Check if alternate Gemini key should be used
-            if [ "${{ github.event.inputs.use_alternate_gemini_key }}" = "true" ]; then
-              echo "GEMINI_API_KEY=${{ secrets.GEMINI_API_KEY2 }}" >> $GITHUB_ENV
-            else
-              echo "GEMINI_API_KEY=${{ secrets.GEMINI_API_KEY }}" >> $GITHUB_ENV
-            fi
+            # Select Gemini API key based on choice
+            case "${{ github.event.inputs.gemini_api_key || 'key1' }}" in
+              key1)
+                echo "GEMINI_API_KEY=${{ secrets.GEMINI_API_KEY }}" >> $GITHUB_ENV
+                ;;
+              key2)
+                echo "GEMINI_API_KEY=${{ secrets.GEMINI_API_KEY2 }}" >> $GITHUB_ENV
+                ;;
+              key3)
+                echo "GEMINI_API_KEY=${{ secrets.GEMINI_API_KEY3 }}" >> $GITHUB_ENV
+                ;;
+            esac
           elif [ "${{ steps.provider.outputs.provider }}" = "ollama" ]; then
             # For Ollama via OpenAI endpoint, set a dummy API key if needed
             echo "OPENAI_API_KEY=dummy" >> $GITHUB_ENV
@@ -478,6 +488,12 @@ jobs:
           fi
 
           echo "- Status: ${status_emoji} **${status_text}**" >> $GITHUB_STEP_SUMMARY
+
+          # Show which Gemini API key was used if provider is Gemini
+          if [ "${{ steps.provider.outputs.provider }}" = "gemini" ]; then
+            echo "- Gemini API key: ${{ github.event.inputs.gemini_api_key || 'key1' }}" >> $GITHUB_STEP_SUMMARY
+          fi
+
           if [ -n "${{ steps.process.outputs.package_name }}" ]; then
             echo "- Generated package name: ${{ steps.process.outputs.package_name }}" >> $GITHUB_STEP_SUMMARY
           fi
