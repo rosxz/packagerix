@@ -282,13 +282,13 @@ jobs:
           name: vibenix
           authToken: '${{ secrets.CACHIX_TOKEN }}'
         
-      - name: Tailscale
-        if: ${{ steps.provider.outputs.provider == 'ollama' || steps.provider.outputs.provider == 'openai' }}
-        uses: tailscale/github-action@v3
-        with:
-          oauth-client-id: ${{ secrets.TS_OAUTH_CLIENT_ID }}
-          oauth-secret: ${{ secrets.TS_OAUTH_SECRET }}
-          tags: tag:oauth-client-gh-action-hydralisk-ollama
+      #- name: Tailscale
+      #  if: ${{ steps.provider.outputs.provider == 'ollama' || steps.provider.outputs.provider == 'openai' }}
+      #  uses: tailscale/github-action@v3
+      #  with:
+      #    oauth-client-id: ${{ secrets.TS_OAUTH_CLIENT_ID }}
+      #    oauth-secret: ${{ secrets.TS_OAUTH_SECRET }}
+      #    tags: tag:oauth-client-gh-action-hydralisk-ollama
           
       - name: Create vibenix config
         run: |
