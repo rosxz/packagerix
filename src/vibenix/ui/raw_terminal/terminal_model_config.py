@@ -156,16 +156,27 @@ def show_model_config_terminal() -> Optional[Dict[str, str]]:
     
     if not model:
         return None
-    
+
+    # For OpenRouter, model names already include provider prefix (e.g., 'openai/gpt-4')
+    # Don't add prefix again in that case
+    is_openrouter = openai_api_base and 'openrouter.ai' in openai_api_base
+
+    if is_openrouter and '/' in model:
+        # Model already has provider prefix
+        full_model_name = model
+    else:
+        # Add provider prefix
+        full_model_name = f"{provider}/{model}"
+
     # Save configuration
-    print(f"\n✅ Saving configuration: {provider}/{model}")
-    
+    print(f"\n✅ Saving configuration: {full_model_name}")
+
     # Save to config file
     save_configuration(provider, model, openai_api_base)
-    
+
     return {
         "provider": provider,
-        "model": f"{provider}/{model}",
+        "model": full_model_name,
         "openai_api_base": openai_api_base
     }
 
@@ -208,26 +219,32 @@ def handle_openai_api_base_terminal() -> Optional[str]:
 
 
 def choose_model_terminal(base_url: str, api_key: str) -> Optional[str]:
-    """Let user choose a model from available options."""
+    """Let user choose a model from available options.
+
+    Note: For OpenRouter, model names already include provider prefix (e.g., 'openai/gpt-4').
+    """
     print("\n🤔 Fetching available models...")
-    
+
+    is_openrouter = base_url and 'openrouter.ai' in base_url
     models = get_available_models_from_endpoint(base_url, api_key)
-    
+
     if not models:
         print("\n⚠️  No models found via API. Enter model name manually:")
+        if is_openrouter:
+            print("For OpenRouter, include provider prefix (e.g., 'openai/gpt-4-turbo')")
         model = input("Model name: ").strip()
         return model if model else None
-    
+
     print(f"\n📋 Available models ({len(models)}):")
     for i, model in enumerate(models, 1):
         print(f"{i}. {model}")
-    
+
     while True:
         choice = input(f"\nSelect model (1-{len(models)}) or 'q' to quit: ").strip().lower()
-        
+
         if choice == 'q':
             return None
-        
+
         try:
             idx = int(choice) - 1
             if 0 <= idx < len(models):

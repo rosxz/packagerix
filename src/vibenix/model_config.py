@@ -8,6 +8,7 @@ import json
 from typing import Optional, Dict, Any, Tuple
 from pydantic_ai.models.openai import OpenAIChatModel, OpenAIChatModelSettings
 from pydantic_ai.providers.openai import OpenAIProvider
+from pydantic_ai.providers.openrouter import OpenRouterProvider
 from pydantic_ai.models.anthropic import AnthropicModel, AnthropicModelSettings
 from pydantic_ai.providers.anthropic import AnthropicProvider
 from pydantic_ai.models.google import GoogleModel, GoogleModelSettings
@@ -266,25 +267,65 @@ def initialize_model_config():
         _cached_model = GoogleModel(config["model_name"], provider=provider, settings=model_settings)
     else:
         # Default to OpenAI-compatible models
-        # Get OpenAI API key - check environment first (as override), then secure storage
-        from vibenix.secure_keys import get_api_key
-        api_key = os.environ.get("OPENAI_API_KEY")
-        if not api_key:
-            api_key = get_api_key("OPENAI_API_KEY")
-            if not api_key:
-                # For local/Ollama endpoints, API key is optional
-                logger.info("No OPENAI_API_KEY found in environment or secure storage, using 'dummy'")
-                api_key = "dummy"
-
         base_url = config.get("base_url")
 
-        # Log configuration details
-        if "OPENAI_BASE_URL" in os.environ:
-            logger.info(f"Set OPENAI_BASE_URL to {os.environ['OPENAI_BASE_URL']}")
+        # Check if using OpenRouter
+        is_openrouter = base_url and 'openrouter.ai' in base_url
 
-        logger.info(f"Using OpenAI-compatible model: {model_name} at {base_url}")
-        provider = OpenAIProvider(base_url=base_url, api_key=api_key, http_client=create_retrying_client())
-        
+        if is_openrouter:
+            # Use OpenRouterProvider for OpenRouter endpoints
+            from vibenix.secure_keys import get_api_key
+            api_key = os.environ.get("OPENROUTER_API_KEY") or os.environ.get("OPENAI_API_KEY")
+            if not api_key:
+                api_key = get_api_key("OPENROUTER_API_KEY")
+                if not api_key:
+                    api_key = get_api_key("OPENAI_API_KEY")
+                    if not api_key:
+                        raise ValueError("OPENROUTER_API_KEY not found in environment or secure storage. Run interactively to configure.")
+
+            # OpenRouter requires provider prefix in model name (e.g., "openai/gpt-4")
+            # If the model name doesn't have a prefix, try to infer it
+            if '/' not in model_name:
+                # Try to infer provider from model name
+                if model_name.startswith('gpt'):
+                    model_name = f"openai/{model_name}"
+                    logger.warning(f"Model name missing provider prefix for OpenRouter. Inferred: {model_name}")
+                elif model_name.startswith('claude'):
+                    model_name = f"anthropic/{model_name}"
+                    logger.warning(f"Model name missing provider prefix for OpenRouter. Inferred: {model_name}")
+                elif model_name.startswith('gemini'):
+                    model_name = f"google/{model_name}"
+                    logger.warning(f"Model name missing provider prefix for OpenRouter. Inferred: {model_name}")
+                else:
+                    logger.error(f"Cannot infer provider prefix for OpenRouter model: {model_name}")
+                    raise ValueError(
+                        f"OpenRouter requires provider prefix in model name (e.g., 'openai/gpt-4'). "
+                        f"Got: '{model_name}'. Please reconfigure with the full model name."
+                    )
+
+            logger.info(f"Using OpenRouter model: {model_name}")
+            provider = OpenRouterProvider(api_key=api_key, http_client=create_retrying_client())
+
+            # Update the config cache with the corrected model name
+            _cached_config["model_name"] = model_name
+        else:
+            # Use OpenAIProvider for other OpenAI-compatible endpoints
+            from vibenix.secure_keys import get_api_key
+            api_key = os.environ.get("OPENAI_API_KEY")
+            if not api_key:
+                api_key = get_api_key("OPENAI_API_KEY")
+                if not api_key:
+                    # For local/Ollama endpoints, API key is optional
+                    logger.info("No OPENAI_API_KEY found in environment or secure storage, using 'dummy'")
+                    api_key = "dummy"
+
+            # Log configuration details
+            if "OPENAI_BASE_URL" in os.environ:
+                logger.info(f"Set OPENAI_BASE_URL to {os.environ['OPENAI_BASE_URL']}")
+
+            logger.info(f"Using OpenAI-compatible model: {model_name} at {base_url}")
+            provider = OpenAIProvider(base_url=base_url, api_key=api_key, http_client=create_retrying_client())
+
         env_settings = load_model_settings_from_env("openai")
         model_settings = create_openai_settings(env_settings)
         _cached_model = OpenAIChatModel(config["model_name"], provider=provider, settings=model_settings)
