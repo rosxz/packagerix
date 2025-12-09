@@ -21,11 +21,14 @@ nix develop
 
 ### Running the Application
 ```bash
-# Run the Textual UI (recommended)
+# Run the terminal UI (default)
 nix develop -c python -m vibenix
 
 # Or if already in nix develop shell:
 python -m vibenix
+
+# Run the Textual UI (unmaintained, not recommended)
+python -m vibenix --textual
 ```
 
 ### Running Tests
@@ -72,8 +75,8 @@ nix build
    - `template/`: Language-specific Nix package templates
 
 4. **User Interface** (`src/vibenix/ui/`)
-   - `textual/`: Rich TUI using Textual framework
-   - `raw_terminal/`: Fallback terminal interface
+   - `raw_terminal/`: Terminal interface (default, actively maintained)
+   - `textual/`: Rich TUI using Textual framework (unmaintained)
    - `conversation.py`: Manages the conversation flow between user and AI
 
 ### Key Design Patterns

@@ -19,12 +19,14 @@ I could also imagine providing this functionality as a hosted service to custome
 
 ### How to run this
 
-To run the textual UI use:
+To run vibenix with the default terminal UI:
 ```
 nix develop -c python -m vibenix
 ```
 
-You will be asked to pick a model and also provide an API key if requried.
+You will be asked to pick a model and also provide an API key if required.
+
+**Note:** There is also a `--textual` flag for a Textual-based UI, but it is currently unmaintained and not recommended for use.
 
 Models we have tested to perform well are our default model `gemini-2.5-flash` (38 %),
 `claude-3-5-haiku-20241022` (32 %) and `o3-mini-2025-01-31` (26 %).

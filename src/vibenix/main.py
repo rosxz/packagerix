@@ -195,21 +195,27 @@ def main():
         description="Vibenix - AI-powered Nix package builder",
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""Examples:
-  vibenix                                         # Run with interactive textual UI
-  vibenix --raw                                   # Run with terminal-only interface
-  vibenix --raw https://github.com/user/repo      # Package a specific repo
-  vibenix --raw --output-dir out https://github.com/user/repo  # Save output
+  vibenix                                         # Run with interactive terminal UI (default)
+  vibenix --textual                               # Run with textual UI (unmaintained)
+  vibenix https://github.com/user/repo            # Package a specific repo
+  vibenix --output-dir out https://github.com/user/repo  # Save output
   vibenix --configure-settings                    # Configure vibenix settings
   vibenix --help                                  # Show this help
 """
     )
-    
+
+    parser.add_argument(
+        "--textual",
+        action="store_true",
+        help="Use textual UI instead of terminal interface (unmaintained)"
+    )
+
     parser.add_argument(
         "--raw",
         action="store_true",
-        help="Use terminal-only interface instead of textual UI"
+        help="Deprecated: terminal mode is now the default (this flag does nothing)"
     )
-    
+
     parser.add_argument(
         "--configure-vibenix",
         action="store_true",
@@ -219,27 +225,27 @@ def main():
     parser.add_argument(
         "--output-dir",
         type=str,
-        help="Directory to save successful package.nix files (only works with --raw)"
+        help="Directory to save successful package.nix files"
     )
-    
+
     parser.add_argument(
         "project_url",
         default=None,
         nargs="?",
-        help="GitHub project URL to package (only works with --raw)"
+        help="GitHub project URL to package"
     )
 
     parser.add_argument(
         "revision",
         type=str,
         nargs="?",
-        help="Project revision to package (e.g., commit hash, tag, release name) (optional, only works with --raw)."
+        help="Project revision to package (e.g., commit hash, tag, release name) (optional)."
     )
 
     parser.add_argument(
         "--fetcher",
         default=None,
-        help="Path to .nix file with fetcher for the project source code (only works with --raw)."
+        help="Path to .nix file with fetcher for the project source code."
     )
 
     parser.add_argument(
@@ -247,7 +253,7 @@ def main():
         type=str,
         default=None,
         metavar="CSV_FILE",
-        help="Path to CSV dataset file containing package info (only works with --raw). Requires --csv-package."
+        help="Path to CSV dataset file containing package info. Requires --csv-package."
     )
 
     parser.add_argument(
@@ -255,14 +261,14 @@ def main():
         type=str,
         default=None,
         metavar="PACKAGE_NAME",
-        help="Package name to look up in the CSV dataset (only works with --raw). Requires --csv-dataset."
+        help="Package name to look up in the CSV dataset. Requires --csv-dataset."
     )
 
     parser.add_argument(
         "--nixpkgs-commit",
         type=str,
         default=None,
-        help="Nixpkgs commit hash to use for building (only works with --raw). Overrides value from CSV if provided."
+        help="Nixpkgs commit hash to use for building. Overrides value from CSV if provided."
     )
 
     parser.add_argument(
@@ -279,8 +285,28 @@ def main():
             from vibenix.ui.raw_terminal.terminal_vibenix_settings import show_vibenix_settings_terminal
             show_vibenix_settings_terminal()
             sys.exit(0)
-        
-        if args.raw:
+
+        if args.textual:
+            # Textual UI mode (unmaintained)
+            # Check for incompatible arguments
+            if args.output_dir:
+                parser.error("--output-dir only works with terminal mode (default)")
+            if args.project_url:
+                parser.error("project URL argument only works with terminal mode (default)")
+            if args.revision:
+                parser.error("revision argument only works with terminal mode (default)")
+            if args.fetcher:
+                parser.error("--fetcher only works with terminal mode (default)")
+            if args.csv_dataset:
+                parser.error("--csv-dataset only works with terminal mode (default)")
+            if args.csv_package:
+                parser.error("--csv-package only works with terminal mode (default)")
+            if args.nixpkgs_commit:
+                parser.error("--nixpkgs-commit only works with terminal mode (default)")
+            logger.info("Starting vibenix in textual UI mode (unmaintained)")
+            run_textual_ui()
+        else:
+            # Terminal mode is now the default
             logger.info("Starting vibenix in terminal mode")
 
             # Handle CSV dataset mode if provided
@@ -331,13 +357,6 @@ def main():
                             revision=args.revision, fetcher=args.fetcher,
                             csv_pname=csv_pname, csv_version=csv_version,
                             fetcher_content=fetcher_content)
-        else:
-            if args.output_dir:
-                parser.error("--output-dir only works with --raw mode")
-            if args.project_url:
-                parser.error("project URL argument only works with --raw mode")
-            logger.info("Starting vibenix in textual UI mode")
-            run_textual_ui()
     except KeyboardInterrupt:
         logger.info("\nExiting...")
         sys.exit(0)
