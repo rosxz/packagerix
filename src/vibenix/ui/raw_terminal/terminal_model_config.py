@@ -113,15 +113,45 @@ def show_model_config_terminal() -> Optional[Dict[str, str]]:
             # Use default if not provided
             openai_api_base = "http://llama.digidow.ins.jku.at:11434/v1/"
 
-        # Handle OpenAI API key
-        if not handle_api_key_terminal("OPENAI_API_KEY", "OpenAI", "https://platform.openai.com/api-keys"):
-            return None
-        # Get the API key for model selection
+        # Determine which API key to use based on the endpoint URL
         from vibenix.secure_keys import get_api_key
-        api_key = os.environ.get("OPENAI_API_KEY") or get_api_key("OPENAI_API_KEY")
-        if not api_key:
-            # For local/Ollama endpoints, API key is optional
+        is_openrouter = openai_api_base and 'openrouter.ai' in openai_api_base
+        is_bedrock = openai_api_base and 'bedrock' in openai_api_base and 'api.aws' in openai_api_base
+
+        # Detect if this is a local endpoint (no API key needed)
+        is_local = openai_api_base and (
+            'localhost' in openai_api_base or
+            '127.0.0.1' in openai_api_base or
+            '.local' in openai_api_base or
+            '.ts.net' in openai_api_base  # Tailscale
+        )
+
+        if is_openrouter:
+            if not handle_api_key_terminal("OPENROUTER_API_KEY", "OpenRouter", "https://openrouter.ai/keys"):
+                return None
+            api_key = os.environ.get("OPENROUTER_API_KEY") or get_api_key("OPENROUTER_API_KEY")
+            if not api_key:
+                print("\n❌ Failed to retrieve OpenRouter API key")
+                return None
+        elif is_bedrock:
+            if not handle_api_key_terminal("AWS_BEARER_TOKEN_BEDROCK", "AWS Bedrock", "https://console.aws.amazon.com/"):
+                return None
+            api_key = os.environ.get("AWS_BEARER_TOKEN_BEDROCK") or get_api_key("AWS_BEARER_TOKEN_BEDROCK")
+            if not api_key:
+                print("\n❌ Failed to retrieve AWS Bedrock API key")
+                return None
+        elif is_local:
+            # Local endpoints don't need an API key
+            print("\n🏠 Local endpoint detected - no API key required")
             api_key = "dummy"
+        else:
+            # Standard OpenAI endpoint
+            if not handle_api_key_terminal("OPENAI_API_KEY", "OpenAI", "https://platform.openai.com/api-keys"):
+                return None
+            api_key = os.environ.get("OPENAI_API_KEY") or get_api_key("OPENAI_API_KEY")
+            if not api_key:
+                print("\n❌ Failed to retrieve OpenAI API key")
+                return None
     elif provider == "anthropic":
         # Handle Anthropic API key
         if not handle_api_key_terminal("ANTHROPIC_API_KEY", "Anthropic", "https://console.anthropic.com/"):

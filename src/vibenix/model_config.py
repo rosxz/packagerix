@@ -20,6 +20,7 @@ from vibenix.defaults import DEFAULT_MODEL_SETTINGS, DEFAULT_USAGE_LIMITS
 # Cache for model configuration to avoid repeated loading and logging
 _cached_config = None
 _cached_model = None
+_use_prompted_output = False  # Whether to use PromptedOutput mode for structured outputs
 
 
 def load_saved_configuration() -> Optional[Tuple[str, str, Optional[str], Optional[str]]]:
@@ -109,12 +110,21 @@ def get_model_config() -> dict:
 def get_model():
     """Get the model instance, creating it if necessary."""
     global _cached_model
-    
+
     if _cached_model is None:
         # This should only happen if initialize_model_config wasn't called
         raise RuntimeError("Model not initialized. Call initialize_model_config() first.")
-    
+
     return _cached_model
+
+
+def use_prompted_output() -> bool:
+    """Check if PromptedOutput mode should be used for structured outputs.
+
+    PromptedOutput mode is more compatible with OpenAI-compatible endpoints
+    that may not properly support tool-based structured outputs.
+    """
+    return _use_prompted_output
 
 
 
@@ -204,11 +214,12 @@ def create_anthropic_settings(settings: Dict[str, Any]) -> AnthropicModelSetting
 
 def initialize_model_config():
     """Initialize model configuration and create model instance. Must be called once at startup."""
-    global _cached_model
-    
+    global _cached_model, _use_prompted_output
+
     config = get_model_config()
     provider_name = config.get("provider", "openai")
     model_name = config.get("model_name")
+    base_url = config.get("base_url", "")
     
     logger.info(f"Loaded configuration: {provider_name}/{config['model_name']} from {provider_name}")
     
@@ -269,19 +280,35 @@ def initialize_model_config():
         # Default to OpenAI-compatible models
         base_url = config.get("base_url")
 
-        # Check if using OpenRouter
+        # Check if using OpenRouter or AWS Bedrock
         is_openrouter = base_url and 'openrouter.ai' in base_url
+        is_bedrock = base_url and 'bedrock' in base_url and 'api.aws' in base_url
 
-        if is_openrouter:
+        # Auto-enable PromptedOutput mode for endpoints that don't reliably support tool-based structured outputs
+        if is_openrouter or is_bedrock:
+            _use_prompted_output = True
+            logger.info("Auto-enabled PromptedOutput mode for better compatibility with this endpoint")
+
+        if is_bedrock:
+            # Use OpenAI-compatible provider for AWS Bedrock
+            from vibenix.secure_keys import get_api_key
+            api_key = os.environ.get("AWS_BEARER_TOKEN_BEDROCK")
+            if not api_key:
+                api_key = get_api_key("AWS_BEARER_TOKEN_BEDROCK")
+                if not api_key:
+                    raise ValueError("AWS_BEARER_TOKEN_BEDROCK not found in environment or secure storage. Run interactively to configure.")
+
+            logger.info(f"Using AWS Bedrock model: {model_name} at {base_url}")
+            provider = OpenAIProvider(base_url=base_url, api_key=api_key, http_client=create_retrying_client())
+
+        elif is_openrouter:
             # Use OpenRouterProvider for OpenRouter endpoints
             from vibenix.secure_keys import get_api_key
-            api_key = os.environ.get("OPENROUTER_API_KEY") or os.environ.get("OPENAI_API_KEY")
+            api_key = os.environ.get("OPENROUTER_API_KEY")
             if not api_key:
                 api_key = get_api_key("OPENROUTER_API_KEY")
                 if not api_key:
-                    api_key = get_api_key("OPENAI_API_KEY")
-                    if not api_key:
-                        raise ValueError("OPENROUTER_API_KEY not found in environment or secure storage. Run interactively to configure.")
+                    raise ValueError("OPENROUTER_API_KEY not found in environment or secure storage. Run interactively to configure.")
 
             # OpenRouter requires provider prefix in model name (e.g., "openai/gpt-4")
             # If the model name doesn't have a prefix, try to infer it

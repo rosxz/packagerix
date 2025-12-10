@@ -5,11 +5,11 @@ This module provides the core agent functionality using pydantic-ai.
 
 import asyncio
 from typing import Callable, Any, List, Optional
-from pydantic_ai import Agent, UnexpectedModelBehavior, capture_run_messages, RunContext
+from pydantic_ai import Agent, UnexpectedModelBehavior, capture_run_messages, RunContext, PromptedOutput
 from pydantic_ai.usage import UsageLimits
 from tenacity import retry, stop_after_attempt, wait_exponential, retry_if_exception_type, RetryError
 from pydantic_ai.exceptions import UsageLimitExceeded, UnexpectedModelBehavior
-from vibenix.model_config import get_model
+from vibenix.model_config import get_model, use_prompted_output
 from vibenix.ui.conversation import get_ui_adapter, Message, Actor, Usage
 from vibenix.usage_utils import extract_usage_tokens
 from vibenix.ccl_log import get_logger
@@ -33,10 +33,18 @@ class VibenixAgent:
         
         # Only pass output_type if it's not None
         if output_type is not None:
-            self.agent = Agent(
-                model=self.model,
-                output_type=output_type,
-            )
+            # Use PromptedOutput mode for endpoints that don't reliably support tool-based structured outputs
+            # (e.g., OpenRouter, AWS Bedrock). This is auto-detected in model_config.py
+            if use_prompted_output():
+                self.agent = Agent(
+                    model=self.model,
+                    output_type=PromptedOutput(output_type),
+                )
+            else:
+                self.agent = Agent(
+                    model=self.model,
+                    output_type=output_type,
+                )
         else:
             self.agent = Agent(
                 model=self.model,

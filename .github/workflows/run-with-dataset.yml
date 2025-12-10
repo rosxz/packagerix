@@ -39,6 +39,7 @@ on:
         options:
           - https://api.openai.com
           - https://openrouter.ai/api
+          - https://bedrock-mantle.eu-north-1.api.aws
           - http://hive.van-duck.ts.net:11434
       dataset:
         description: 'Which dataset to use for testing'
@@ -345,9 +346,11 @@ jobs:
             # For Ollama via OpenAI endpoint, set a dummy API key if needed
             echo "OPENAI_API_KEY=dummy" >> $GITHUB_ENV
           elif [ "${{ steps.provider.outputs.provider }}" = "openai" ]; then
-            # Check if using OpenRouter or local llama.cpp based on the api_base_url
+            # Check if using OpenRouter, AWS Bedrock, or local llama.cpp based on the api_base_url
             if [[ "${{ github.event.inputs.api_base_url }}" == *"openrouter.ai"* ]]; then
-              echo "OPENAI_API_KEY=${{ secrets.OPENROUTER_API_KEY }}" >> $GITHUB_ENV
+              echo "OPENROUTER_API_KEY=${{ secrets.OPENROUTER_API_KEY }}" >> $GITHUB_ENV
+            elif [[ "${{ github.event.inputs.api_base_url }}" == *"bedrock"*"api.aws"* ]]; then
+              echo "AWS_BEARER_TOKEN_BEDROCK=${{ secrets.AWS_BEARER_TOKEN_BEDROCK }}" >> $GITHUB_ENV
             elif [[ "${{ github.event.inputs.api_base_url }}" == *"hive.van-duck.ts.net"* ]]; then
               echo "OPENAI_API_KEY=dummy" >> $GITHUB_ENV
             else
