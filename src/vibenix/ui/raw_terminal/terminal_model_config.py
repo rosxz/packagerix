@@ -229,6 +229,14 @@ def handle_openai_api_base_terminal() -> Optional[str]:
             print("❌ URL must start with http:// or https://")
             continue
         
+        # Check if this is AWS Bedrock which requires authentication for the models endpoint
+        is_bedrock = 'bedrock' in api_base and 'api.aws' in api_base
+
+        if is_bedrock:
+            # Skip unauthenticated endpoint test for Bedrock
+            print("✅ URL accepted (AWS Bedrock requires authentication, skipping connection test)")
+            return api_base
+
         # Test the endpoint
         print(f"\n🔍 Testing connection to {api_base}...")
         try:
@@ -236,7 +244,7 @@ def handle_openai_api_base_terminal() -> Optional[str]:
             test_url = api_base
             if not test_url.endswith("/v1/") and not test_url.endswith("/v1"):
                 test_url = test_url.rstrip("/") + "/v1/"
-            
+
             response = requests.get(test_url + "models", timeout=5)
             response.raise_for_status()
             print("✅ Successfully connected!")
@@ -245,7 +253,7 @@ def handle_openai_api_base_terminal() -> Optional[str]:
             print(f"❌ Failed to connect: {e}")
             retry = input("\nRetry with different URL? (y/N): ").strip().lower()
             if retry != 'y':
-                return input
+                return api_base  # Return the URL anyway, let later steps fail if invalid
 
 
 def choose_model_terminal(base_url: str, api_key: str) -> Optional[str]:
