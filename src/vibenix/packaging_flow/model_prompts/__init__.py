@@ -20,14 +20,14 @@ ask_model_prompt = model_prompt_manager.ask_model_prompt
 
 def run_formatter_after(func):
     """Decorator to automatically run Nix formatter after prompts that modify code."""
+    import sys
     def wrapper(*args, **kwargs):
         result = func(*args, **kwargs)
         try:
             from vibenix.nix import run_formatter
             run_formatter()
-            print("🎨 Code automatically formatted after model response")
         except Exception as e:
-            print(f"⚠️  Warning: Failed to format code: {e}")
+            print(f"⚠️  Warning: Failed to format code: {e}", file=sys.stderr, flush=True)
         return result
     return wrapper
 
