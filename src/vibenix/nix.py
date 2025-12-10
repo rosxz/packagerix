@@ -268,7 +268,6 @@ def run_formatter():
     """Run nixpkgs-fmt on the current package.nix to ensure consistent formatting."""
     from vibenix.flake import get_package_path
     file_path = get_package_path()
-    print(f"Running nixfmt on {file_path}")
     with open(file_path, 'r') as f:
         format_result = subprocess.run(
             ["nixfmt"],
