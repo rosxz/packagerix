@@ -37,11 +37,16 @@ class VibenixAgent:
             # (e.g., OpenRouter, AWS Bedrock). This is auto-detected in model_config.py
             if use_prompted_output():
                 # Custom template with explicit instructions for clean JSON output
+                # Note: curly braces must be doubled to escape them for str.format()
                 json_template = (
                     "Respond with valid JSON matching this schema:\n"
                     "{schema}\n\n"
-                    "IMPORTANT: Output ONLY the JSON object, with no additional text, "
-                    "no markdown formatting, and no extra characters before or after the JSON."
+                    "IMPORTANT: Output ONLY the JSON object, with no additional text or markdown formatting.\n\n"
+                    "Examples of correct JSON output:\n"
+                    '- For enums: {{"response": "rust"}} or {{"response": "python"}}\n'
+                    '- For lists: {{"response": ["item1", "item2"]}}\n'
+                    '- For multi-line strings, use \\n for newlines (not \\\\n): '
+                    '{{"code": "line1\\nline2\\nline3"}}'
                 )
                 self.agent = Agent(
                     model=self.model,
