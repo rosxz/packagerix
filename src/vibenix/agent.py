@@ -36,9 +36,16 @@ class VibenixAgent:
             # Use PromptedOutput mode for endpoints that don't reliably support tool-based structured outputs
             # (e.g., OpenRouter, AWS Bedrock). This is auto-detected in model_config.py
             if use_prompted_output():
+                # Custom template with explicit instructions for clean JSON output
+                json_template = (
+                    "Respond with valid JSON matching this schema:\n"
+                    "{schema}\n\n"
+                    "IMPORTANT: Output ONLY the JSON object, with no additional text, "
+                    "no markdown formatting, and no extra characters before or after the JSON."
+                )
                 self.agent = Agent(
                     model=self.model,
-                    output_type=PromptedOutput(output_type),
+                    output_type=PromptedOutput(output_type, template=json_template),
                 )
             else:
                 self.agent = Agent(
