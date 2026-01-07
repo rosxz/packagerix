@@ -32,9 +32,13 @@ def _get_nixpkgs_source_path() -> str:
 def get_builder_functions() -> List[str]:
     """Returns the list of all builder functions in nixpkgs."""
     print("📞 Function called: get_builder_functions")
-    return _get_builder_functions(do_print=True)
+    builders = _get_builder_functions()
+    notes = '''
+Notes: "Application vs. Package" Rule: If the project is a standalone tool the user runs (e.g., a CLI tool or a GUI), prioritize `Application`. If its primarily modules/libraries, use `Package`.
+'''
+    return builders.append(notes)
 
-def _get_builder_functions(do_print: bool = False) -> List[str]:
+def _get_builder_functions() -> List[str]:
     """Returns the list of all builder functions in nixpkgs."""
     import json
     from pathlib import Path
@@ -48,8 +52,6 @@ def _get_builder_functions(do_print: bool = False) -> List[str]:
             with open(cache_file, 'r') as f:
                 cached_data = json.load(f)
             functions = cached_data['functions']
-            if do_print:
-                print(f"♻️ Loaded {len(functions)} builder functions from cache")
             return functions
         except (json.JSONDecodeError, KeyError) as e:
             print(f"⚠️ Cache file corrupted, regenerating: {e}")
@@ -283,9 +285,10 @@ def _find_qualified_path(function_name: str, helper_map: dict, langs: List[str])
     raise ValueError(f"Could not find qualified path for function: '{function_name}' ([{langs[0]}, {langs[1]}, ...])")
 
 
-def _create_find_similar_builder_patterns(cache: List[str] = []):
+def _create_find_similar_builder_patterns(use_cache: bool = False):
     """Factory function that returns find_similar_builder_patterns with cache captured in closure."""
     from vibenix.flake import get_package_contents
+    cache = [] if not use_cache else _get_builder_functions()
     @log_function_call("find_similar_builder_patterns")
     def find_similar_builder_patterns(builders: List[str] = None, keyword: str = None) -> str:
         """

@@ -156,6 +156,7 @@ def run_in_vm(*, script: str, system_packages: str = "[ pkg ]") -> str:
                          Examples:
                          - "[ pkg ]" - Just the package itself (default)
                          - "[ pkg (pkgs.python3.withPackages (ps: [ pkg ])) ]" - Package + Python environment
+                         - The expression has access to `pkg` (the built package) and `pkgs` (nixpkgs)
 
     Returns:
         The stdout and stderr output from the script execution.

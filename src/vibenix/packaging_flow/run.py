@@ -423,9 +423,9 @@ def package_project(output_dir=None, project_url=None, revision=None, fetcher=No
     nixpkgs_path = get_nixpkgs_source_path()
     project_functions = create_source_function_calls(store_path, "project_")
     nixpkgs_functions = create_source_function_calls(nixpkgs_path, "nixpkgs_")
-    from vibenix.tools.search_related_packages import get_builder_functions, _create_find_similar_builder_patterns
-    available_builders = get_builder_functions()
-    find_similar_builder_patterns = _create_find_similar_builder_patterns(available_builders)
+    from vibenix.tools.search_related_packages import get_builder_functions, \
+     _create_find_similar_builder_patterns
+    find_similar_builder_patterns = _create_find_similar_builder_patterns(use_cache=True)
     additional_functions = project_functions + nixpkgs_functions + [get_builder_functions, find_similar_builder_patterns]
     # Initialize said tools via settings manager
     get_settings_manager().initialize_additional_tools(additional_functions)
