@@ -19,6 +19,7 @@ from vibenix import config
 def get_linter_feedback() -> list[str]:
     from vibenix.flake import get_package_path
     import subprocess
+    from strip_ansi import strip_ansi
     path = get_package_path()
     linters = [
         f"statix check {path}",
@@ -32,7 +33,7 @@ def get_linter_feedback() -> list[str]:
         cmd = cmd.split(' ')
         result = subprocess.run(cmd, capture_output=True, text=True)
         if result.stdout.strip() or result.stderr.strip():
-            feedback.append(f"Output from `{result.args}`:\n{result.stdout}\n{result.stderr}")
+            feedback.append(f"Output from `{result.args}`:\n{strip_ansi(result.stdout)}\n{strip_ansi(result.stderr)}")
     return feedback
         
 
