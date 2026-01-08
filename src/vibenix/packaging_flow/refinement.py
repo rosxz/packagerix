@@ -16,6 +16,26 @@ from vibenix.nix import get_build_output_path
 
 from vibenix import config
 
+def get_linter_feedback() -> list[str]:
+    from vibenix.flake import get_package_path
+    import subprocess
+    path = get_package_path()
+    linters = [
+        f"statix check {path}",
+        f"nixpkgs-lint {path}",
+        f"nil diagnostics {path}",
+        f"nixf-diagnose {path}",
+    ]
+
+    feedback = []
+    for cmd in linters:
+        cmd = cmd.split(' ')
+        result = subprocess.run(cmd, capture_output=True, text=True)
+        if result.stdout.strip() or result.stderr.strip():
+            feedback.append(f"Output from `{result.args}`:\n{result.stdout}\n{result.stderr}")
+    return feedback
+        
+
 def refine_package(curr: Solution, project_page: str) -> Solution:
     """Refinement cycle to improve the packaging."""
     from vibenix.defaults import get_settings_manager
@@ -39,7 +59,12 @@ def refine_package(curr: Solution, project_page: str) -> Solution:
         ccl_logger.write_kv("code", curr.code)
 
         # Get feedback (VM will be started/stopped automatically by run_in_vm calls)
-        feedback = get_feedback(curr, project_page, chat_history=chat_history).strip()
+        linters = get_linter_feedback()
+        if any(linters):
+            coordinator_message("Linters have reported issues with the current packaging code. Using linter feedback.")
+            feedback = "\n".join(linters)
+        else:
+            feedback = get_feedback(curr, project_page, chat_history=chat_history).strip()
         ccl_logger.write_kv("feedback", str(feedback))
 
         coordinator_message(f"Refining package based on feedback...")
