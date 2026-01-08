@@ -313,12 +313,13 @@ in with pkgs; stdenv.mkDerivation {{
         raise
 
 
-def compare_template(available_builders, initial_code,
-                     find_similar_builder_patterns, summary) -> str:
+def compare_template(initial_code, find_similar_builder_patterns, summary) -> str:
     """Prompt LLM to compare template with set of builders it thinks are relevant,
     present builder combinations to model, and let it make changes if needed."""
     from vibenix.tools.search_related_packages import _extract_builders
+    from vibenix.tools.search_related_packages import get_builder_functions
 
+    available_builders = get_builder_functions()
     builders = choose_builders(available_builders, summary)
     if not choose_builders:
         raise RuntimeError("Model failed to choose builders for comparison.")
@@ -473,7 +474,7 @@ def package_project(output_dir=None, project_url=None, revision=None, fetcher=No
     initial_code = fill_src_attributes(starting_template, pname, version, fetcher_content)
 
     if get_settings_manager().get_setting_enabled("compare_template_builders"):
-        initial_code = compare_template(available_builders, initial_code, find_similar_builder_patterns, summary)
+        initial_code = compare_template(initial_code, find_similar_builder_patterns, summary)
     coordinator_message(f"Initial package code:\n```nix\n{initial_code}\n```")
 
     # Step 7: Agentic loop
