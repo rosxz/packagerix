@@ -284,7 +284,10 @@ jobs:
           authToken: '${{ secrets.CACHIX_TOKEN }}'
         
       - name: Tailscale
-        if: ${{ steps.provider.outputs.provider == 'ollama' || steps.provider.outputs.provider == 'openai' }}
+        if: >-
+              (steps.provider.outputs.provider == 'ollama' ||
+               steps.provider.outputs.provider == 'openai') &&
+              ${{ secrets.TS_OAUTH_CLIENT_ID != '' }}
         uses: tailscale/github-action@v3
         with:
           oauth-client-id: ${{ secrets.TS_OAUTH_CLIENT_ID }}
