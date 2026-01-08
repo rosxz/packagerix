@@ -3149,6 +3149,15 @@ wheels = [
 ]
 
 [[package]]
+name = "strip-ansi"
+version = "0.1.1"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/b9/bd/273a435b7f9fd111b22f740b2661b6b734938c93d86531f9689747323c43/strip-ansi-0.1.1.tar.gz", hash = "sha256:5d60f239cc8a37fdd52b43c3e66e893d45ba0423115db59eca0d2eef83b07729", size = 1733, upload-time = "2020-06-20T22:24:49.349Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/22/a1/077deda41f949b3412434fda858396ee9927a3260a43537c2ae333bd688c/strip_ansi-0.1.1-py3-none-any.whl", hash = "sha256:9f55280e1b0ba84dac49d4f18aa6b51b90ff766b22e4918ffc01cc87b394ecd1", size = 1815, upload-time = "2020-06-20T22:24:50.453Z" },
+]
+
+[[package]]
 name = "sympy"
 version = "1.14.0"
 source = { registry = "https://pypi.org/simple" }
@@ -3402,6 +3411,7 @@ dependencies = [
     { name = "rich" },
     { name = "scikit-learn" },
     { name = "setuptools" },
+    { name = "strip-ansi" },
     { name = "textual" },
     { name = "tiktoken" },
     { name = "tokenizers" },
@@ -3438,6 +3448,7 @@ requires-dist = [
     { name = "rich" },
     { name = "scikit-learn", specifier = ">=1.7.0" },
     { name = "setuptools" },
+    { name = "strip-ansi", specifier = ">=0.1.1" },
     { name = "textual" },
     { name = "tiktoken", specifier = ">=0.12.0" },
     { name = "tokenizers", specifier = ">=0.21,<0.22" },
