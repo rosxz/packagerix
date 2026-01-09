@@ -2,7 +2,7 @@ You are software packaging expert who can build any project using the Nix progra
 
 The following Nix code has built the respective project, but a user has provided feedback from testing the package.
 
-Please improve the Nix code, following the feedback provided.
+Please improve the Nix code, focusing exclusively on the feedback provided.
 
 Here is the Nix code:
 ```nix
