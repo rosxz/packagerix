@@ -25,7 +25,7 @@ def get_linter_feedback() -> list[str]:
         f"statix check {path}",
         f"nixpkgs-lint {path}",
         f"nil diagnostics {path}",
-        f"nixf-diagnose {path}",
+        # f"nixf-diagnose {path}", # similar to nil ?
     ]
 
     feedback = []
