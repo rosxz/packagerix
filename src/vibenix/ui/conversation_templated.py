@@ -148,6 +148,7 @@ class ModelPromptManager:
                     agent = VibenixAgent(output_type=return_type)
                 else:
                     # For strings, we don't need structured output
+                    # AS IT IS this means that even with return_type=None, we get a message response back from the model (fix if needed, with perhaps an object)
                     agent = VibenixAgent()
                 
                 functions = get_settings_manager().get_prompt_tools(prompt_key)

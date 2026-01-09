@@ -136,7 +136,7 @@ DEFAULT_VIBENIX_SETTINGS = {
         "edit_tools": True,
         # Snippets to add to prompts dynamically
         "snippets": {
-            "tool": "To perform each change to the code, use the text editor tools: [<TOOLS>].",
+            "tool": "To change the code, use the text editor tools: [<TOOLS>]. Go in bottom to top order.",
             "extract": "Please respond with the full updated packaging code, wrapped like so:\n```nix\n...\n```.",
             "object": "Please respond with a valid ModelCodeResponse object containing the full updated packaging code.",
             "feedback": "Please respond with the list of concrete changes you would make to the packaging code. Be specific."
