@@ -37,7 +37,7 @@ def get_linter_feedback() -> list[str]:
     return feedback
         
 
-def refine_package(curr: Solution, project_page: str) -> Solution:
+def refine_package(curr: Solution, project_page: str, output_dir=None) -> Solution:
     """Refinement cycle to improve the packaging."""
     from vibenix.defaults import get_settings_manager
     # Max iterations for refinement's internal packaging loop (fix build errors)
@@ -49,6 +49,9 @@ def refine_package(curr: Solution, project_page: str) -> Solution:
     ccl_logger.enter_attribute("refine_package", log_start=True)
 
     coordinator_message("Starting refinement process for the package.")
+    from vibenix.packaging_flow.run import save_package_output
+    if output_dir:
+        save_package_output(curr.code, output_dir)
 
     chat_history = None
     if use_chat_history:
@@ -65,7 +68,7 @@ def refine_package(curr: Solution, project_page: str) -> Solution:
             coordinator_message("Linters have reported issues with the current packaging code. Using linter feedback.")
             feedback = "\n".join(linters)
         else:
-            feedback = get_feedback(curr, project_page, chat_history=chat_history).strip()
+            feedback = get_feedback(curr.code, project_page, chat_history=chat_history).strip()
         ccl_logger.write_kv("feedback", str(feedback))
 
         coordinator_message(f"Refining package based on feedback...")
