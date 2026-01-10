@@ -73,26 +73,30 @@ def _str_replace(old_str: str, new_str: str, occurrence: int = None) -> str:
 
         update_flake(updated_content)
         
-        # Show updated lines (and ones with changed line numbers)
         previous_lines = previous_content.splitlines()
         updated_lines = updated_content.splitlines()
-        return_msg = None
-        if len(previous_lines) == len(updated_lines):
-            diff_lines = [f"{i:>3}: {updated_lines[i]}" for i in range(len(updated_lines)) if previous_lines[i] != updated_lines[i]]
-            diff = "\n".join(diff_lines)
-            return_msg = f"Updated lines:\n```\n{diff}\n```"
-        else:
-            # Updated lines get * marker, other lines are shown for context (updated line number)
-            new_str_idx = updated_content.index(new_str)
-            first_diff_index = updated_content[:new_str_idx].count("\n")
-            diff_lines = []
-            for i, line in enumerate(updated_lines[first_diff_index:], start=first_diff_index):
-                if i < first_diff_index+len(new_str.splitlines()):
-                    diff_lines += [f"*{i + 1:>3}: {line}"]
-                else:
-                    diff_lines += [f" {i + 1:>3}: {line}"]
-            diff = "\n".join(diff_lines)
-            return_msg = f"Showing lines starting from {first_diff_index + 1}:\n```\n{diff}\n```"
+        return_msg = ""
+        if len(previous_lines) != len(updated_lines):
+            from vibenix.ui.conversation_templated import get_model_prompt_manager
+            get_model_prompt_manager().set_synced(False)
+
+        # Show updated lines (and ones with changed line numbers)
+        #if len(previous_lines) == len(updated_lines):
+        #    diff_lines = [f"{i:>3}: {updated_lines[i]}" for i in range(len(updated_lines)) if previous_lines[i] != updated_lines[i]]
+        #    diff = "\n".join(diff_lines)
+        #    return_msg = f"Updated lines:\n```\n{diff}\n```"
+        #else:
+        #    # Updated lines get * marker, other lines are shown for context (updated line number)
+        #    new_str_idx = updated_content.index(new_str)
+        #    first_diff_index = updated_content[:new_str_idx].count("\n")
+        #    diff_lines = []
+        #    for i, line in enumerate(updated_lines[first_diff_index:], start=first_diff_index):
+        #        if i < first_diff_index+len(new_str.splitlines()):
+        #            diff_lines += [f"*{i + 1:>3}: {line}"]
+        #        else:
+        #            diff_lines += [f" {i + 1:>3}: {line}"]
+        #    diff = "\n".join(diff_lines)
+        #    return_msg = f"Showing lines starting from {first_diff_index + 1}:\n```\n{diff}\n```"
 
         return f"Successfully replaced text. {return_msg}"
         

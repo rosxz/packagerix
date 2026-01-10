@@ -30,6 +30,7 @@ class ModelPromptManager:
         self._session_tool_usage = {} # total across retries
         self._model = model
         self.current_prompt = None
+        self.synced = False
     
     def get_session_cost(self):
         """Get the accumulated cost for this session."""
@@ -82,6 +83,14 @@ class ModelPromptManager:
     def get_current_prompt(self) -> Optional[str]:
         """Get the current prompt being used."""
         return self.current_prompt
+
+    def get_synced(self) -> bool:
+        """Get whether the model is synced with the file."""
+        return self.synced
+
+    def set_synced(self, synced: bool):
+        """Set whether the model is synced with the file."""
+        self.synced = synced
     #####
 
     def ask_model_prompt(self, template_path: str):
