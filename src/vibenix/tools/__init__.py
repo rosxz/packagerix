@@ -14,6 +14,11 @@ from vibenix.tools.build_package import build_package
 from vibenix.tools.out_path_file_tools import create_out_path_file_tools
 from vibenix.tools.vm_script import run_in_vm
 
+# Fake useless tool to avoid error when no tools are given
+def noop_tool() -> str:
+    """A no-operation tool that does nothing. Do not use."""
+    return "No operation performed."
+
 # Export all functions so they can be imported from this module
 __all__ = [
     'search_nixpkgs_for_package_literal',
@@ -27,7 +32,9 @@ __all__ = [
     'error_pagination',
     'build_package',
     'run_in_vm',
+    'noop_tool',
 ]
+
 
 # Standard search functions for all prompts that need them
 SEARCH_TOOLS = [
