@@ -6,6 +6,7 @@ This module provides model configuration compatible with the previous litellm-ba
 import os
 import json
 from typing import Optional, Dict, Any, Tuple
+from pydantic_ai.models import Model
 from pydantic_ai.models.openai import OpenAIChatModel, OpenAIChatModelSettings
 from pydantic_ai.providers.openai import OpenAIProvider
 from pydantic_ai.providers.openrouter import OpenRouterProvider
@@ -106,9 +107,17 @@ def get_model_config() -> dict:
     
     return _cached_config
 
+def get_cached_model_config() -> dict:
+    """Get the cached model configuration without reloading."""
+    global _cached_config
 
-def get_model():
-    """Get the model instance, creating it if necessary."""
+    if _cached_config is None:
+        raise RuntimeError("Model configuration not initialized. Call initialize_model_config() first.")
+
+    return _cached_config
+
+def get_model() -> Model:
+    """Get the model instance, creating it if necessary.""" # TODO not creating if necessary
     global _cached_model
 
     if _cached_model is None:
@@ -212,7 +221,7 @@ def create_anthropic_settings(settings: Dict[str, Any]) -> AnthropicModelSetting
     return AnthropicModelSettings(**merged_settings)
 
 
-def initialize_model_config():
+def initialize_model_config(model_settings = None):
     """Initialize model configuration and create model instance. Must be called once at startup."""
     global _cached_model, _use_prompted_output
 
@@ -236,9 +245,10 @@ def initialize_model_config():
         logger.info(f"Using Anthropic model: {model_name}")
         provider = AnthropicProvider(api_key=api_key, http_client=create_retrying_client())
         
-        # Always use env settings or defaults, never from config file
-        env_settings = load_model_settings_from_env("anthropic")
-        model_settings = create_anthropic_settings(env_settings)
+        if not model_settings:
+            # Always use env settings or defaults, never from config file
+            env_settings = load_model_settings_from_env("anthropic")
+            model_settings = create_anthropic_settings(env_settings)
         _cached_model = AnthropicModel(model_name, provider=provider, settings=model_settings)
     
     elif provider_name == "gemini":
@@ -273,8 +283,9 @@ def initialize_model_config():
         # Pass the configured client to GoogleProvider
         provider = GoogleProvider(client=gemini_client)
 
-        env_settings = load_model_settings_from_env("gemini")
-        model_settings = create_gemini_settings(env_settings)
+        if not model_settings:
+            env_settings = load_model_settings_from_env("gemini")
+            model_settings = create_gemini_settings(env_settings)
         _cached_model = GoogleModel(config["model_name"], provider=provider, settings=model_settings)
     else:
         # Default to OpenAI-compatible models
@@ -353,8 +364,9 @@ def initialize_model_config():
             logger.info(f"Using OpenAI-compatible model: {model_name} at {base_url}")
             provider = OpenAIProvider(base_url=base_url, api_key=api_key, http_client=create_retrying_client())
 
-        env_settings = load_model_settings_from_env("openai")
-        model_settings = create_openai_settings(env_settings)
+        if not model_settings:
+            env_settings = load_model_settings_from_env("openai")
+            model_settings = create_openai_settings(env_settings)
         _cached_model = OpenAIChatModel(config["model_name"], provider=provider, settings=model_settings)
 
 
