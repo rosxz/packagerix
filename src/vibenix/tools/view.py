@@ -49,8 +49,8 @@ def _view(view_range: list[int]=None, prompt: str=None) -> str:
 
         # Join the lines back into a single string
         content_to_view = "\n".join(lines)
-        from vibenix.ui.conversation_templated import get_model_prompt_manager
-        get_model_prompt_manager().set_synced(True)
+        #from vibenix.ui.conversation_templated import get_model_prompt_manager
+        #get_model_prompt_manager().set_synced(True)
         return content_to_view
         
     except Exception as e:

@@ -76,9 +76,12 @@ def _str_replace(old_str: str, new_str: str, occurrence: int = None) -> str:
         previous_lines = previous_content.splitlines()
         updated_lines = updated_content.splitlines()
         return_msg = ""
-        if len(previous_lines) != len(updated_lines):
-            from vibenix.ui.conversation_templated import get_model_prompt_manager
-            get_model_prompt_manager().set_synced(False)
+        #if len(previous_lines) != len(updated_lines):
+        #    from vibenix.ui.conversation_templated import get_model_prompt_manager
+        #    get_model_prompt_manager().set_synced(False)
+        start_line = updated_content.split(new_str)[0].count("\n") + 1
+        for i, line in enumerate(new_str.splitlines(), start=start_line):
+            return_msg += f"\n* {i:>3}: {line}"
 
         # Show updated lines (and ones with changed line numbers)
         #if len(previous_lines) == len(updated_lines):
