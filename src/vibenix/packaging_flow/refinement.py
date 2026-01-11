@@ -2,7 +2,7 @@ from vibenix.flake import get_package_contents
 from vibenix.ui.conversation import ask_user,  coordinator_message, coordinator_error, coordinator_progress
 from vibenix.nix import eval_progress, execute_build_and_add_to_stack, revert_packaging_to_solution
 from vibenix.packaging_flow.model_prompts import (
-    refine_code, get_feedback
+    refine_code, get_feedback, improve_code
 )
 from vibenix.ccl_log import init_logger, get_logger, close_logger, enum_str
 from vibenix.errors import NixBuildErrorDiff, NixErrorKind, NixBuildResult
@@ -42,7 +42,6 @@ def refine_package(curr: Solution, project_page: str, output_dir=None) -> Soluti
     from vibenix.defaults import get_settings_manager
     # Max iterations for refinement's internal packaging loop (fix build errors)
     max_iterations = get_settings_manager().get_setting_value("refinement.max_iterations")
-    use_chat_history = get_settings_manager().get_setting_value("refinement.chat_history")
 
     from vibenix.ccl_log import get_logger, close_logger
     ccl_logger = get_logger()
@@ -50,11 +49,9 @@ def refine_package(curr: Solution, project_page: str, output_dir=None) -> Soluti
 
     coordinator_message("Starting refinement process for the package.")
     from vibenix.packaging_flow.run import save_package_output
-    if output_dir:
-        save_package_output(curr.code, output_dir)
 
     chat_history = None
-    if use_chat_history:
+    if get_settings_manager().get_setting_value("refinement.chat_history"):
         chat_history = [] # List to keep track of (user_prompt -> final model response) over the course of refinement
 
     iteration = 0
@@ -63,12 +60,7 @@ def refine_package(curr: Solution, project_page: str, output_dir=None) -> Soluti
         ccl_logger.write_kv("code", curr.code)
 
         # Get feedback (VM will be started/stopped automatically by run_in_vm calls)
-        linters = get_linter_feedback()
-        if any(linters):
-            coordinator_message("Linters have reported issues with the current packaging code. Using linter feedback.")
-            feedback = "\n".join(linters)
-        else:
-            feedback = get_feedback(curr.code, project_page, chat_history=chat_history).strip()
+        feedback = get_feedback(curr.code, project_page, chat_history=chat_history).strip()
         ccl_logger.write_kv("feedback", str(feedback))
 
         coordinator_message(f"Refining package based on feedback...")
@@ -94,7 +86,7 @@ def refine_package(curr: Solution, project_page: str, output_dir=None) -> Soluti
             ccl_logger.write_kv("type", attempt.result.error.type)
             ccl_logger.write_kv("error", attempt.result.error.truncated())
         else:
-            if refining_error and use_chat_history:
+            if refining_error and chat_history is not None:
                 from pydantic_ai.messages import ModelRequest, ModelResponse, UserPromptPart, TextPart
 
                 error_msg = f"The refined code introduced errors during build: {enum_str(refining_error.type)}.\nError details:\n{refining_error.truncated()}\n\n Please fix them."
@@ -107,6 +99,13 @@ def refine_package(curr: Solution, project_page: str, output_dir=None) -> Soluti
             coordinator_progress("Refined packaging code successfuly builds.")
             curr = attempt
         iteration += 1
+
+    coordinator_message("Improving final nix code (removing dead code, running linters, etc.)")
+    linters, feedback = get_linter_feedback(), "No linter feedback to provide."
+    if any(linters):
+        coordinator_message("Linters have reported issues with the current packaging code. Using linter feedback.")
+        feedback = "\n".join(linters)
+    improve_code(view_package_contents(prompt="improve_code"), feedback, chat_history=chat_history)
 
     if iteration > 0:
         ccl_logger.leave_list()

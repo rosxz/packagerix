@@ -76,6 +76,17 @@ def refine_code(
 
 
 @run_formatter_after
+@ask_model_prompt('refinement/refine_code.md')
+def improve_code(
+    code: str,
+    feedback: str,
+    chat_history: Optional[List] = None
+) -> ModelCodeResponse:
+    """Improve a refined Nix package, with suggestions from linters."""
+    ...
+
+
+@run_formatter_after
 @ask_model_prompt('error_fixing/fix_build_error.md')
 def fix_build_error(
     code: str,
@@ -165,12 +176,12 @@ __all__ = [
     "evaluate_code",
     "get_feedback",
     "refine_code",
+    "improve_code",
     "fix_build_error",
     "fix_hash_mismatch",
     "evaluate_progress",
     "classify_packaging_failure",
     "analyze_package_failure",
-    "summarize_build",
     "choose_builders",
     "compare_template_builders",
 ]

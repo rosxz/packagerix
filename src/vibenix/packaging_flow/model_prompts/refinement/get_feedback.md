@@ -11,9 +11,8 @@ Please identify ONE concrete improvement, if any exists, to the packaging code, 
        - For applications: ensure the binaries runs without errors (e.g. `program --version`);
        - For libraries: ensure the main module can be imported/loaded without errors;
        - Ensure the correct Nix builder is used, and identify missing dependencies, if any.
-    2. Remove dead code, empty attributes, or boilerplate comments, implement linter feedback (nothing else);
-    3. If there is no test suite or check clearly present that validates the packaging:
-       - When applicable, try the most simple Nix builder specific attributes for validation (e.g. `pythonImportsCheck`).
+    2. Once the package is correct, and if there is no test suite or check clearly present that validates the packaging:
+       - Try the most simple Nix builder specific attributes for validation (e.g. `pythonImportsCheck`).
        - When that proves tricky or not applicable, ensure `doInstallCheck = true;` is present with a meaningful `installCheckPhase` (as in 1.);
     (...)
 
