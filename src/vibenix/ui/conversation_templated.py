@@ -142,6 +142,25 @@ class ModelPromptManager:
                 coordinator_msg = f"@model {first_line}" if len(rendered_prompt) > 100 else f"@model {rendered_prompt}"
                 adapter.show_message(Message(Actor.COORDINATOR, coordinator_msg))
                 
+                functions = get_settings_manager().get_prompt_tools(prompt_key)
+                try:
+                    functions = [get_settings_manager().get_tool_callable(func_name) for func_name in functions]
+                except Exception as e:
+                    raise ValueError(f"Failed to get tool callables for prompt '{prompt_key}': {e}")
+
+                from vibenix.model_config import get_cached_model_config
+                model_config = get_cached_model_config()
+                if len(functions) == 0 and model_config["provider"] in ["openai"]:
+                    # If no functions are provided, add a noop tool to avoid errors
+                    from vibenix.tools import noop_tool
+                    functions = [noop_tool]
+                    #model_settings = model_config.get("model_settings", {})
+                    #if model_settings and model_settings.get("parallel_tool_calls", False):
+                    #    model_settings = model_settings.copy().pop("parallel_tool_calls")
+                    #    from vibenix.model_config import initialize_model_config
+                    #    initialize_model_config(model_settings)
+                    #    # TODO need to restore previous settings after prompt finished
+
                 # Create agent with appropriate output type
                 if is_structured:
                     # For structured outputs (enums, lists, etc.), use output_type
@@ -150,12 +169,6 @@ class ModelPromptManager:
                     # For strings, we don't need structured output
                     agent = VibenixAgent()
                 
-                functions = get_settings_manager().get_prompt_tools(prompt_key)
-                try:
-                    functions = [get_settings_manager().get_tool_callable(func_name) for func_name in functions]
-                except Exception as e:
-                    raise ValueError(f"Failed to get tool callables for prompt '{prompt_key}': {e}")
-
                 # Add tools to the agent
                 for tool_func in functions:
                     agent.add_tool(tool_func)
