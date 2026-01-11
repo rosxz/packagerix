@@ -356,6 +356,11 @@ class CCLLogger:
         self.write_kv("summary", summary_str)
         self.leave_attribute()
 
+    def log_save_package(self, package_path: str, indent_level: int = 0):
+        """Log saving the package to a file."""
+        self.enter_attribute("save_package")
+        self.write_kv("package_path", package_path)
+        self.leave_attribute()
 
 # Global logger instance
 _logger: CCLLogger = None

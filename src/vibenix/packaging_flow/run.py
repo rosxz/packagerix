@@ -564,6 +564,8 @@ def save_package_output(code: str, output_dir: str):
     package_file.write_text(code)
     
     coordinator_message(f"Saved package to: {package_file}")
+    from vibenix.ccl_log import get_logger
+    get_logger().log_save_package(str(package_file))
 
 
 def run_packaging_flow(output_dir=None, project_url=None, revision=None, fetcher=None,
