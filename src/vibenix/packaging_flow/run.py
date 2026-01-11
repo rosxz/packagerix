@@ -511,9 +511,9 @@ def package_project(output_dir=None, project_url=None, revision=None, fetcher=No
         ccl_logger.log_total_tool_cost()
         # Always log success and return, regardless of refinement outcome
         ccl_logger.log_session_end(signal=None, total_cost=get_model_prompt_manager().get_session_cost())
-        close_logger()
         if output_dir:
             save_package_output(candidate.code, output_dir)
+        close_logger()
         return candidate.code  
     else:
         max_iterations = get_settings_manager().get_setting_value("packaging_loop.max_iterations")

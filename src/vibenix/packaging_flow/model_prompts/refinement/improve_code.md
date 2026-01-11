@@ -2,7 +2,7 @@ You are software packaging expert who can build any project using the Nix progra
 
 The following Nix code has built the respective project, and has been refined and validated.
 
-Please improve the Nix code, focusing exclusively on:
+Please improve the Nix code, focusing exclusively on these aspects:
  - Pruning: removing dead code, empty attributes, boilerplate comments;
  - Implementing linter feedback.
 
@@ -15,6 +15,8 @@ Here is the linter feedback:
 ```
 {{ feedback }}
 ```
+
+Try to prune and implement feedback as much as possible, while not changing the output of the code.
 
 {% include 'snippets/project_info_section.md' %}
 
