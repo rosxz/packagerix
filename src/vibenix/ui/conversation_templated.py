@@ -212,8 +212,8 @@ class ModelPromptManager:
                         from vibenix.flake import get_package_contents
                         
                         package_contents = get_package_contents()
-                        get_logger().log_debug(f"Chat history before append length: {len(chat_history)}")
-                        get_logger().log_debug(f"Appending to chat history: Prompt({rendered_prompt[:20]}), RetType({return_type}), PkgCont({package_contents[:20]}), Result({str(result)[:20]})")
+                        #get_logger().log_debug(f"Chat history before append length: {len(chat_history)}")
+                        #get_logger().log_debug(f"Appending to chat history: Prompt({rendered_prompt[:20]}), RetType({return_type}), PkgCont({package_contents[:20]}), Result({str(result)[:20]})")
                         user_message = ModelRequest(parts=[UserPromptPart(content=rendered_prompt)])
                         if return_type is None:
                             response_content = package_contents
@@ -223,7 +223,7 @@ class ModelPromptManager:
                         
                         chat_history.append(user_message)
                         chat_history.append(model_message)
-                        get_logger().log_debug(f"Updated chat history length: {len(chat_history)}")
+                        #get_logger().log_debug(f"Updated chat history length: {len(chat_history)}")
 
                     return result
                     

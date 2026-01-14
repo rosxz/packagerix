@@ -56,7 +56,7 @@ def refine_package(curr: Solution, project_page: str, output_dir=None) -> Soluti
 
     iteration = 0
     while iteration < 3: # TODO make configurable
-        get_logger().log_debug(f"Chat history at iteration {iteration} start: {len(chat_history) if chat_history is not None else 'N/A'}")
+        #get_logger().log_debug(f"Chat history at iteration {iteration} start: {len(chat_history) if chat_history is not None else 'N/A'}")
         ccl_logger.log_iteration_start(iteration)
         ccl_logger.write_kv("code", curr.code)
 
@@ -90,15 +90,15 @@ def refine_package(curr: Solution, project_page: str, output_dir=None) -> Soluti
             if refining_error and chat_history is not None:
                 from pydantic_ai.messages import ModelRequest, ModelResponse, UserPromptPart, TextPart
 
-                get_logger().log_debug(f"Chat history before error append length {len(chat_history)}")
+                #get_logger().log_debug(f"Chat history before error append length {len(chat_history)}")
                 error_msg = f"The refined code introduced errors during build: {enum_str(refining_error.type)}.\nError details:\n{refining_error.truncated()}\n\n Please fix them."
-                get_logger().log_debug(f"Appending to chat history: Prompt({error_msg[:20]}), Code({attempt.code[:20]})")
+                #get_logger().log_debug(f"Appending to chat history: Prompt({error_msg[:20]}), Code({attempt.code[:20]})")
                 user_message = ModelRequest(parts=[UserPromptPart(content=error_msg)])
                 model_message = ModelResponse(parts=[TextPart(content=attempt.code)])
 
                 chat_history.append(user_message)
                 chat_history.append(model_message)
-                get_logger().log_debug(f"Chat history after append length: {len(chat_history)}")
+                #get_logger().log_debug(f"Chat history after append length: {len(chat_history)}")
                 refining_error = None
             coordinator_progress("Refined packaging code successfuly builds.")
             curr = attempt
