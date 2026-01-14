@@ -61,9 +61,9 @@ def _insert(insert_line: int, new_str: str) -> str:
         
         # Show all lines starting from first changed line, mark inserted lines with *
         start_line = max(insert_line-2, 0)
-        line_count = min(len(new_str.splitlines()) + 1, len(lines)-1)
+        line_count = min(len(new_str.splitlines()) + 2, len(lines)-1)
         for i in range(start_line, start_line + line_count + 1):
-            prefix = "*" if start_line < i < start_line + line_count else " "
+            prefix = "*" if start_line+1 < i < start_line + line_count else " "
             return_msg += f"{prefix}{i + 1:>3}: {lines[i]}\n"
         #updated_lines = updated_content.splitlines()
         #previous_lines = current_content.splitlines()
@@ -80,7 +80,7 @@ def _insert(insert_line: int, new_str: str) -> str:
         #diff = "\n".join(diff_lines)
         #return_msg = f"Lines starting from {insert_line}:\n```\n{diff}\n```"
 
-        return f"Successfuly inserted text. {return_msg}"
+        return f"Successfuly inserted text.\n{return_msg}"
         
     except Exception as e:
         error_msg = f"Error inserting text: {str(e)}"

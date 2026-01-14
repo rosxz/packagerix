@@ -16,7 +16,7 @@ Please identify ONE concrete improvement, if any exists, to the packaging code, 
        - When that proves tricky or not applicable, ensure `doInstallCheck = true;` is present with a meaningful `installCheckPhase` (as in 1.);
     (...)
 
-Please reply with a concise description of the feedback you identify, and not the full updated packaging code.
+Please reply with a succint, concise description of the feedback you identify, and not the full updated packaging code.
 
 **Each invocation of `run_in_vm` starts a fresh VM** that boots, executes your script, and shuts down. The VM has **no network access** and **no Nix binary** (on purpose).
 
