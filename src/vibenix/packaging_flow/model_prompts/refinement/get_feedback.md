@@ -18,22 +18,23 @@ Please identify improvements, if any exist, to the packaging code, in the follow
        - When that proves tricky or not applicable, ensure `doInstallCheck = true;` is present with a meaningful `installCheckPhase` (as in 1.);
     (...)
 
-Please reply with a succint, concise description of the feedback you identify, and not the full updated packaging code.
-
 **Each invocation of `run_in_vm` starts a fresh VM** that boots, executes your script, and shuts down. The VM has **no network access** and **no Nix binary** (on purpose).
-The systemPackages initially made available (beside generic utilities) are `{{ systemPackages }}`.
-If additional packages are necessary, change this, before calling `run_in_vm`, with the tool `set_vm_systemPackages` (e.g. set_vm_systemPackages("[ pkg (pkgs.python3.withPackages (ps: [ pkg ])) ]") ).
+The systemPackages initially made available (beside generic utilities) are `{{ systemPackages }}`. If additional packages are necessary, change this, before calling `run_in_vm`, with the tool `set_vm_systemPackages`.
+The `set_vm_systemPackages` tool accepts the parameter:
+   - system_packages: A Nix list expression controlling how the package at hand is installed in the VM.
+      - Use "[ pkg ]" to install just the package itself
+      - Use "[ (pkgs.python3.withPackages (ps: [ pkg ])) ]" to install a Python environment containing the package
+      - Use "[ pkg (pkgs.python3.withPackages (ps: [ pkg ])) ]" to have both
+      - Package dependencies should not be added to the VM's systemPackages, and should be handled by the package itself.
+      - This expression automatically has access to pkg (the built package) and pkgs (nixpkgs)
 
 **Above improving the package, prioritize not breaking the build by limiting the scope of the improvements identified. Try to verify your suggestions before submitting an answer.**
 
 Your feedback should be focused, direct, and without optional sections, as it will be ingested by another LLM.
-Follow the style:
+
+Here is the `tree` output of the /home/test/package directory:
 ```
-Feedback:
-- Remove the broken dependency <dep>, it has security risks
-- Add missing dependencies <dep1>, <dep2>, (...), which revelead necessary when running (...)
-- Change Nix builder from (...) to (...), because the package (...)
-(...)
+{{ tree_output }}
 ```
 
 Notes:
