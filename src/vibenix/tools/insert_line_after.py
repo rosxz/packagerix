@@ -60,6 +60,7 @@ def _insert(insert_line: int, new_str: str) -> str:
         return_msg = ""
         
         # Show all lines starting from first changed line, mark inserted lines with *
+        lines = updated_content.splitlines()
         start_line = max(insert_line-2, 0)
         line_count = min(len(new_str.splitlines()) + 2, len(lines)-1)
         for i in range(start_line, start_line + line_count + 1):
