@@ -16,6 +16,16 @@ from vibenix.nix import get_build_output_path
 
 from vibenix import config
 
+def get_tree_output() -> str:
+    from vibenix.flake import get_package_path
+    import subprocess
+    out_path = config.solution_stack[-1].out_path
+    cmd = ["tree", "-n", out_path]
+    result = subprocess.run(cmd, capture_output=True, text=True)
+    if result.returncode != 0:
+        return ""
+    return result.stdout[len(out_path)+1:]  # Exclude the output path itself
+
 def get_linter_feedback() -> list[str]:
     from vibenix.flake import get_package_path
     import subprocess
@@ -61,7 +71,8 @@ def refine_package(curr: Solution, project_page: str, output_dir=None) -> Soluti
         ccl_logger.write_kv("code", curr.code)
 
         # Get feedback (VM will be started/stopped automatically by run_in_vm calls)
-        feedback = get_feedback(curr.code, chat_history=chat_history.copy() if chat_history is not None else None, project_page=project_page).strip() # copy to avoid storing
+        feedback = get_feedback(curr.code, chat_history=chat_history.copy() if chat_history is not None else None,
+                                 project_page=project_page, tree_output=get_tree_output()).strip() # copy to avoid storing
         ccl_logger.write_kv("feedback", str(feedback))
 
         coordinator_message(f"Refining package based on feedback...")
@@ -110,6 +121,15 @@ def refine_package(curr: Solution, project_page: str, output_dir=None) -> Soluti
         coordinator_message("Linters have reported issues with the current packaging code. Using linter feedback.")
         feedback = "\n".join(linters)
     improve_code(view_package_contents(prompt="improve_code"), feedback, chat_history=chat_history)
+    updated_code = get_package_contents()
+    ccl_logger.write_kv("improved_code", updated_code)
+
+    attempt = execute_build_and_add_to_stack(updated_code)
+    if not attempt.result.success:
+        coordinator_message("Final code improvement caused build errors, reverting to last successful solution.")
+        revert_packaging_to_solution(curr)
+        ccl_logger.write_kv("type", attempt.result.error.type)
+        ccl_logger.write_kv("error", attempt.result.error.truncated())
 
     if iteration > 0:
         ccl_logger.leave_list()

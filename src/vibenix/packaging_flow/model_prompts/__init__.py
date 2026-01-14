@@ -57,6 +57,7 @@ def get_feedback(
     code: str,
     chat_history: Optional[List],
     project_page: Optional[str] = None,
+    tree_output: Optional[str] = "",
 ) -> str:
     """Get feedback on a successfully built package."""
     ...
