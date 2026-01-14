@@ -23,7 +23,7 @@ MAX_CONSECUTIVE_REBUILDS_WITHOUT_PROGRESS = settings_manager.get_setting_value("
 MAX_CONSECUTIVE_NON_BUILD_ERRORS = settings_manager.get_setting_value("packaging_loop.max_consecutive_non_build_errors")
 
 def packaging_loop(best: Solution, summary: str,
-    max_iterations: int = MAX_ITERATIONS, chat_history: List[ModelMessage] = []):
+    max_iterations: int = MAX_ITERATIONS, chat_history: List[ModelMessage] = None):
     """Loop that receives a Solution (code and build result), and iteratively
     attempts to fix the errors until a successful build is a achieved or a
     limit of (failing, etc.) iterations is reached."""

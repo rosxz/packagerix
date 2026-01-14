@@ -56,15 +56,16 @@ def refine_package(curr: Solution, project_page: str, output_dir=None) -> Soluti
 
     iteration = 0
     while iteration < 3: # TODO make configurable
+        get_logger().log_debug(f"Chat history at iteration {iteration} start: {len(chat_history) if chat_history is not None else 'N/A'}")
         ccl_logger.log_iteration_start(iteration)
         ccl_logger.write_kv("code", curr.code)
 
         # Get feedback (VM will be started/stopped automatically by run_in_vm calls)
-        feedback = get_feedback(curr.code, project_page, chat_history=chat_history).strip()
+        feedback = get_feedback(curr.code, chat_history=chat_history.copy() if chat_history is not None else None, project_page=project_page).strip() # copy to avoid storing
         ccl_logger.write_kv("feedback", str(feedback))
 
         coordinator_message(f"Refining package based on feedback...")
-        refine_code(view_package_contents(prompt="refine_code"), feedback, project_page, chat_history=chat_history)
+        refine_code(view_package_contents(prompt="refine_code"), feedback, chat_history=chat_history, project_page=project_page)
         updated_code = get_package_contents()
         ccl_logger.write_kv("refined_code", updated_code)
 
@@ -89,12 +90,15 @@ def refine_package(curr: Solution, project_page: str, output_dir=None) -> Soluti
             if refining_error and chat_history is not None:
                 from pydantic_ai.messages import ModelRequest, ModelResponse, UserPromptPart, TextPart
 
+                get_logger().log_debug(f"Chat history before error append length {len(chat_history)}")
                 error_msg = f"The refined code introduced errors during build: {enum_str(refining_error.type)}.\nError details:\n{refining_error.truncated()}\n\n Please fix them."
+                get_logger().log_debug(f"Appending to chat history: Prompt({error_msg[:20]}), Code({attempt.code[:20]})")
                 user_message = ModelRequest(parts=[UserPromptPart(content=error_msg)])
                 model_message = ModelResponse(parts=[TextPart(content=attempt.code)])
 
                 chat_history.append(user_message)
                 chat_history.append(model_message)
+                get_logger().log_debug(f"Chat history after append length: {len(chat_history)}")
                 refining_error = None
             coordinator_progress("Refined packaging code successfuly builds.")
             curr = attempt

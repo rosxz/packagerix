@@ -113,12 +113,12 @@ class ModelPromptManager:
                 prompt_key = template_path.split('/')[-1].replace('.md', '')
                 if get_settings_manager().is_edit_tools_prompt(prompt_key):
                     if get_settings_manager().get_setting_enabled("edit_tools"):
-                        return_type = type(None)
+                        return_type = None
                     # Else, keep the original class return type
                 # Determine output type and whether to use streaming
                 is_streaming = return_type == str
                 is_enum = inspect.isclass(return_type) and issubclass(return_type, Enum)
-                is_structured = return_type not in [str, type(None)]
+                is_structured = return_type not in [str, None]
 
                 # Get function signature to map args to param names
                 sig = inspect.signature(func)
@@ -128,7 +128,7 @@ class ModelPromptManager:
                 # Filter out None values and empty lists from arguments
                 template_context = {
                     k: v for k, v in bound_args.arguments.items() 
-                    if v is not None and v != []
+                    if v is not None# and v != []
                 }
                 
                 tool_call_collector = template_context.pop('tool_call_collector', None) # TODO
@@ -163,12 +163,6 @@ class ModelPromptManager:
                     # If no functions are provided, add a noop tool to avoid errors
                     from vibenix.tools import noop_tool
                     functions = [noop_tool]
-                    #model_settings = model_config.get("model_settings", {})
-                    #if model_settings and model_settings.get("parallel_tool_calls", False):
-                    #    model_settings = model_settings.copy().pop("parallel_tool_calls")
-                    #    from vibenix.model_config import initialize_model_config
-                    #    initialize_model_config(model_settings)
-                    #    # TODO need to restore previous settings after prompt finished
 
                 # Create agent with appropriate output type
                 if is_structured:
@@ -187,11 +181,11 @@ class ModelPromptManager:
                     # Run the agent
                     if is_streaming: # TODO remove when possible
                         # For string returns, use streaming
-                        result, usage = agent.run_stream(rendered_prompt, message_history=chat_history if chat_history else None)
+                        result, usage = agent.run_stream(rendered_prompt, message_history=chat_history if chat_history else [])
                         get_logger().reply_chunk_text(0, result, 4)
                     else:
                         # For non-streaming (structured outputs), just run normally
-                        result, usage = agent.run(rendered_prompt, message_history=chat_history if chat_history else None)
+                        result, usage = agent.run(rendered_prompt, message_history=chat_history if chat_history else [])
                         
                         if return_type == ModelCodeResponse:
                             from vibenix.flake import update_flake
@@ -217,11 +211,19 @@ class ModelPromptManager:
                         from pydantic_ai.messages import ModelRequest, ModelResponse, UserPromptPart, TextPart
                         from vibenix.flake import get_package_contents
                         
+                        package_contents = get_package_contents()
+                        get_logger().log_debug(f"Chat history before append length: {len(chat_history)}")
+                        get_logger().log_debug(f"Appending to chat history: Prompt({rendered_prompt[:20]}), RetType({return_type}), PkgCont({package_contents[:20]}), Result({str(result)[:20]})")
                         user_message = ModelRequest(parts=[UserPromptPart(content=rendered_prompt)])
-                        model_message = ModelResponse(parts=[TextPart(content=get_package_contents())])
+                        if return_type is None:
+                            response_content = package_contents
+                        else:
+                            response_content = str(result) if result is not None else "(empty response)"
+                        model_message = ModelResponse(parts=[TextPart(content=response_content)])
                         
                         chat_history.append(user_message)
                         chat_history.append(model_message)
+                        get_logger().log_debug(f"Updated chat history length: {len(chat_history)}")
 
                     return result
                     

@@ -1,9 +1,10 @@
 You are software packaging expert who can build any project using the Nix programming language.
 
 The following Nix code has built the respective project, and has been refined and validated.
+Now, we need to improve its overall "presentation", so it can be accepted into the nixpkgs repository.
 
 Please improve the Nix code, focusing exclusively on these aspects:
- - Pruning: removing dead code, empty attributes, boilerplate comments;
+ - Pruning: removing dead code, empty attributes, boilerplate/unnecessary comments;
  - Implementing linter feedback.
 
 Here is the Nix code:
@@ -16,7 +17,7 @@ Here is the linter feedback:
 {{ feedback }}
 ```
 
-Try to prune and implement feedback as much as possible, while not changing the output of the code.
+Try to do both things (as much as possible) in one single answer.
 
 {% include 'snippets/project_info_section.md' %}
 
