@@ -21,6 +21,8 @@ Please identify improvements, if any exist, to the packaging code, in the follow
 Please reply with a succint, concise description of the feedback you identify, and not the full updated packaging code.
 
 **Each invocation of `run_in_vm` starts a fresh VM** that boots, executes your script, and shuts down. The VM has **no network access** and **no Nix binary** (on purpose).
+The systemPackages initially made available (beside generic utilities) are `{{ systemPackages }}`.
+If additional packages are necessary, change this, before calling `run_in_vm`, with the tool `set_vm_systemPackages` (e.g. set_vm_systemPackages("[ pkg (pkgs.python3.withPackages (ps: [ pkg ])) ]") ).
 
 **Above improving the package, prioritize not breaking the build by limiting the scope of the improvements identified. Try to verify your suggestions before submitting an answer.**
 

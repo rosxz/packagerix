@@ -12,7 +12,7 @@ from vibenix.tools.insert_line_after import insert_line_after
 from vibenix.tools.error_pagination import error_pagination
 from vibenix.tools.build_package import build_package
 from vibenix.tools.out_path_file_tools import create_out_path_file_tools
-from vibenix.tools.vm_script import run_in_vm
+from vibenix.tools.vm_script import run_in_vm, set_vm_systemPackages
 
 # Fake useless tool to avoid error when no tools are given
 def noop_tool() -> str:
@@ -46,4 +46,4 @@ SEARCH_TOOLS = [
 ]
 EDIT_TOOLS = [error_pagination, str_replace, insert_line_after, view]
 # OUT_PATH_TOOLS = create_out_path_file_tools()
-VM_TOOLS = [run_in_vm]
+VM_TOOLS = [run_in_vm, set_vm_systemPackages]
