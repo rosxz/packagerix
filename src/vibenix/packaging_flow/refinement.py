@@ -27,6 +27,16 @@ def get_tree_output() -> str:
         return ""
     return result.stdout[len(out_path)+1:]  # Exclude the output path itself
 
+def get_tree_output() -> str:
+    from vibenix.flake import get_package_path
+    import subprocess
+    out_path = config.solution_stack[-1].out_path
+    cmd = ["tree", "-n", out_path]
+    result = subprocess.run(cmd, capture_output=True, text=True)
+    if result.returncode != 0:
+        return ""
+    return result.stdout[len(out_path)+1:]  # Exclude the output path itself
+
 def get_linter_feedback() -> list[str]:
     from vibenix.flake import get_package_path
     import subprocess
@@ -131,9 +141,12 @@ def refine_package(curr: Solution, project_page: str, output_dir=None) -> Soluti
         revert_packaging_to_solution(curr)
         ccl_logger.write_kv("type", attempt.result.error.type)
         ccl_logger.write_kv("error", attempt.result.error.truncated())
+<<<<<<< HEAD
     else:
         coordinator_message("Final code improvement successfuly builds.")
         curr = attempt
+=======
+>>>>>>> cc6ad4e (fix: revert to curr if improve_code fails, add tree_output to get_feedback, readd run_in_vm instructions to get_feedback)
 
     if iteration > 0:
         ccl_logger.leave_list()
