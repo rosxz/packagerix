@@ -18,6 +18,7 @@ from vibenix.defaults import get_settings_manager
 
 from vibenix.packaging_flow.model_prompts.prompt_loader import get_prompt_loader
 from vibenix.agent import VibenixAgent
+from vibenix.packaging_flow.IterationResult import IterationResult
 
 T = TypeVar('T')
 
@@ -113,7 +114,7 @@ class ModelPromptManager:
                 prompt_key = template_path.split('/')[-1].replace('.md', '')
                 if get_settings_manager().is_edit_tools_prompt(prompt_key):
                     if get_settings_manager().get_setting_enabled("edit_tools"):
-                        return_type = None
+                        return_type = IterationResult
                     # Else, keep the original class return type
                 # Determine output type and whether to use streaming
                 is_streaming = return_type == str
@@ -219,6 +220,8 @@ class ModelPromptManager:
                             response_content = package_contents
                         else:
                             response_content = str(result) if result is not None else "(empty response)"
+                        if type(return_type) is type(IterationResult):
+                            response_content += "\n\n```nix\n" + str(package_contents) + "\n```"
                         model_message = ModelResponse(parts=[TextPart(content=response_content)])
                         
                         chat_history.append(user_message)

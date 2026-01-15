@@ -13,6 +13,7 @@ from vibenix.errors import NixBuildErrorDiff, LogDiff, FullLogDiff, ProcessedLog
 
 # Re-export enums
 from vibenix.packaging_flow.model_prompts.enums import RefinementExit, PackagingFailure
+from vibenix.packaging_flow.IterationResult import RefinementIterationResult, IterationResult
 
 
 model_prompt_manager = get_model_prompt_manager()
@@ -56,9 +57,11 @@ def evaluate_code(code: str, previous_code: str, feedback: str) -> RefinementExi
 def get_feedback(
     code: str,
     chat_history: Optional[List],
+    lessons_learned: List[str] = [],
+    already_implemented: List[str] = [],
     project_page: Optional[str] = None,
     tree_output: Optional[str] = "",
-) -> str:
+) -> RefinementIterationResult:
     """Get feedback on a successfully built package."""
     ...
 

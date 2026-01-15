@@ -60,12 +60,13 @@ def _insert(insert_line: int, new_str: str) -> str:
         return_msg = ""
         
         # Show all lines starting from first changed line, mark inserted lines with *
-        lines = updated_content.splitlines()
-        start_line = max(insert_line-2, 0)
-        line_count = min(len(new_str.splitlines()) + 2, len(lines)-1)
-        for i in range(start_line, start_line + line_count + 1):
-            prefix = "*" if start_line+1 < i < start_line + line_count else " "
-            return_msg += f"{prefix}{i + 1:>3}: {lines[i]}\n"
+        #lines = updated_content.splitlines()
+        #start_line = max(insert_line-2, 0)
+        #line_count = min(len(new_str.splitlines()) + 2, len(lines)-1)
+        #for i in range(start_line, start_line + line_count + 1):
+        #    prefix = "*" if start_line+1 < i < start_line + line_count else " "
+        #    return_msg += f"{prefix}{i + 1:>3}: {lines[i]}\n"
+
         #updated_lines = updated_content.splitlines()
         #previous_lines = current_content.splitlines()
         #
@@ -80,6 +81,8 @@ def _insert(insert_line: int, new_str: str) -> str:
         #        diff_lines += [f" {i + 1:>3}: {line}"]
         #diff = "\n".join(diff_lines)
         #return_msg = f"Lines starting from {insert_line}:\n```\n{diff}\n```"
+        from vibenix.tools.view import _view
+        return_msg = _view(prompt="_view")
 
         return f"Successfuly inserted text.\n{return_msg}"
         

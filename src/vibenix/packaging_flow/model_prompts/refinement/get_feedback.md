@@ -17,9 +17,27 @@ Please identify improvements, if any exist, to the packaging code, in the follow
        - Try the most simple Nix builder specific attributes for validation (e.g. `pythonImportsCheck`), and using the project's integrated testing frameworks.
        - When that proves tricky or not applicable, ensure `doInstallCheck = true;` is present with a meaningful `installCheckPhase` (as in 1.);
     (...)
+{% if lessons_learned %}
+
+Lessons previously learned about this package:
+```text
+{% for lesson in lessons_learned %}
+- {{ lesson }}
+{% endfor %}
+```
+{% endif %}
+{% if already_implemented %}
+
+Feedback previously implemented on this package:
+```text
+{% for feedback in already_implemented %}
+- {{ feedback }}
+{% endfor %}
+```
+{% endif %}
 
 **Each invocation of `run_in_vm` starts a fresh VM** that boots, executes your script, and shuts down. The VM has **no network access** and **no Nix binary** (on purpose).
-The systemPackages initially made available (beside generic utilities) are `{{ systemPackages }}`. If additional packages are necessary, change this, before calling `run_in_vm`, with the tool `set_vm_systemPackages`.
+The VM's environment.systemPackages initially made available (beside generic utilities) are `{{ systemPackages }}`. If additional packages are necessary, change this, before calling `run_in_vm`, with the tool `set_vm_systemPackages`.
 The `set_vm_systemPackages` tool accepts the parameter:
    - system_packages: A Nix list expression controlling how the package at hand is installed in the VM.
       - Use "[ pkg ]" to install just the package itself
