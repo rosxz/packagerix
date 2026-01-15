@@ -73,15 +73,15 @@ def _str_replace(old_str: str, new_str: str, occurrence: int = None) -> str:
 
         update_flake(updated_content)
         
-        previous_lines = previous_content.splitlines()
-        updated_lines = updated_content.splitlines()
-        return_msg = ""
+        #previous_lines = previous_content.splitlines()
+        #updated_lines = updated_content.splitlines()
+        #return_msg = ""
         #if len(previous_lines) != len(updated_lines):
         #    from vibenix.ui.conversation_templated import get_model_prompt_manager
         #    get_model_prompt_manager().set_synced(False)
-        start_line = updated_content.split(new_str)[0].count("\n") + 1
-        for i, line in enumerate(new_str.splitlines(), start=start_line):
-            return_msg += f"\n* {i:>3}: {line}"
+        #start_line = updated_content.split(new_str)[0].count("\n") + 1
+        #for i, line in enumerate(new_str.splitlines(), start=start_line):
+        #    return_msg += f"\n* {i:>3}: {line}"
 
         # Show updated lines (and ones with changed line numbers)
         #if len(previous_lines) == len(updated_lines):
@@ -100,8 +100,10 @@ def _str_replace(old_str: str, new_str: str, occurrence: int = None) -> str:
         #            diff_lines += [f" {i + 1:>3}: {line}"]
         #    diff = "\n".join(diff_lines)
         #    return_msg = f"Showing lines starting from {first_diff_index + 1}:\n```\n{diff}\n```"
+        from vibenix.tools.view import _view
+        return_msg = _view(prompt="_view")
 
-        return f"Successfully replaced text. {return_msg}"
+        return f"Successfully replaced text.\n{return_msg}"
         
     except Exception as e:
         error_msg = f"Error during string replacement: {str(e)}"
