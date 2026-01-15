@@ -15,6 +15,7 @@ from vibenix.packaging_flow.model_prompts import model_prompt_manager
 from vibenix.nix import get_build_output_path
 
 from vibenix import config
+from vibenix.packaging_flow.IterationResult import RefinementIterationResult, IterationResult
 
 def get_tree_output() -> str:
     from vibenix.flake import get_package_path
@@ -45,7 +46,7 @@ def get_linter_feedback() -> list[str]:
         if result.stdout.strip() or result.stderr.strip():
             feedback.append(f"Output from `{result.args}`:\n{strip_ansi(result.stdout)}\n{strip_ansi(result.stderr)}")
     return feedback
-        
+
 
 def refine_package(curr: Solution, project_page: str, output_dir=None) -> Solution:
     """Refinement cycle to improve the packaging."""
@@ -64,6 +65,8 @@ def refine_package(curr: Solution, project_page: str, output_dir=None) -> Soluti
     if get_settings_manager().get_setting_value("refinement.chat_history"):
         chat_history = [] # List to keep track of (user_prompt -> final model response) over the course of refinement
 
+    cumulative_result = RefinementIterationResult()
+
     iteration = 0
     while iteration < 3: # TODO make configurable
         #get_logger().log_debug(f"Chat history at iteration {iteration} start: {len(chat_history) if chat_history is not None else 'N/A'}")
@@ -71,14 +74,17 @@ def refine_package(curr: Solution, project_page: str, output_dir=None) -> Soluti
         ccl_logger.write_kv("code", curr.code)
 
         # Get feedback (VM will be started/stopped automatically by run_in_vm calls)
-        feedback = get_feedback(curr.code, chat_history=chat_history.copy() if chat_history is not None else None,
-                                 project_page=project_page, tree_output=get_tree_output()).strip() # copy to avoid storing
+        lessons, done = cumulative_result.lessons_learned, cumulative_result.tasks_identified
+        feedback = get_feedback(curr.code, chat_history.copy() if chat_history is not None else None,
+                                 lessons, done, project_page=project_page, tree_output=get_tree_output()) # copy to avoid storing
         ccl_logger.write_kv("feedback", str(feedback))
+        cumulative_result.lessons_learned.extend(feedback.lessons_learned)
 
         coordinator_message(f"Refining package based on feedback...")
-        refine_code(view_package_contents(prompt="refine_code"), feedback, chat_history=chat_history, project_page=project_page)
+        refined = refine_code(view_package_contents(prompt="refine_code"), str(feedback), chat_history=chat_history, project_page=project_page)
         updated_code = get_package_contents()
         ccl_logger.write_kv("refined_code", updated_code)
+        cumulative_result.tasks_identified.extend(refined.tasks_performed) # we don't really care about tasks_identified for the future
 
         attempt = execute_build_and_add_to_stack(updated_code)
         # Verify the updated code still builds
@@ -130,6 +136,9 @@ def refine_package(curr: Solution, project_page: str, output_dir=None) -> Soluti
         revert_packaging_to_solution(curr)
         ccl_logger.write_kv("type", attempt.result.error.type)
         ccl_logger.write_kv("error", attempt.result.error.truncated())
+    else:
+        coordinator_message("Final code improvement successfuly builds.")
+        curr = attempt
 
     if iteration > 0:
         ccl_logger.leave_list()
