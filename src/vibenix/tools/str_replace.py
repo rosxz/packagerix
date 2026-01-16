@@ -100,10 +100,10 @@ def _str_replace(old_str: str, new_str: str, occurrence: int = None) -> str:
         #            diff_lines += [f" {i + 1:>3}: {line}"]
         #    diff = "\n".join(diff_lines)
         #    return_msg = f"Showing lines starting from {first_diff_index + 1}:\n```\n{diff}\n```"
-        from vibenix.tools.view import _view
-        return_msg = _view(prompt="_view")
-
-        return f"Successfully replaced text.\n{return_msg}"
+        #from vibenix.tools.view import _view
+        #return_msg = _view(prompt="_view")
+        #return f"Successfully replaced text.\n{return_msg}"
+        return f"Successfully replaced text."
         
     except Exception as e:
         error_msg = f"Error during string replacement: {str(e)}"

@@ -28,15 +28,16 @@ def _get_nixpkgs_source_path() -> str:
         raise RuntimeError(f"Failed to get nixpkgs source path: {e}")
 
 
-@log_function_call("find_builder_functions")
-def get_builder_functions() -> List[str]:
+@log_function_call("get_builder_functions")
+def get_builder_functions() -> str:
     """Returns the list of all builder functions in nixpkgs."""
     print("📞 Function called: get_builder_functions")
     builders = _get_builder_functions()
+    builders = " - " + "\n - ".join(builders)
     notes = '''
 Notes: "Application vs. Package" Rule: If the project is a standalone tool the user runs (e.g., a CLI tool or a GUI), prioritize `Application`. If its primarily modules/libraries, use `Package`.
 '''
-    return builders.append(notes)
+    return builders + notes
 
 def _get_builder_functions() -> List[str]:
     """Returns the list of all builder functions in nixpkgs."""
