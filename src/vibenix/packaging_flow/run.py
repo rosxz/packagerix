@@ -317,9 +317,9 @@ def compare_template(initial_code, find_similar_builder_patterns, summary) -> st
     """Prompt LLM to compare template with set of builders it thinks are relevant,
     present builder combinations to model, and let it make changes if needed."""
     from vibenix.tools.search_related_packages import _extract_builders
-    from vibenix.tools.search_related_packages import get_builder_functions
+    from vibenix.tools.search_related_packages import _get_builder_functions
 
-    available_builders = get_builder_functions()
+    available_builders = _get_builder_functions()
     builders = choose_builders(available_builders, summary)
     if not choose_builders:
         raise RuntimeError("Model failed to choose builders for comparison.")

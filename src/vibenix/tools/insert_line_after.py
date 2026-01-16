@@ -81,10 +81,11 @@ def _insert(insert_line: int, new_str: str) -> str:
         #        diff_lines += [f" {i + 1:>3}: {line}"]
         #diff = "\n".join(diff_lines)
         #return_msg = f"Lines starting from {insert_line}:\n```\n{diff}\n```"
-        from vibenix.tools.view import _view
-        return_msg = _view(prompt="_view")
+        #from vibenix.tools.view import _view
+        #return_msg = _view(prompt="_view")
+        #return f"Successfuly inserted text.\n{return_msg}"
 
-        return f"Successfuly inserted text.\n{return_msg}"
+        return f"Successfuly inserted text."
         
     except Exception as e:
         error_msg = f"Error inserting text: {str(e)}"
