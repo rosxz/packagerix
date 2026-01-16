@@ -44,6 +44,6 @@ SEARCH_TOOLS = [
     search_nixpkgs_for_file,
     search_nixpkgs_manual_documentation,
 ]
-EDIT_TOOLS = [error_pagination, str_replace, insert_line_after] # view
+EDIT_TOOLS = [error_pagination, str_replace, insert_line_after, view]
 # OUT_PATH_TOOLS = create_out_path_file_tools()
 VM_TOOLS = [run_in_vm, set_vm_systemPackages]

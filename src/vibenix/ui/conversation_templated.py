@@ -112,9 +112,11 @@ class ModelPromptManager:
                 type_hints = get_type_hints(func)
                 return_type = type_hints.get('return', type(None))
                 prompt_key = template_path.split('/')[-1].replace('.md', '')
-                if get_settings_manager().is_edit_tools_prompt(prompt_key):
-                    if get_settings_manager().get_setting_enabled("edit_tools"):
-                        return_type = IterationResult
+                if get_settings_manager().is_edit_tools_prompt(prompt_key) and \
+                 get_settings_manager().get_setting_enabled("edit_tools"):
+                    if prompt_key.endswith("_code"):
+                      return_type = IterationResult # TODO if edit tools are not ON, these prompts wont work as intended just by using ModelCodeResponse
+                    return_type = None
                     # Else, keep the original class return type
                 # Determine output type and whether to use streaming
                 is_streaming = return_type == str
