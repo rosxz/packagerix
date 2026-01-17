@@ -90,7 +90,7 @@ def setup_safe_logging():
     
     # Set up timeout (default 1800 seconds = 30 minutes, configurable via env var)
     import os
-    timeout_seconds = int(os.environ.get('VIBENIX_TIMEOUT_SECONDS', '1800'))
+    timeout_seconds = int(os.environ.get('VIBENIX_TIMEOUT_SECONDS', '3600'))
     
     if timeout_seconds > 0:
         def timeout_handler():
