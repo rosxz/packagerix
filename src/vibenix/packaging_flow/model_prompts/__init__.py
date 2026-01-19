@@ -55,8 +55,8 @@ def evaluate_code(code: str, previous_code: str, feedback: str) -> RefinementExi
 @ask_model_prompt('refinement/get_feedback.md')
 def get_feedback(
     code: str,
+    chat_history: Optional[List],
     project_page: Optional[str] = None,
-    chat_history: Optional[List] = None
 ) -> str:
     """Get feedback on a successfully built package."""
     ...
@@ -67,9 +67,9 @@ def get_feedback(
 def refine_code(
     code: str,
     feedback: str,
+    chat_history: Optional[List],
     project_page: Optional[str] = None,
     template_notes: Optional[str] = None,
-    chat_history: Optional[List] = None
 ) -> ModelCodeResponse:
     """Refine a nix package based on feedback."""
     ...

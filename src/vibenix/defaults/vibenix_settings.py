@@ -94,7 +94,7 @@ DEFAULT_PROMPT_TOOLS.update(
     {
         'summarize_project_source': PROJECT_TOOLS,
         'get_feedback': get_names(SEARCH_TOOLS + VM_TOOLS) + ADDITIONAL_TOOLS, # Access to run_in_vm tools
-        'refine_code': get_names(SEARCH_TOOLS + EDIT_TOOLS), # Access to out path tools + OUT_PATH_TOOLS
+        'refine_code': get_names(SEARCH_TOOLS + EDIT_TOOLS),
         'fix_build_error': get_names(SEARCH_TOOLS + EDIT_TOOLS) + ADDITIONAL_TOOLS,
         'fix_hash_mismatch': get_names(EDIT_TOOLS),
         'analyze_package_failure': get_names(SEARCH_TOOLS) + ADDITIONAL_TOOLS,

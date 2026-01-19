@@ -13,7 +13,7 @@ Please identify ONE, if any exists, concrete improvement to the packaging code, 
        This attribute should be set to, at least, programatically verify a very basic execution of the program, and that the expected
        binaries and libraries are, respectively, executable and present.
 
-Please reply with a concise description of the feedback you identify, and not the full updated packaging code.
+Please reply with a succint, concise description of the feedback you identify, and not the full updated packaging code.
 
 **IMPORTANT**: To get more information on the current state of the package, use the tool `run_in_vm` to run shell scripts inside an isolated, headless VM containing the package in the system's global environment.
 

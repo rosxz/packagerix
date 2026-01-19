@@ -76,7 +76,7 @@ class VibenixAgent:
       wait=wait_exponential(multiplier=3, max=60),
       before_sleep=lambda retry_state: _capture_failed_usage_before_retry(retry_state, _global_failed_messages)
     )
-    async def run_async(self, prompt: str, message_history: Optional[List[ModelMessage]]=None) -> tuple[Any, Usage]:
+    async def run_async(self, prompt: str, message_history: List[ModelMessage]=[]) -> tuple[Any, Usage]:
         """Run the agent asynchronously and return response with usage."""
         global _global_failed_messages
         
@@ -106,7 +106,7 @@ class VibenixAgent:
         
         return output, usage
     
-    def run(self, prompt: str, message_history: Optional[List[ModelMessage]]=None) -> tuple[str, Usage]:
+    def run(self, prompt: str, message_history: List[ModelMessage]=[]) -> tuple[str, Usage]:
         """Run the agent synchronously."""
         # Create event loop if needed
         try:
@@ -124,7 +124,7 @@ class VibenixAgent:
       before_sleep=lambda retry_state: _capture_failed_usage_before_retry(retry_state, _global_failed_messages),
       retry_error_callback=lambda retry_state: _capture_failed_usage_before_retry(retry_state, _global_failed_messages)
     )
-    async def run_stream_async(self, prompt: str, message_history: Optional[List[ModelMessage]]=None) -> tuple[str, Usage]:
+    async def run_stream_async(self, prompt: str, message_history: List[ModelMessage]=[]) -> tuple[str, Usage]:
         """Run the agent with streaming and return complete response with usage."""
         global _global_failed_messages
         
@@ -193,7 +193,7 @@ class VibenixAgent:
                 
                 return full_response, usage
     
-    def run_stream(self, prompt: str, message_history: Optional[List[ModelMessage]]=None) -> tuple[str, Usage]:
+    def run_stream(self, prompt: str, message_history: List[ModelMessage]=[]) -> tuple[str, Usage]:
         """Run the agent with streaming synchronously."""
         try:
             loop = asyncio.get_event_loop()

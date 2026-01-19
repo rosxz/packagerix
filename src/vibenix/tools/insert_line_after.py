@@ -70,7 +70,7 @@ def _insert(insert_line: int, new_str: str) -> str:
         diff = "\n".join(diff_lines)
         return_msg = f"Lines starting from {insert_line}:\n```\n{diff}\n```"
 
-        return f"Successfuly inserted text. {return_msg}"
+        return f"Successfuly inserted text.\n{return_msg}"
         
     except Exception as e:
         error_msg = f"Error inserting text: {str(e)}"

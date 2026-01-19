@@ -76,8 +76,11 @@ class CCLLogger:
             self._write(self._indent() + key + " =\n")
             return
             
-        value_str = str(value).strip()
+        value_str = str(value)
         is_multiline = '\n' in value_str
+        # Only strip for single-line values; preserve leading whitespace for multiline
+        if not is_multiline:
+            value_str = value_str.strip()
         curr_key_path = "@" + "/".join(str(x) for x in self._current_attr_path + [ key ])
         prev_key_path = None
         # reference multi-line values by previous path if possible
@@ -125,8 +128,9 @@ class CCLLogger:
         and proper indentation for each line.
         """
         lines = value_str.splitlines()
-        line_start = ('\n' + self._indent() + "  ")
-        return line_start + line_start.join(line for line in lines)
+        prefix = self._indent() + "  "
+        line_separator = '\n' + prefix
+        return '\n' + prefix + line_separator.join(lines)
     
     def close(self):
         """Close the log file."""
@@ -356,6 +360,10 @@ class CCLLogger:
         self.write_kv("summary", summary_str)
         self.leave_attribute()
 
+
+    def log_debug(self, message: str, indent_level: int = 0):
+        """Log a debug message."""
+        self.write_kv("debug", message)
 
 # Global logger instance
 _logger: CCLLogger = None
