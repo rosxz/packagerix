@@ -114,11 +114,7 @@ class ModelPromptManager:
                 prompt_key = template_path.split('/')[-1].replace('.md', '')
                 if get_settings_manager().is_edit_tools_prompt(prompt_key) and \
                  get_settings_manager().get_setting_enabled("edit_tools"):
-                    if prompt_key.endswith("_code"):
-                      return_type = IterationResult # TODO if edit tools are not ON, these prompts wont work as intended just by using ModelCodeResponse
-                    else:
                       return_type = None
-                    # Else, keep the original class return type
                 # Determine output type and whether to use streaming
                 is_streaming = return_type == str
                 is_enum = inspect.isclass(return_type) and issubclass(return_type, Enum)
@@ -223,8 +219,6 @@ class ModelPromptManager:
                             response_content = package_contents
                         else:
                             response_content = str(result) if result is not None else "(empty response)"
-                        if type(return_type) is type(IterationResult):
-                            response_content += "\n\n```nix\n" + str(package_contents) + "\n```"
                         model_message = ModelResponse(parts=[TextPart(content=response_content)])
                         
                         chat_history.append(user_message)
