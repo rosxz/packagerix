@@ -22,7 +22,7 @@ def str_replace(old_str: str, new_str: str, occurrence: int = 1) -> str:
     return _str_replace(old_str, new_str, occurrence)
 
 
-def _str_replace(old_str: str, new_str: str, occurrence: int = None) -> str:
+def _str_replace(old_str: str, new_str: str, occurrence: int = 1) -> str:
     """Replace text in the current packaging expression."""
     
     try:
@@ -35,29 +35,27 @@ def _str_replace(old_str: str, new_str: str, occurrence: int = None) -> str:
             return error_msg
         count = current_content.count(old_str)
         if count == 0:
-            os_strp = old_str.rstrip() # Try removing trailing whitespace
-            current_content = current_content.rstrip()
-            count = current_content.count(os_strp)
-            if count > 0:
-                old_str = os_strp
-            else:
-                return f"Error: Text not found in packaging expression."
+            return f"Error: Text not found in packaging expression."
 
         if old_str == new_str:
             return f"Error: `old_str` and `new_str` are identical; no changes made."
 
         # Validate occurrence parameter
-        if count > 1 and occurrence:
-            if occurrence not in range(1, count + 1):
-                error_msg = f"Error: Requested occurrence {occurrence} outside range 1 to {count}.\n"
-                error_msg += "All occurrences:\n"
-                for i, line in enumerate(current_content.splitlines(), start=1):
-                    if old_str in line:
-                        error_msg += f"{i:>3}: {line}\n"
-                return error_msg
-
-            # Replace the specified occurrence
-            parts = current_content.split(old_str)
+        if occurrence < 1:
+            error_msg = f"Error: `occurrence` must be >= 1, got {occurrence}"
+            return error_msg
+            
+        if occurrence > count:
+            error_msg = f"Error: Requested occurrence {occurrence} but only found {count} matches.\n"
+            error_msg += "All occurrences:\n"
+            for i, line in enumerate(current_content.splitlines(), start=1):
+                if old_str in line:
+                    error_msg += f"{i:>3}: {line}\n"
+            return error_msg
+        
+        # Replace the specified occurrence
+        parts = current_content.split(old_str)
+        if len(parts) >= occurrence + 1:
             updated_content = old_str.join(parts[:occurrence]) + new_str + old_str.join(parts[occurrence:])
         else:
             updated_content = current_content.replace(old_str, new_str)
@@ -73,37 +71,28 @@ def _str_replace(old_str: str, new_str: str, occurrence: int = None) -> str:
 
         update_flake(updated_content)
         
-        #previous_lines = previous_content.splitlines()
-        #updated_lines = updated_content.splitlines()
-        #return_msg = ""
-        #if len(previous_lines) != len(updated_lines):
-        #    from vibenix.ui.conversation_templated import get_model_prompt_manager
-        #    get_model_prompt_manager().set_synced(False)
-        #start_line = updated_content.split(new_str)[0].count("\n") + 1
-        #for i, line in enumerate(new_str.splitlines(), start=start_line):
-        #    return_msg += f"\n* {i:>3}: {line}"
-
         # Show updated lines (and ones with changed line numbers)
-        #if len(previous_lines) == len(updated_lines):
-        #    diff_lines = [f"{i:>3}: {updated_lines[i]}" for i in range(len(updated_lines)) if previous_lines[i] != updated_lines[i]]
-        #    diff = "\n".join(diff_lines)
-        #    return_msg = f"Updated lines:\n```\n{diff}\n```"
-        #else:
-        #    # Updated lines get * marker, other lines are shown for context (updated line number)
-        #    new_str_idx = updated_content.index(new_str)
-        #    first_diff_index = updated_content[:new_str_idx].count("\n")
-        #    diff_lines = []
-        #    for i, line in enumerate(updated_lines[first_diff_index:], start=first_diff_index):
-        #        if i < first_diff_index+len(new_str.splitlines()):
-        #            diff_lines += [f"*{i + 1:>3}: {line}"]
-        #        else:
-        #            diff_lines += [f" {i + 1:>3}: {line}"]
-        #    diff = "\n".join(diff_lines)
-        #    return_msg = f"Showing lines starting from {first_diff_index + 1}:\n```\n{diff}\n```"
-        #from vibenix.tools.view import _view
-        #return_msg = _view(prompt="_view")
-        #return f"Successfully replaced text.\n{return_msg}"
-        return f"Successfully replaced text."
+        previous_lines = previous_content.splitlines()
+        updated_lines = updated_content.splitlines()
+        return_msg = None
+        if len(previous_lines) == len(updated_lines):
+            diff_lines = [f"{i:>3}: {updated_lines[i]}" for i in range(len(updated_lines)) if previous_lines[i] != updated_lines[i]]
+            diff = "\n".join(diff_lines)
+            return_msg = f"Updated lines:\n```\n{diff}\n```"
+        else:
+            # Updated lines get * marker, other lines are shown for context (updated line number)
+            new_str_idx = updated_content.index(new_str)
+            first_diff_index = updated_content[:new_str_idx].count("\n")
+            diff_lines = []
+            for i, line in enumerate(updated_lines[first_diff_index:], start=first_diff_index):
+                if i < first_diff_index+len(new_str.splitlines()):
+                    diff_lines += [f"*{i + 1:>3}: {line}"]
+                else:
+                    diff_lines += [f" {i + 1:>3}: {line}"]
+            diff = "\n".join(diff_lines)
+            return_msg = f"Showing lines starting from {first_diff_index + 1}:\n```\n{diff}\n```"
+
+        return f"Successfully replaced text. {return_msg}"
         
     except Exception as e:
         error_msg = f"Error during string replacement: {str(e)}"

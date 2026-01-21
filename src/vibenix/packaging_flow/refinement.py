@@ -126,19 +126,19 @@ def refine_package(curr: Solution, project_page: str, output_dir=None) -> Soluti
     if any(linters):
         coordinator_message("Linters have reported issues with the current packaging code. Using linter feedback.")
         feedback = "\n".join(linters)
-    improve_code(view_package_contents(prompt="improve_code"), feedback, chat_history=chat_history)
-    updated_code = get_package_contents()
-    ccl_logger.write_kv("improved_code", updated_code)
+    #improve_code(view_package_contents(prompt="improve_code"), feedback, chat_history=chat_history)
+    #updated_code = get_package_contents()
+    #ccl_logger.write_kv("improved_code", updated_code)
 
-    attempt = execute_build_and_add_to_stack(updated_code)
-    if not attempt.result.success:
-        coordinator_message("Final code improvement caused build errors, reverting to last successful solution.")
-        revert_packaging_to_solution(curr)
-        ccl_logger.write_kv("type", attempt.result.error.type)
-        ccl_logger.write_kv("error", attempt.result.error.truncated())
-    else:
-        coordinator_message("Final code improvement successfuly builds.")
-        curr = attempt
+    #attempt = execute_build_and_add_to_stack(updated_code)
+    #if not attempt.result.success:
+    #    coordinator_message("Final code improvement caused build errors, reverting to last successful solution.")
+    #    revert_packaging_to_solution(curr)
+    #    ccl_logger.write_kv("type", attempt.result.error.type)
+    #    ccl_logger.write_kv("error", attempt.result.error.truncated())
+    #else:
+    #    coordinator_message("Final code improvement successfuly builds.")
+    #    curr = attempt
 
     if iteration > 0:
         ccl_logger.leave_list()

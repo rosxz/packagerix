@@ -15,9 +15,6 @@ def insert_line_after(line_number: int, new_content: str) -> str:
       line_number: The line number after which the new content will be inserted.
     """
     print(f"📞 Function called: insert_line_after")
-    #from vibenix.ui.conversation_templated import get_model_prompt_manager
-    #if not get_model_prompt_manager().get_synced():
-    #    return "Error: Please use the `view` tool before using the `insert_line_after` tool."
     return _insert(line_number, new_content)
 
 
@@ -55,37 +52,25 @@ def _insert(insert_line: int, new_str: str) -> str:
         
         # Update the flake with new content
         update_flake(updated_content)
-        #from vibenix.ui.conversation_templated import get_model_prompt_manager
-        #get_model_prompt_manager().set_synced(False)
-        return_msg = ""
         
         # Show all lines starting from first changed line, mark inserted lines with *
-        #lines = updated_content.splitlines()
-        #start_line = max(insert_line-2, 0)
-        #line_count = min(len(new_str.splitlines()) + 2, len(lines)-1)
-        #for i in range(start_line, start_line + line_count + 1):
-        #    prefix = "*" if start_line+1 < i < start_line + line_count else " "
-        #    return_msg += f"{prefix}{i + 1:>3}: {lines[i]}\n"
+        start_line = insert_line-1
+        updated_lines = updated_content.splitlines()
+        previous_lines = current_content.splitlines()
+        
+        diff_lines = []
+        # Updated lines get * marker, other lines are shown for context (updated line number)
+        first_diff_index = next(i for i in range(min(len(previous_lines), len(updated_lines))) if previous_lines[i] != updated_lines[i])
+        diff_lines = []
+        for i, line in enumerate(updated_lines[first_diff_index:], start=first_diff_index):
+            if i < first_diff_index+len(new_str.splitlines()):
+                diff_lines += [f"*{i + 1:>3}: {line}"]
+            else:
+                diff_lines += [f" {i + 1:>3}: {line}"]
+        diff = "\n".join(diff_lines)
+        return_msg = f"Lines starting from {insert_line}:\n```\n{diff}\n```"
 
-        #updated_lines = updated_content.splitlines()
-        #previous_lines = current_content.splitlines()
-        #
-        #diff_lines = []
-        ## Updated lines get * marker, other lines are shown for context (updated line number)
-        #first_diff_index = next(i for i in range(min(len(previous_lines), len(updated_lines))) if previous_lines[i] != updated_lines[i])
-        #diff_lines = []
-        #for i, line in enumerate(updated_lines[first_diff_index:], start=first_diff_index):
-        #    if i < first_diff_index+len(new_str.splitlines()):
-        #        diff_lines += [f"*{i + 1:>3}: {line}"]
-        #    else:
-        #        diff_lines += [f" {i + 1:>3}: {line}"]
-        #diff = "\n".join(diff_lines)
-        #return_msg = f"Lines starting from {insert_line}:\n```\n{diff}\n```"
-        #from vibenix.tools.view import _view
-        #return_msg = _view(prompt="_view")
-        #return f"Successfuly inserted text.\n{return_msg}"
-
-        return f"Successfuly inserted text."
+        return f"Successfuly inserted text.\n{return_msg}"
         
     except Exception as e:
         error_msg = f"Error inserting text: {str(e)}"
