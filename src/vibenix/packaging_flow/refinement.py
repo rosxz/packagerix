@@ -65,8 +65,6 @@ def refine_package(curr: Solution, project_page: str, output_dir=None) -> Soluti
     if get_settings_manager().get_setting_value("refinement.chat_history"):
         chat_history = [] # List to keep track of (user_prompt -> final model response) over the course of refinement
 
-    cumulative_result = RefinementIterationResult()
-
     iteration = 0
     while iteration < 3: # TODO make configurable
         #get_logger().log_debug(f"Chat history at iteration {iteration} start: {len(chat_history) if chat_history is not None else 'N/A'}")
@@ -74,17 +72,14 @@ def refine_package(curr: Solution, project_page: str, output_dir=None) -> Soluti
         ccl_logger.write_kv("code", curr.code)
 
         # Get feedback (VM will be started/stopped automatically by run_in_vm calls)
-        lessons, done = cumulative_result.lessons_learned, cumulative_result.tasks_identified
         feedback = get_feedback(curr.code, chat_history.copy() if chat_history is not None else None,
-                                 lessons, done, project_page=project_page, tree_output=get_tree_output()) # copy to avoid storing
+                                 project_page=project_page, tree_output=get_tree_output()) # copy to avoid storing
         ccl_logger.write_kv("feedback", str(feedback))
-        cumulative_result.lessons_learned.extend(feedback.lessons_learned)
 
         coordinator_message(f"Refining package based on feedback...")
         refined = refine_code(view_package_contents(prompt="refine_code"), str(feedback), chat_history=chat_history, project_page=project_page)
         updated_code = get_package_contents()
         ccl_logger.write_kv("refined_code", updated_code)
-        cumulative_result.tasks_identified.extend(refined.tasks_performed) # we don't really care about tasks_identified for the future
 
         attempt = execute_build_and_add_to_stack(updated_code)
         # Verify the updated code still builds
