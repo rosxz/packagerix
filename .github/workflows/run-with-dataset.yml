@@ -244,7 +244,7 @@ jobs:
     needs: setup
     runs-on: ubuntu-latest
     name: "${{ matrix.id || matrix.issue_number }}: ${{ matrix.repo_name || matrix.package_name }}"
-    timeout-minutes: 60
+    timeout-minutes: 65
     strategy:
       matrix: ${{ fromJson(needs.setup.outputs.matrix) }}
       max-parallel: ${{ fromJson(github.event.inputs.concurrent_jobs || '1') }}  # Configurable parallel jobs
