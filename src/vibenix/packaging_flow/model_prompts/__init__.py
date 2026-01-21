@@ -61,7 +61,7 @@ def get_feedback(
     already_implemented: List[str] = [],
     project_page: Optional[str] = None,
     tree_output: Optional[str] = "",
-) -> RefinementIterationResult:
+) -> str:
     """Get feedback on a successfully built package."""
     ...
 
