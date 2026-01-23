@@ -74,7 +74,7 @@ def update_fetcher(project_url: Optional[str], revision: Optional[str]) -> str:
         project_url = get_project_url()
 
     from vibenix.packaging_flow.run import run_nurl
-    version, fetcher = run_nurl(project_url, revision)
+    version, fetcher = run_nurl(project_url, revision) # Project should be updated by default, this is maintenance mode after all
 
     # Update the fetcher in package.nix
     package_contents: str = get_package_contents()
@@ -203,7 +203,6 @@ def run_maintenance(maintenance_dir: str, output_dir: Optional[str] = None,
 
         return file_path
 
-    ## Initial Vibenix messages
     # Initialize CCL logger
     if output_dir:
         output_path = Path(output_dir)
@@ -251,9 +250,9 @@ def run_maintenance(maintenance_dir: str, output_dir: Optional[str] = None,
     fetch_project_src(fetcher) # Ensure project source is in nix store
     if update_lock:
         update_lock_file()
-        # upgrade_lock_file() # TODO match closest nixpkgs release
+        # upgrade_lock_file() # match closest nixpkgs release # Not doing this anymore
 
-    # Step 2: Create additional (runtime-initialized) tools for model
+    # Create additional (runtime-initialized) tools for model
     from vibenix.packaging_flow.run import get_nixpkgs_source_path, create_source_function_calls, get_store_path
     store_path = get_store_path(fetcher)
     nixpkgs_path = get_nixpkgs_source_path()
@@ -267,7 +266,7 @@ def run_maintenance(maintenance_dir: str, output_dir: Optional[str] = None,
     from vibenix.ui.conversation_templated import get_settings_manager
     get_settings_manager().initialize_additional_tools(additional_functions)
 
-    # Step 3: Analyze project to obtain summary used for model prompts
+    # Analyze project to obtain summary used for model prompts
     # Use project source root's README.md + root directory file list as information sources
     coordinator_message("Using project source files to analyze the project.")
     try:
@@ -285,7 +284,7 @@ def run_maintenance(maintenance_dir: str, output_dir: Optional[str] = None,
     if not summary:
         coordinator_error("Model failed to produce a project summary.")
 
-    # Step 7: Agentic loop
+    # Agentic loop
     coordinator_progress("Testing the initial build...")
     from vibenix.nix import execute_build_and_add_to_stack, revert_packaging_to_solution
     best = execute_build_and_add_to_stack(get_package_contents())
