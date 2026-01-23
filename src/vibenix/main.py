@@ -272,6 +272,14 @@ def main():
     )
 
     parser.add_argument(
+        "--maintenance",
+        type=str,
+        default=None,
+        metavar="NIX_FILE",
+        help="Path to .nix file for maintenance mode. Requires --raw. Incompatible with project_url, revision, --csv-dataset, --csv-package, and --fetcher."
+    )
+
+    parser.add_argument(
         "--version",
         action="version",
         version="vibenix 0.1.0"
@@ -284,6 +292,33 @@ def main():
             logger.info("Starting vibenix settings configuration")
             from vibenix.ui.raw_terminal.terminal_vibenix_settings import show_vibenix_settings_terminal
             show_vibenix_settings_terminal()
+            sys.exit(0)
+
+        # Validate maintenance mode constraints
+        if args.maintenance:
+            # Maintenance mode requires --raw
+            if not args.raw:
+                parser.error("--maintenance requires --raw to be set")
+            
+            # Maintenance mode is incompatible with project_url and revision
+            if args.project_url:
+                parser.error("--maintenance is incompatible with project_url argument")
+            
+            if args.revision:
+                parser.error("--maintenance is incompatible with revision argument")
+            
+            # Maintenance mode is incompatible with CSV dataset mode
+            if args.csv_dataset or args.csv_package:
+                parser.error("--maintenance is incompatible with --csv-dataset and --csv-package")
+            
+            # Maintenance mode is incompatible with --fetcher
+            if args.fetcher:
+                parser.error("--maintenance is incompatible with --fetcher")
+            
+            # Run maintenance mode
+            logger.info(f"Starting maintenance mode for: {args.maintenance}")
+            from vibenix.maintenance import run_maintenance
+            run_maintenance(args.maintenance, output_dir=args.output_dir)
             sys.exit(0)
 
         if args.textual:
