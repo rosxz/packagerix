@@ -2,13 +2,15 @@ import shutil
 import os
 import git
 from jinja2 import Template
+from typing import Optional
 
 from vibenix import config
 from vibenix.ui.logging_config import logger
 from vibenix.nixpkgs_lock import get_nixpkgs_lock_info
 
+from pathlib import Path
 
-def init_flake():
+def init_flake(reference_dir: Optional[Path] = None) -> None:
 
     logger.info(f"Creating flake at {config.flake_dir} from reference directory {config.template_dir}")
 
@@ -62,9 +64,25 @@ def init_flake():
         f.write(flake_lock_content)
     os.chmod(flake_lock_path, 0o644)
 
+    ## If reference_dir is provided, copy its contents into the flake directory
+    if reference_dir:
+        ref_path = Path(reference_dir).resolve()
+        logger.info(f"Copying contents from reference directory: {ref_path}")
+
+        for item in ref_path.iterdir():
+            dest = config.flake_dir / item.name
+            if item.is_dir(): # TODO improve ts
+                shutil.copytree(item, dest, dirs_exist_ok=True)
+            else:
+                shutil.copy2(item, dest)
+            os.chmod(dest, 0o644 if dest.is_file() else 0o755)
+
     repo = git.Repo.init(config.flake_dir.as_posix())
     repo.git.add('-A')
-    repo.index.commit("add empty template")
+    if not reference_dir:
+        repo.index.commit("add empty template")
+    else:
+        repo.index.commit("initialize flake from reference directory")
 
 def update_flake(new_content, do_commit: bool = False) -> str:
     file_path = config.flake_dir / "package.nix"

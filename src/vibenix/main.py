@@ -275,8 +275,24 @@ def main():
         "--maintenance",
         type=str,
         default=None,
-        metavar="NIX_FILE",
-        help="Path to .nix file for maintenance mode. Requires --raw. Incompatible with project_url, revision, --csv-dataset, --csv-package, and --fetcher."
+        metavar="MAINTENANCE_DIR",
+        help="Directory containing flake.nix and package.nix (flake.lock optional) for maintenance mode. Requires --raw. Incompatible with project_url, revision, --csv-dataset, --csv-package, and --fetcher."
+    )
+    
+    parser.add_argument(
+        "--update-lock",
+        type=bool,
+        default=True,
+        metavar="UPDATE_LOCK",
+        help="Whether to update the flake.lock file if present during maintenance mode. Requires --raw. Default: True"
+    )
+
+    parser.add_argument(
+        "--upgrade-lock",
+        type=bool,
+        default=False,
+        metavar="UPGRADE_LOCK",
+        help="Whether to upgrade/bump the nixpkgs release used during maintenance mode. Requires --raw. Default: False"
     )
 
     parser.add_argument(
@@ -308,17 +324,13 @@ def main():
                 parser.error("--maintenance is incompatible with revision argument")
             
             # Maintenance mode is incompatible with CSV dataset mode
-            if args.csv_dataset or args.csv_package:
-                parser.error("--maintenance is incompatible with --csv-dataset and --csv-package")
-            
-            # Maintenance mode is incompatible with --fetcher
-            if args.fetcher:
-                parser.error("--maintenance is incompatible with --fetcher")
+            if args.csv_dataset or args.csv_package or args.fetcher:
+                parser.error("--maintenance is incompatible with --csv-dataset, --csv-package and --fetcher arguments")
             
             # Run maintenance mode
             logger.info(f"Starting maintenance mode for: {args.maintenance}")
-            from vibenix.maintenance import run_maintenance
-            run_maintenance(args.maintenance, output_dir=args.output_dir)
+            from vibenix.packaging_flow.maintenance import run_maintenance
+            run_maintenance(args.maintenance, output_dir=args.output_dir, upgrade_lock=args.upgrade_lock, update_lock=args.update_lock)
             sys.exit(0)
 
         if args.textual:
