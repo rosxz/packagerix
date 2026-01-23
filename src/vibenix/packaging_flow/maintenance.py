@@ -13,8 +13,9 @@ from vibenix.flake import init_flake, get_package_contents
 from vibenix import config
 
 
-def update_fetcher(project_url: Optional[str], revision: Optional[str], upgrade_lock: bool, update_lock: bool) -> None:
-    """Update the fetcher in flake.nix and flake.lock as needed."""
+def update_fetcher(project_url: Optional[str], revision: Optional[str]) -> str:
+    """Update the fetcher in package.nix to reflect project updates.
+    Runs nurl to get the fetcher for the provided version (default: latest rev) and replaces it in package.nix."""
     coordinator_progress("Updating fetcher in flake.nix and flake.lock")
 
     def get_project_url() -> str:
@@ -69,7 +70,6 @@ def update_fetcher(project_url: Optional[str], revision: Optional[str], upgrade_
         project_url = _normalize_project_url(project_url)
         return project_url
 
-
     if not project_url:
         project_url = get_project_url()
 
@@ -94,6 +94,7 @@ def update_fetcher(project_url: Optional[str], revision: Optional[str], upgrade_
     new_package_contents = package_contents.replace(fetcher_content, fetcher)
     from vibenix.flake import update_flake
     update_flake(new_package_contents) # TODO rename update_flake to update_package
+    return fetcher
 
 
 def update_lock_file() -> None:
@@ -121,6 +122,29 @@ def update_lock_file() -> None:
         coordinator_message("Successfully updated flake.lock file.")
     except (subprocess.TimeoutExpired, subprocess.CalledProcessError) as e:
         raise RuntimeError(f"Failed to update flake.lock file: {e}")
+
+def fetch_project_src(fetcher_contents: str) -> None:
+    """Ensure the project source is fetched to the Nix store."""
+    coordinator_progress("Fetching project source to Nix store")
+    ccl_logger = get_logger()
+    ccl_logger.write_kv("fetcher", fetcher_contents)
+
+    # Instantiate fetcher to pull contents to nix store TODO theres probably definetly a better way
+    cmd = [
+        'nix',
+        'build',
+        '--impure',
+        '--expr',
+        f"let pkgs = (builtins.getFlake (toString ./.)).inputs.nixpkgs.legacyPackages.${{builtins.currentSystem}}; in\nwith pkgs; {fetcher_contents}"
+    ]
+    try:
+        result = subprocess.run(cmd, cwd=config.flake_dir, capture_output=True, text=True, check=True)
+        if result.returncode != 0:
+            ccl_logger.write_kv("nix_eval_error", result.stderr)
+            ccl_logger.leave_attribute(log_end=True)
+            raise RuntimeError(f"{result.stderr}")
+    except (subprocess.TimeoutExpired, subprocess.CalledProcessError) as e:
+        raise RuntimeError(f"Failed to evaluate project fetcher: {e}")
 
 
 def run_maintenance(maintenance_dir: str, output_dir: Optional[str] = None,
@@ -223,7 +247,56 @@ def run_maintenance(maintenance_dir: str, output_dir: Optional[str] = None,
     init_flake(reference_dir=maintenance_path)
     coordinator_message(f"Working on temporary flake at {config.flake_dir}")
 
-    update_fetcher(None, revision, upgrade_lock, update_lock)
-    update_lock_file()
+    fetcher = update_fetcher(None, revision) # Update package src in the package.nix
+    fetch_project_src(fetcher) # Ensure project source is in nix store
+    if update_lock:
+        update_lock_file()
+        # upgrade_lock_file() # TODO match closest nixpkgs release
+
+    # Step 2: Create additional (runtime-initialized) tools for model
+    from vibenix.packaging_flow.run import get_nixpkgs_source_path, create_source_function_calls, get_store_path
+    store_path = get_store_path(fetcher)
+    nixpkgs_path = get_nixpkgs_source_path()
+    project_functions = create_source_function_calls(store_path, "project_")
+    nixpkgs_functions = create_source_function_calls(nixpkgs_path, "nixpkgs_")
+    from vibenix.tools.search_related_packages import get_builder_functions, \
+     _create_find_similar_builder_patterns
+    find_similar_builder_patterns = _create_find_similar_builder_patterns(use_cache=True)
+    additional_functions = project_functions + nixpkgs_functions + [get_builder_functions, find_similar_builder_patterns]
+    # Initialize said tools via settings manager
+    from vibenix.ui.conversation_templated import get_settings_manager
+    get_settings_manager().initialize_additional_tools(additional_functions)
+
+    # Step 3: Analyze project to obtain summary used for model prompts
+    # Use project source root's README.md + root directory file list as information sources
+    coordinator_message("Using project source files to analyze the project.")
+    try:
+        from vibenix.tools.file_tools import get_project_source_info
+        source_info = get_project_source_info(store_path)
+    except Exception as e:
+        coordinator_error(f"Failed to acquire project summary from source: {e}")
+        return
+
+    ccl_logger.log_project_summary_begin()
+    from vibenix.packaging_flow.run import analyze_project
+    summary = analyze_project(source_info=source_info) # TODO add current packaging code as context?
+    ccl_logger.log_project_summary_end(summary)
+
+    if not summary:
+        coordinator_error("Model failed to produce a project summary.")
+
+    # Step 7: Agentic loop
+    coordinator_progress("Testing the initial build...")
+    from vibenix.nix import execute_build_and_add_to_stack, revert_packaging_to_solution
+    best = execute_build_and_add_to_stack(get_package_contents())
+
+    from vibenix.tools.view import _view as view_package_contents 
+    ccl_logger.log_initial_build(view_package_contents(), best.result)
+    
+    from vibenix.packaging_flow.packaging_loop import packaging_loop 
+    candidate, best, status = packaging_loop(
+        best,
+        summary,
+    )
 
     return None
