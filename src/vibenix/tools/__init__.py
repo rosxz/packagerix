@@ -13,6 +13,7 @@ from vibenix.tools.error_pagination import error_pagination
 from vibenix.tools.build_package import build_package
 from vibenix.tools.out_path_file_tools import create_out_path_file_tools
 from vibenix.tools.vm_script import run_in_vm, set_vm_systemPackages
+from vibenix.tools.upgrade_nixpkgs import upgrade_nixpkgs
 
 # Fake useless tool to avoid error when no tools are given
 def noop_tool() -> str:
@@ -32,6 +33,7 @@ __all__ = [
     'error_pagination',
     'build_package',
     'run_in_vm',
+    'upgrade_nixpkgs',
     'noop_tool',
 ]
 
