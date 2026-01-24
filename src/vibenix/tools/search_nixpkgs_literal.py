@@ -22,12 +22,23 @@ def _search_nixpkgs_for_package_literal(query: str, package_set_unique: str = No
     """Search the nixpkgs repository of Nix code for the given package using fuzzy search."""
     
     # Get all packages (using ^ to match everything)
-    nix_result = subprocess.run(
-        ["nix", "search", "--json", "nixpkgs", "^"],
-        stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE,
-        text=True
-    )
+    from vibenix.defaults import get_settings_manager
+    from vibenix import config
+    if get_settings_manager().get_setting_enabled("strict_lock_env"):
+        nix_result = subprocess.run(
+            ["nix", "search", "--json", "--inputs-from", ".", "nixpkgs", "^"],
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+            cwd=config.flake_dir  # Run in the package directory to use its lock file
+        )
+    else:
+        nix_result = subprocess.run(
+            ["nix", "search", "--json", "nixpkgs", "^"],
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True
+        )
     
     if nix_result.returncode != 0 or not nix_result.stdout.strip():
         return f"Failed to fetch package list from nixpkgs"
