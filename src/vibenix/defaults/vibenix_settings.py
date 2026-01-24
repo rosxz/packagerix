@@ -126,6 +126,7 @@ DEFAULT_VIBENIX_SETTINGS = {
 
     # General behavior, misc
     "behaviour": {
+        "strict_lock_env": False,
         "progress_evaluation": True,
         "compare_template_builders": False,
         "packaging_loop": {
