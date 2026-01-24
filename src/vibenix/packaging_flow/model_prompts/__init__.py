@@ -108,6 +108,24 @@ def fix_build_error(
     ...
 
 
+@run_formatter_after
+@ask_model_prompt('error_fixing/fix_build_error.md')
+def fix_build_error_maintenance(
+    code: str,
+    error: str,
+    project_page: Optional[str] = None,
+    template_notes: Optional[str] = None,
+    is_broken_log_output: bool = False,
+    is_dependency_build_error: bool = False,
+    is_syntax_error: bool = False,
+    attempted_tool_calls: List = [],
+    tool_call_collector: List = None,
+    chat_history: Optional[List] = None,
+) -> ModelCodeResponse:
+    """Fix a build error in Nix code during maintenance mode."""
+    ...
+
+
 @ask_model_prompt('error_fixing/fix_hash_mismatch.md')
 def fix_hash_mismatch(code: str, error: str) -> ModelCodeResponse:
     """Fix hash mismatch errors in Nix code."""

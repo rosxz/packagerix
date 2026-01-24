@@ -3,13 +3,17 @@
 from pathlib import Path
 import subprocess
 from typing import Optional
+from certifi import contents
 from vibenix.ui.logging_config import logger
 from magika import Magika
 
 from vibenix.ccl_log import init_logger, get_logger, close_logger, enum_str
 from vibenix.git_info import get_git_info
 from vibenix.ui.conversation import coordinator_message, coordinator_error, coordinator_progress
+from vibenix.ui.conversation_templated import get_model_prompt_manager
 from vibenix.flake import init_flake, get_package_contents
+from vibenix.packaging_flow.model_prompts import analyze_package_failure, classify_packaging_failure, PackagingFailure
+from vibenix.packaging_flow.refinement import refine_package
 from vibenix import config
 
 current_system = ""
@@ -142,7 +146,6 @@ def fetch_project_src(fetcher_contents: str) -> None:
 
     global current_system
     # Instantiate fetcher to pull contents to nix store TODO theres probably definetly a better way
-    nix_expr = f"let pkgs = (builtins.getFlake (toString ./.)).inputs.nixpkgs.legacyPackages.${{builtins.currentSystem}}; in\nwith pkgs; {fetcher_contents}"
     cmd = [
         'nix',
         'build',
@@ -160,6 +163,26 @@ def fetch_project_src(fetcher_contents: str) -> None:
         ccl_logger.write_kv("nix_eval_error", error_details)
         ccl_logger.leave_attribute(log_end=True)
         raise RuntimeError(f"Failed to evaluate project fetcher:\n{error_details}")
+
+def save_package_output(package_directory: Path, output_dir: str) -> None:
+    """Save the fixed package.nix and accompanying files to the output directory."""
+    output_path = Path(output_dir).resolve()
+    output_path.mkdir(parents=True, exist_ok=True)
+
+    def ignore_git(dir, contents):
+        # This will match .git, .gitignore, etc. anywhere in the tree
+        return [c for c in contents if c == ".git" or c.startswith(".git")]
+
+    # Copy files from package_directory to output_path
+    import shutil
+    for item in package_directory.iterdir():
+        dest = output_path / item.name
+        if item.is_dir():
+            shutil.copytree(item, dest, dirs_exist_ok=True, ignore=ignore_git)
+        else:
+            shutil.copy2(item, dest)
+
+    coordinator_message(f"Saved updated package.nix to: {output_path / 'package.nix'}")
 
 
 def run_maintenance(maintenance_dir: str, output_dir: Optional[str] = None,
@@ -294,6 +317,57 @@ def run_maintenance(maintenance_dir: str, output_dir: Optional[str] = None,
     candidate, best, status = packaging_loop(
         best,
         summary,
+        maintenance_mode=True
     )
 
+    # Log the raw package code before refinement or analysis
+    ccl_logger.write_kv("raw_package", candidate.code)
+    
+    if candidate.result.success:
+        coordinator_message("Build succeeded!")
+        if get_settings_manager().get_setting_enabled("refinement.enabled"):
+            packaging_usage = get_model_prompt_manager().get_session_usage()
+            candidate = refine_package(candidate, summary, output_dir)
+            ccl_logger.write_kv("refined_package", candidate.code)
+
+            refinement_usage = get_model_prompt_manager().get_session_usage() - packaging_usage
+            ccl_logger.log_refinement_cost(
+                packaging_usage.calculate_cost(),
+                refinement_usage.calculate_cost(),
+                refinement_usage.prompt_tokens,
+                refinement_usage.completion_tokens,
+                refinement_usage.cache_read_tokens
+            )
+        
+        ccl_logger.log_total_tool_cost()
+        # Always log success and return, regardless of refinement outcome
+        ccl_logger.log_session_end(signal=None, total_cost=get_model_prompt_manager().get_session_cost())
+        if output_dir:
+            from vibenix.flake import get_package_path
+            package_directory = Path(get_package_path()).parent
+            save_package_output(package_directory, output_dir)
+        close_logger()
+        return candidate.code  
+    else:
+        max_iterations = get_settings_manager().get_setting_value("packaging_loop.max_iterations")
+        max_consecutive_non_build_errors = get_settings_manager().get_setting_value("packaging_loop.max_consecutive_non_build_errors")
+        if status['consecutive_non_build_errors'] >= max_consecutive_non_build_errors:
+            coordinator_error(f"Aborted: {status['consecutive_rebuilds_without_progress']} consecutive rebuilds without progress.")
+        else:
+            coordinator_error(f"Reached MAX_ITERATIONS build iteration limit of {max_iterations}.")
+    
+    ccl_logger.enter_attribute("analyze_failure")
+    revert_packaging_to_solution(best) # TODO do this differently later, not just best
+    details = analyze_package_failure(best.code, best.result.error.truncated(), summary) # TODO best.code
+    ccl_logger.write_kv("description", str(details))
+    packaging_failure = classify_packaging_failure(details)
+    ccl_logger.write_kv("failure_type", enum_str(packaging_failure))
+    ccl_logger.leave_attribute()
+    if isinstance(packaging_failure, PackagingFailure):
+        coordinator_message(f"Packaging failure type: {packaging_failure}\nDetails:\n{details}\n")
+
+    ccl_logger.log_total_tool_cost()
+    ccl_logger.log_session_end(signal=None, total_cost=get_model_prompt_manager().get_session_cost())
+    close_logger()
     return None
+
