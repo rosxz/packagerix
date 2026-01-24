@@ -101,11 +101,12 @@ def mock_input (ask : str, reply: str):
     logger.info(reply + "\n")
     return reply
 
-def run_terminal_ui(output_dir=None, project_url=None, revision=None, fetcher=None,
+def run_terminal_ui(maintenance=None, output_dir=None, project_url=None, revision=None, fetcher=None,
                     csv_pname=None, csv_version=None, fetcher_content=None):
     """Run the terminal-based interface.
 
     Args:
+        maintenance: Directory containing flake.nix and package.nix for maintenance mode
         output_dir: Directory to save successful package.nix files
         project_url: GitHub project URL to package (URL-based mode)
         revision: Project revision (commit hash, tag, or release name)
@@ -162,7 +163,11 @@ def run_terminal_ui(output_dir=None, project_url=None, revision=None, fetcher=No
 
     def run_coordinator():
         try:
-            run_packaging_flow(output_dir=output_dir, project_url=project_url,
+            if maintenance:
+                from vibenix.packaging_flow.maintenance import run_maintenance
+                run_maintenance(maintenance, output_dir=output_dir)
+            else:
+                run_packaging_flow(output_dir=output_dir, project_url=project_url,
                                revision=revision, fetcher=fetcher,
                                csv_pname=csv_pname, csv_version=csv_version,
                                fetcher_content=fetcher_content)
@@ -276,7 +281,7 @@ def main():
         type=str,
         default=None,
         metavar="MAINTENANCE_DIR",
-        help="Directory containing flake.nix and package.nix (flake.lock optional) for maintenance mode. Requires --raw. Incompatible with project_url, revision, --csv-dataset, --csv-package, and --fetcher."
+        help="Directory containing flake.nix and package.nix (flake.lock optional) for maintenance mode. Requires --raw. Incompatible with --csv-dataset, --csv-package, and --fetcher."
     )
     
     parser.add_argument(
@@ -326,12 +331,6 @@ def main():
             # Maintenance mode is incompatible with CSV dataset mode
             if args.csv_dataset or args.csv_package or args.fetcher:
                 parser.error("--maintenance is incompatible with --csv-dataset, --csv-package and --fetcher arguments")
-            
-            # Run maintenance mode
-            logger.info(f"Starting maintenance mode for: {args.maintenance}")
-            from vibenix.packaging_flow.maintenance import run_maintenance
-            run_maintenance(args.maintenance, output_dir=args.output_dir, upgrade_lock=args.upgrade_lock, update_lock=args.update_lock)
-            sys.exit(0)
 
         if args.textual:
             # Textual UI mode (unmaintained)
@@ -400,7 +399,7 @@ def main():
             if args.output_dir and not (args.project_url or args.fetcher or csv_pname):
                 parser.error("--output-dir requires a project URL, Nix fetcher, or CSV dataset to be provided")
 
-            run_terminal_ui(output_dir=args.output_dir, project_url=args.project_url,
+            run_terminal_ui(maintenance=args.maintenance, output_dir=args.output_dir, project_url=args.project_url,
                             revision=args.revision, fetcher=args.fetcher,
                             csv_pname=csv_pname, csv_version=csv_version,
                             fetcher_content=fetcher_content)

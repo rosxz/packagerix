@@ -12,6 +12,7 @@ from vibenix.ui.conversation import coordinator_message, coordinator_error, coor
 from vibenix.flake import init_flake, get_package_contents
 from vibenix import config
 
+current_system = ""
 
 def update_fetcher(project_url: Optional[str], revision: Optional[str]) -> str:
     """Update the fetcher in package.nix to reflect project updates.
@@ -42,6 +43,7 @@ def update_fetcher(project_url: Optional[str], revision: Optional[str]) -> str:
                 text=True,
                 check=True,
             )
+            global current_system
             current_system = system_result.stdout.strip()
 
             result = subprocess.run(
@@ -81,8 +83,9 @@ def update_fetcher(project_url: Optional[str], revision: Optional[str]) -> str:
     # Build regex pattern to match src = fetch{...} with repo attribute matching pname (case-insensitive)
     import re
     repo = project_url.split("/")[-1]
-    fetcher_pattern = rf"src\s+=\s+(fetch[\w]+\s+\{{\n(?:.*\n)*?\s+repo\s+=\s+\"[^\"]*{re.escape(repo)}[^\"]*\"\s*;\n(?:.*\n)*?\}})"
-    fetcher_match = re.search(fetcher_pattern, package_contents, re.IGNORECASE | re.MULTILINE)
+    fetcher_pattern = r"src\s+=\s+(fetch[\w]+\s*\{[\s\S]*?repo\s+=\s+\"[^\"]*" + re.escape(repo) + r"[^\"]*\"[\s\S]*?\});"
+    # TODO check how much identation previous fetcher had to match or something
+    fetcher_match = re.search(fetcher_pattern, package_contents, re.IGNORECASE)
     fetcher_content = ""
     if fetcher_match:
         fetcher_content = fetcher_match.group(1)
@@ -91,7 +94,14 @@ def update_fetcher(project_url: Optional[str], revision: Optional[str]) -> str:
         coordinator_error(f"No fetcher found with repo matching '{repo}'")
         raise ValueError(f"Could not find fetcher with repo matching '{repo}' in flake.nix")
 
+    # Indent all lines after the first by 2 spaces
+    lines = fetcher.split('\n')
+    if len(lines) > 1:
+        fetcher = lines[0] + '\n' + '\n'.join('  ' + line for line in lines[1:])
     new_package_contents = package_contents.replace(fetcher_content, fetcher)
+    if new_package_contents == package_contents:
+        coordinator_error("Failed to update fetcher in package.nix")
+        raise RuntimeError("Fetcher update did not change package.nix contents")
     from vibenix.flake import update_flake
     update_flake(new_package_contents) # TODO rename update_flake to update_package
     return fetcher
@@ -127,15 +137,17 @@ def fetch_project_src(fetcher_contents: str) -> None:
     """Ensure the project source is fetched to the Nix store."""
     coordinator_progress("Fetching project source to Nix store")
     ccl_logger = get_logger()
+    ccl_logger.enter_attribute("load_fetcher", log_start=True)
     ccl_logger.write_kv("fetcher", fetcher_contents)
 
+    global current_system
     # Instantiate fetcher to pull contents to nix store TODO theres probably definetly a better way
+    nix_expr = f"let pkgs = (builtins.getFlake (toString ./.)).inputs.nixpkgs.legacyPackages.${{builtins.currentSystem}}; in\nwith pkgs; {fetcher_contents}"
     cmd = [
         'nix',
         'build',
         '--impure',
-        '--expr',
-        f"let pkgs = (builtins.getFlake (toString ./.)).inputs.nixpkgs.legacyPackages.${{builtins.currentSystem}}; in\nwith pkgs; {fetcher_contents}"
+        f'.#packages.{current_system}.default.src',
     ]
     try:
         result = subprocess.run(cmd, cwd=config.flake_dir, capture_output=True, text=True, check=True)
@@ -143,8 +155,11 @@ def fetch_project_src(fetcher_contents: str) -> None:
             ccl_logger.write_kv("nix_eval_error", result.stderr)
             ccl_logger.leave_attribute(log_end=True)
             raise RuntimeError(f"{result.stderr}")
-    except (subprocess.TimeoutExpired, subprocess.CalledProcessError) as e:
-        raise RuntimeError(f"Failed to evaluate project fetcher: {e}")
+    except subprocess.CalledProcessError as e:
+        error_details = e.stderr if hasattr(e, 'stderr') else str(e)
+        ccl_logger.write_kv("nix_eval_error", error_details)
+        ccl_logger.leave_attribute(log_end=True)
+        raise RuntimeError(f"Failed to evaluate project fetcher:\n{error_details}")
 
 
 def run_maintenance(maintenance_dir: str, output_dir: Optional[str] = None,
@@ -173,9 +188,7 @@ def run_maintenance(maintenance_dir: str, output_dir: Optional[str] = None,
         logger.error(f"Maintenance path must be a directory, not a file: {maintenance_path}")
         raise ValueError(f"Expected a directory, got a file: {maintenance_path}")
 
-    magika = Magika()
-
-    def _validate_required_file(filename: str, expected_suffix: str) -> Path:
+    def _validate_required_file(filename: str) -> Path:
         file_path = maintenance_path / filename
 
         if not file_path.exists():
@@ -185,21 +198,6 @@ def run_maintenance(maintenance_dir: str, output_dir: Optional[str] = None,
         if not file_path.is_file():
             logger.error(f"Expected a file but found a directory at: {file_path}")
             raise ValueError(f"Expected a file, got a directory: {file_path}")
-
-        if file_path.suffix != expected_suffix:
-            logger.error(f"Unexpected extension for {filename}: {file_path.suffix}")
-            raise ValueError(f"Expected {expected_suffix} extension for {filename}, got: {file_path.suffix}")
-
-        logger.info(f"Verifying {filename} using Magika: {file_path}")
-        result = magika.identify_path(file_path)
-        logger.info(f"Magika detection for {filename}: type={result.output.ct_label}, confidence={result.score:.2%}, is_text={result.output.is_text}")
-
-        if not result.output.is_text:
-            logger.error(f"{filename} is not a text file: {file_path}")
-            raise ValueError(f"Expected a text file for {filename}, but Magika detected: {result.output.ct_label}")
-
-        if result.output.ct_label.lower() not in ["nix", "unknown", "generic text document", "code"]:
-            logger.warning(f"{filename} may not be a Nix file. Detected as: {result.output.ct_label} (confidence: {result.score:.2%})")
 
         return file_path
 
@@ -222,10 +220,10 @@ def run_maintenance(maintenance_dir: str, output_dir: Optional[str] = None,
 
     coordinator_message("Welcome to vibenix!") ###
 
-    flake_nix_path = _validate_required_file("flake.nix", ".nix")
-    package_nix_path = _validate_required_file("package.nix", ".nix")
+    flake_nix_path = _validate_required_file("flake.nix")
+    package_nix_path = _validate_required_file("package.nix")
     try:
-        flake_lock_path = _validate_required_file("flake.lock", ".lock")
+        flake_lock_path = _validate_required_file("flake.lock")
     except FileNotFoundError:
         flake_lock_path = None
 
