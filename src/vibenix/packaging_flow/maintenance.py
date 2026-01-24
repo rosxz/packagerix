@@ -3,9 +3,7 @@
 from pathlib import Path
 import subprocess
 from typing import Optional
-from certifi import contents
 from vibenix.ui.logging_config import logger
-from magika import Magika
 
 from vibenix.ccl_log import init_logger, get_logger, close_logger, enum_str
 from vibenix.git_info import get_git_info
@@ -184,6 +182,32 @@ def save_package_output(package_directory: Path, output_dir: str) -> None:
 
     coordinator_message(f"Saved updated package.nix to: {output_path / 'package.nix'}")
 
+def create_nixpkgs_function_calls(initial_path: str):
+    """
+    Create all the file tools, but wrap them with a method that updates
+    the root_dir variable of the class to the current nixpkgs outPath.
+    """
+    from vibenix.tools.file_tools import create_source_function_calls
+    funcs = create_source_function_calls(
+        store_path=initial_path,
+        prefix="nixpkgs_",
+        dynamic_path=True
+    )
+    funcs, update_path = funcs[:-1], funcs[-1]
+    
+    import functools
+    def decorate_dynamic_path_update(func):
+        @functools.wraps(func)
+        def wrapper(*args, **kwargs):
+            from vibenix.packaging_flow.run import get_nixpkgs_source_path
+            update_path(get_nixpkgs_source_path())
+            result = func(*args, **kwargs)
+            return result
+        return wrapper
+
+    decorated_funcs = [decorate_dynamic_path_update(f) for f in funcs]
+    return decorated_funcs
+
 
 def run_maintenance(maintenance_dir: str, output_dir: Optional[str] = None,
                     revision: Optional[str] = None, upgrade_lock: bool = False,
@@ -278,7 +302,7 @@ def run_maintenance(maintenance_dir: str, output_dir: Optional[str] = None,
     store_path = get_store_path(fetcher)
     nixpkgs_path = get_nixpkgs_source_path()
     project_functions = create_source_function_calls(store_path, "project_")
-    nixpkgs_functions = create_source_function_calls(nixpkgs_path, "nixpkgs_")
+    nixpkgs_functions = create_nixpkgs_function_calls(nixpkgs_path) # Dynamic nixpkgs path update
     from vibenix.tools.search_related_packages import get_builder_functions, \
      _create_find_similar_builder_patterns
     find_similar_builder_patterns = _create_find_similar_builder_patterns(use_cache=True)
