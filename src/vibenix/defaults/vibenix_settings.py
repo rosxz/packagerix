@@ -5,6 +5,7 @@ from vibenix.tools import (
     SEARCH_TOOLS,
     EDIT_TOOLS,
     #OUT_PATH_TOOLS,
+    MAINTENANCE_TOOLS,
     VM_TOOLS,
     search_nix_functions,
     search_nixpkgs_manual_documentation,
@@ -59,6 +60,7 @@ ALL_PROMPTS = [
     "refine_code",
     "improve_code",
     "fix_build_error",
+    "fix_build_error_maintenance",
     "fix_hash_mismatch",
     "evaluate_progress",
     "classify_packaging_failure",
@@ -98,6 +100,7 @@ DEFAULT_PROMPT_TOOLS.update(
         'refine_code': get_names(SEARCH_TOOLS + EDIT_TOOLS),
         'improve_code': get_names(EDIT_TOOLS),
         'fix_build_error': get_names(SEARCH_TOOLS + EDIT_TOOLS) + ADDITIONAL_TOOLS,
+        'fix_build_error_maintenance': get_names(SEARCH_TOOLS + EDIT_TOOLS + MAINTENANCE_TOOLS) + ADDITIONAL_TOOLS,
         'fix_hash_mismatch': get_names(EDIT_TOOLS),
         'analyze_package_failure': get_names(SEARCH_TOOLS) + ADDITIONAL_TOOLS,
         'compare_template_builders': get_names([search_nix_functions, search_nixpkgs_manual_documentation]+EDIT_TOOLS)
