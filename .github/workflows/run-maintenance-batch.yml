@@ -18,6 +18,39 @@ on:
         required: false
         default: false
         type: boolean
+      concurrent_jobs:
+        description: 'Number of jobs to run in parallel (1 to avoid rate limits)'
+        required: false
+        default: '1'
+        type: number
+      gemini_api_key:
+        description: 'Which Gemini API key to use'
+        required: false
+        default: 'key1'
+        type: choice
+        options:
+          - key1
+          - key2
+          - key3
+      model:
+        description: 'Model to use (e.g., anthropic/claude-3-5-haiku-20241022, ollama/qwen2.5-coder:32b, gemini/gemini-2.5-flash, or openai/gpt-4.1-mini-2025-04-14)'
+        required: false
+        default: 'gemini/gemini-2.5-flash'
+        type: string
+      vibenix_settings:
+        description: 'Vibenix settings as JSON (e.g., {"tools": ["get_builder_packages"]})'
+        required: false
+        type: string
+      api_base_url:
+        description: 'API base URL for OpenAI-compatible endpoints'
+        required: false
+        default: 'https://api.openai.com'
+        type: choice
+        options:
+          - https://api.openai.com
+          - https://openrouter.ai/api
+          - https://bedrock-mantle.eu-north-1.api.aws
+          - http://hive.van-duck.ts.net:11434
 
 jobs:
   discover:
@@ -76,9 +109,28 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix: ${{ fromJson(needs.discover.outputs.matrix) }}
+      max-parallel: ${{ fromJson(github.event.inputs.concurrent_jobs || '1') }}
       fail-fast: false
     steps:
       - uses: actions/checkout@v4
+
+      - name: Set provider
+        id: provider
+        run: |
+          # Determine provider from model input
+          model="${{ github.event.inputs.model || 'gemini/gemini-2.5-flash' }}"
+          if [[ "$model" == ollama/* ]]; then
+            provider="ollama"
+          elif [[ "$model" == openai/* || "$model" == gpt-* ]]; then
+            provider="openai"
+          elif [[ "$model" == anthropic/* || "$model" == claude-* ]]; then
+            provider="anthropic"
+          elif [[ "$model" == gemini/* || "$model" == *gemini* ]]; then
+            provider="gemini"
+          else
+            provider="openai"  # Default to openai if unknown
+          fi
+          echo "provider=$provider" >> $GITHUB_OUTPUT
 
       - name: Install Nix
         uses: cachix/install-nix-action@v31
@@ -92,11 +144,88 @@ jobs:
           name: vibenix
           authToken: '${{ secrets.CACHIX_TOKEN }}'
 
-      - name: Configure Nix access tokens
-        if: ${{ env.GH_TOKEN != '' }}
+      - name: Tailscale
+        if: >-
+          (steps.provider.outputs.provider == 'ollama' || 
+           steps.provider.outputs.provider == 'openai') && 
+          env.TS_ID != ''
+        uses: tailscale/github-action@v3
         env:
-          GH_TOKEN: ${{ secrets.GH_TOKEN }}
-        run: echo "NIX_CONFIG=access-tokens = github.com=${{ secrets.GH_TOKEN }}" >> $GITHUB_ENV
+          TS_ID: ${{ secrets.TS_OAUTH_CLIENT_ID }}
+        with:
+          oauth-client-id: ${{ secrets.TS_OAUTH_CLIENT_ID }}
+          oauth-secret: ${{ secrets.TS_OAUTH_SECRET }}
+          tags: tag:oauth-client-gh-action-hydralisk-ollama
+
+      - name: Create vibenix config
+        run: |
+          mkdir -p ~/.vibenix
+          
+          # Convert ollama/modelname to openai/modelname (no-op for other providers)
+          model="${{ github.event.inputs.model || 'gemini/gemini-2.5-flash' }}"
+          model_converted=$(echo "$model" | sed 's|^ollama/|openai/|')
+          
+          # Use openai provider if ollama was selected
+          provider="${{ steps.provider.outputs.provider }}"
+          if [ "$provider" = "ollama" ]; then
+            provider="openai"
+          fi
+          
+          # Build config JSON dynamically
+          config_json='{"provider": "'$provider'", "model": "'$model_converted'", "backend": "litellm"'
+          
+          # Add API base URL
+          config_json="${config_json}, \"openai_api_base\": \"${{ github.event.inputs.api_base_url || 'https://api.openai.com' }}\""
+          
+          config_json="${config_json}}"
+          
+          echo "$config_json" > ~/.vibenix/config.json
+
+      - name: Create vibenix settings
+        run: |
+          VIBENIX_SETTINGS='''${{ github.event.inputs.vibenix_settings }}'''
+          # Set vibenix settings from input into config file (only if provided)
+          if [ -n "$VIBENIX_SETTINGS" ]; then
+            mkdir -p ~/.vibenix
+            echo '''${{ github.event.inputs.vibenix_settings }}''' > ~/.vibenix/vibenix_settings.json
+          fi
+
+      - name: Setup environment
+        run: |
+          # Set API keys as environment variables based on provider
+          if [ "${{ steps.provider.outputs.provider }}" = "anthropic" ]; then
+            echo "ANTHROPIC_API_KEY=${{ secrets.ANTHROPIC_API_KEY }}" >> $GITHUB_ENV
+          elif [ "${{ steps.provider.outputs.provider }}" = "gemini" ]; then
+            # Select Gemini API key based on choice
+            case "${{ github.event.inputs.gemini_api_key || 'key1' }}" in
+              key1)
+                echo "GEMINI_API_KEY=${{ secrets.GEMINI_API_KEY }}" >> $GITHUB_ENV
+                ;;
+              key2)
+                echo "GEMINI_API_KEY=${{ secrets.GEMINI_API_KEY2 }}" >> $GITHUB_ENV
+                ;;
+              key3)
+                echo "GEMINI_API_KEY=${{ secrets.GEMINI_API_KEY3 }}" >> $GITHUB_ENV
+                ;;
+            esac
+          elif [ "${{ steps.provider.outputs.provider }}" = "ollama" ]; then
+            # For Ollama via OpenAI endpoint, set a dummy API key if needed
+            echo "OPENAI_API_KEY=dummy" >> $GITHUB_ENV
+          elif [ "${{ steps.provider.outputs.provider }}" = "openai" ]; then
+            # Check if using OpenRouter, AWS Bedrock, or local llama.cpp based on the api_base_url
+            if [[ "${{ github.event.inputs.api_base_url }}" == *"openrouter.ai"* ]]; then
+              echo "OPENROUTER_API_KEY=${{ secrets.OPENROUTER_API_KEY }}" >> $GITHUB_ENV
+            elif [[ "${{ github.event.inputs.api_base_url }}" == *"bedrock"*"api.aws"* ]]; then
+              echo "AWS_BEARER_TOKEN_BEDROCK=${{ secrets.AWS_BEARER_TOKEN_BEDROCK }}" >> $GITHUB_ENV
+            elif [[ "${{ github.event.inputs.api_base_url }}" == *"hive.van-duck.ts.net"* ]]; then
+              echo "OPENAI_API_KEY=dummy" >> $GITHUB_ENV
+            else
+              echo "OPENAI_API_KEY=${{ secrets.OPENAI_API_KEY }}" >> $GITHUB_ENV
+            fi
+          fi
+
+          # Set Github token in nix config
+          echo "NIX_CONFIG=access-tokens = github.com=${{ secrets.GH_TOKEN }}" >> $GITHUB_ENV
 
       - name: Summarize inputs and settings
         run: |
@@ -105,11 +234,28 @@ jobs:
           echo "- **Package dir**: ${{ matrix.package_dir }}" >> $GITHUB_STEP_SUMMARY
           echo "- **Update lock**: ${{ github.event.inputs.update_lock }}" >> $GITHUB_STEP_SUMMARY
           echo "- **Upgrade lock**: ${{ github.event.inputs.upgrade_lock }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Model**: ${{ github.event.inputs.model || 'gemini/gemini-2.5-flash (default)' }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Concurrent jobs**: ${{ github.event.inputs.concurrent_jobs || '1 (default)' }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Gemini API key**: ${{ github.event.inputs.gemini_api_key || 'key1 (default)' }}" >> $GITHUB_STEP_SUMMARY
+
+          # Add API base URL if not default
+          if [ "${{ github.event.inputs.api_base_url }}" != "https://api.openai.com" ]; then
+            echo "- **API base URL**: ${{ github.event.inputs.api_base_url || 'https://api.openai.com' }}" >> $GITHUB_STEP_SUMMARY
+          fi
+
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "#### Vibenix Settings" >> $GITHUB_STEP_SUMMARY
-          echo '```json' >> $GITHUB_STEP_SUMMARY
-          nix develop -c python -c 'import json; from vibenix.defaults import DEFAULT_VIBENIX_SETTINGS, settings_to_json_format; from vibenix.defaults.vibenix_settings import deep_diff; diff = deep_diff(DEFAULT_VIBENIX_SETTINGS, DEFAULT_VIBENIX_SETTINGS); print(json.dumps(settings_to_json_format(diff), indent=2))' >> $GITHUB_STEP_SUMMARY || echo "{}"  >> $GITHUB_STEP_SUMMARY
-          echo '```' >> $GITHUB_STEP_SUMMARY
+
+          # Pretty-print vibenix settings if provided, otherwise get defaults from vibenix
+          if [ -n "${{ github.event.inputs.vibenix_settings }}" ]; then
+            echo '```json' >> $GITHUB_STEP_SUMMARY
+            echo '${{ github.event.inputs.vibenix_settings }}' | jq '.' >> $GITHUB_STEP_SUMMARY || echo '${{ github.event.inputs.vibenix_settings }}' >> $GITHUB_STEP_SUMMARY
+            echo '```' >> $GITHUB_STEP_SUMMARY
+          else
+            echo '```json' >> $GITHUB_STEP_SUMMARY
+            nix develop -c python -c 'import json; from vibenix.defaults import DEFAULT_VIBENIX_SETTINGS, settings_to_json_format; from vibenix.defaults.vibenix_settings import deep_diff; diff = deep_diff(DEFAULT_VIBENIX_SETTINGS, DEFAULT_VIBENIX_SETTINGS); print(json.dumps(settings_to_json_format(diff), indent=2))' >> $GITHUB_STEP_SUMMARY || echo "{}"  >> $GITHUB_STEP_SUMMARY
+            echo '```' >> $GITHUB_STEP_SUMMARY
+          fi
 
       - name: Run vibenix maintenance
         id: run-vibenix
