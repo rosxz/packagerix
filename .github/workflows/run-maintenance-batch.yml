@@ -53,12 +53,75 @@ on:
           - http://hive.van-duck.ts.net:11434
 
 jobs:
-  discover:
+  setup:
     runs-on: ubuntu-latest
     outputs:
       matrix: ${{ steps.build-matrix.outputs.matrix }}
     steps:
       - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install Nix
+        uses: cachix/install-nix-action@v31
+
+      - name: Setup Cachix
+        uses: cachix/cachix-action@v15
+        with:
+          name: vibenix
+          authToken: '${{ secrets.CACHIX_TOKEN }}'
+
+      - name: Build vibenix environment
+        run: |
+          nix develop .# --command echo "Development environment ready"
+
+      - name: Generate vibenix cache
+        run: |
+          nix develop -c python -c '''
+          from vibenix.tools.search_related_packages import _get_builder_functions
+          from vibenix import config
+          from vibenix.flake import init_flake
+          config.init()
+          init_flake()
+          _get_builder_functions()'''
+
+      - name: Upload cache artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: vibenix-cache
+          path: cachedir/
+
+      - name: Create setup summary
+        run: |
+          echo "#### Workflow Inputs" >> $GITHUB_STEP_SUMMARY
+          echo "- **Projects path**: research/${{ github.event.inputs.projects_path }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Update lock**: ${{ github.event.inputs.update_lock || 'true (default)' }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Upgrade lock**: ${{ github.event.inputs.upgrade_lock || 'false (default)' }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Model**: ${{ github.event.inputs.model || 'gemini/gemini-2.5-flash (default)' }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Concurrent jobs**: ${{ github.event.inputs.concurrent_jobs || '1 (default)' }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Gemini API key**: ${{ github.event.inputs.gemini_api_key || 'key1 (default)' }}" >> $GITHUB_STEP_SUMMARY
+
+          # Add API base URL if not default
+          if [ "${{ github.event.inputs.api_base_url }}" != "https://api.openai.com" ]; then
+            echo "- **API base URL**: ${{ github.event.inputs.api_base_url || 'https://api.openai.com' }}" >> $GITHUB_STEP_SUMMARY
+          fi
+
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "#### Vibenix Settings" >> $GITHUB_STEP_SUMMARY
+
+          # Pretty-print vibenix settings if provided, otherwise get defaults from vibenix
+          if [ -n "${{ github.event.inputs.vibenix_settings }}" ]; then
+            echo '```json' >> $GITHUB_STEP_SUMMARY
+            echo '${{ github.event.inputs.vibenix_settings }}' | jq '.' >> $GITHUB_STEP_SUMMARY || echo '${{ github.event.inputs.vibenix_settings }}' >> $GITHUB_STEP_SUMMARY
+            echo '```' >> $GITHUB_STEP_SUMMARY
+          else
+            echo '```json' >> $GITHUB_STEP_SUMMARY
+            nix develop -c python -c 'import json; from vibenix.defaults import DEFAULT_VIBENIX_SETTINGS, settings_to_json_format; from vibenix.defaults.vibenix_settings import deep_diff; diff = deep_diff(DEFAULT_VIBENIX_SETTINGS, DEFAULT_VIBENIX_SETTINGS); print(json.dumps(settings_to_json_format(diff), indent=2))' >> $GITHUB_STEP_SUMMARY || echo "{}"  >> $GITHUB_STEP_SUMMARY
+            echo '```' >> $GITHUB_STEP_SUMMARY
+          fi
 
       - name: Build project matrix from path
         id: build-matrix
@@ -105,14 +168,19 @@ jobs:
           echo "matrix=$(cat matrix.json)" >> $GITHUB_OUTPUT
 
   maintenance:
-    needs: discover
+    needs: setup
     runs-on: ubuntu-latest
     strategy:
-      matrix: ${{ fromJson(needs.discover.outputs.matrix) }}
+      matrix: ${{ fromJson(needs.setup.outputs.matrix) }}
       max-parallel: ${{ fromJson(github.event.inputs.concurrent_jobs || '1') }}
       fail-fast: false
     steps:
       - uses: actions/checkout@v4
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: vibenix-cache
+          path: cachedir/
 
       - name: Set provider
         id: provider
@@ -226,36 +294,6 @@ jobs:
 
           # Set Github token in nix config
           echo "NIX_CONFIG=access-tokens = github.com=${{ secrets.GH_TOKEN }}" >> $GITHUB_ENV
-
-      - name: Summarize inputs and settings
-        run: |
-          echo "#### Maintenance Run" >> $GITHUB_STEP_SUMMARY
-          echo "- **Project**: ${{ matrix.project }}" >> $GITHUB_STEP_SUMMARY
-          echo "- **Package dir**: ${{ matrix.package_dir }}" >> $GITHUB_STEP_SUMMARY
-          echo "- **Update lock**: ${{ github.event.inputs.update_lock }}" >> $GITHUB_STEP_SUMMARY
-          echo "- **Upgrade lock**: ${{ github.event.inputs.upgrade_lock }}" >> $GITHUB_STEP_SUMMARY
-          echo "- **Model**: ${{ github.event.inputs.model || 'gemini/gemini-2.5-flash (default)' }}" >> $GITHUB_STEP_SUMMARY
-          echo "- **Concurrent jobs**: ${{ github.event.inputs.concurrent_jobs || '1 (default)' }}" >> $GITHUB_STEP_SUMMARY
-          echo "- **Gemini API key**: ${{ github.event.inputs.gemini_api_key || 'key1 (default)' }}" >> $GITHUB_STEP_SUMMARY
-
-          # Add API base URL if not default
-          if [ "${{ github.event.inputs.api_base_url }}" != "https://api.openai.com" ]; then
-            echo "- **API base URL**: ${{ github.event.inputs.api_base_url || 'https://api.openai.com' }}" >> $GITHUB_STEP_SUMMARY
-          fi
-
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "#### Vibenix Settings" >> $GITHUB_STEP_SUMMARY
-
-          # Pretty-print vibenix settings if provided, otherwise get defaults from vibenix
-          if [ -n "${{ github.event.inputs.vibenix_settings }}" ]; then
-            echo '```json' >> $GITHUB_STEP_SUMMARY
-            echo '${{ github.event.inputs.vibenix_settings }}' | jq '.' >> $GITHUB_STEP_SUMMARY || echo '${{ github.event.inputs.vibenix_settings }}' >> $GITHUB_STEP_SUMMARY
-            echo '```' >> $GITHUB_STEP_SUMMARY
-          else
-            echo '```json' >> $GITHUB_STEP_SUMMARY
-            nix develop -c python -c 'import json; from vibenix.defaults import DEFAULT_VIBENIX_SETTINGS, settings_to_json_format; from vibenix.defaults.vibenix_settings import deep_diff; diff = deep_diff(DEFAULT_VIBENIX_SETTINGS, DEFAULT_VIBENIX_SETTINGS); print(json.dumps(settings_to_json_format(diff), indent=2))' >> $GITHUB_STEP_SUMMARY || echo "{}"  >> $GITHUB_STEP_SUMMARY
-            echo '```' >> $GITHUB_STEP_SUMMARY
-          fi
 
       - name: Run vibenix maintenance
         id: run-vibenix
