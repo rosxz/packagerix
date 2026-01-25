@@ -128,7 +128,7 @@ def run_terminal_ui(maintenance=None, output_dir=None, project_url=None, revisio
     set_ui_adapter(TerminalUIAdapter())
 
     # If project URL, Nix fetcher, or CSV mode are provided, skip interactive configuration
-    if (project_url or fetcher or csv_pname):
+    if (project_url or fetcher or csv_pname or maintenance):
         from vibenix.model_config import load_saved_configuration, initialize_model_config
         from vibenix.ui.raw_terminal.terminal_vibenix_settings import ensure_settings_configured
 
