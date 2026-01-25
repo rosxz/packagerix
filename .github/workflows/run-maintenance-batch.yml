@@ -47,178 +47,228 @@
       - name: Upload combined results
         uses: actions/upload-artifact@v4
         with:
-          name: maintenance-batch-results
-          path: artifacts/
-          retention-days: 30
-name: Run Maintenance Batch
+          name: Run Maintenance Batch
 
-on:
-  workflow_dispatch:
-    inputs:
-      projects_path:
-        description: 'Relative path to directory containing per-project outputs (one project per subdirectory)'
-        required: true
-        type: string
-        default: 'output'
-      update_lock:
-        description: 'Pass --update-lock (True/False) to maintenance runs'
-        required: false
-        default: true
-        type: boolean
-      upgrade_lock:
-        description: 'Pass --upgrade-lock (True/False) to maintenance runs'
-        required: false
-        default: false
-        type: boolean
+          on:
+            workflow_dispatch:
+              inputs:
+                projects_path:
+                  description: 'Relative path to directory containing per-project outputs (one project per subdirectory)'
+                  required: true
+                  type: string
+                  default: 'output'
+                update_lock:
+                  description: 'Pass --update-lock (True/False) to maintenance runs'
+                  required: false
+                  default: true
+                  type: boolean
+                upgrade_lock:
+                  description: 'Pass --upgrade-lock (True/False) to maintenance runs'
+                  required: false
+                  default: false
+                  type: boolean
 
-jobs:
-  discover:
-    runs-on: ubuntu-latest
-    outputs:
-      matrix: ${{ steps.build-matrix.outputs.matrix }}
-    steps:
-      - uses: actions/checkout@v4
+          jobs:
+            discover:
+              runs-on: ubuntu-latest
+              outputs:
+                matrix: ${{ steps.build-matrix.outputs.matrix }}
+              steps:
+                - uses: actions/checkout@v4
 
-      - name: Build project matrix from path
-        id: build-matrix
-        run: |
-          set -euo pipefail
-          MATRIX=$(python3 -c "
-    import json, sys
-    from pathlib import Path
+                - name: Build project matrix from path
+                  id: build-matrix
+                  run: |
+                    set -euo pipefail
+                    MATRIX=$(python3 -c "
+          import json, sys
+          from pathlib import Path
 
-    base = Path('${{ github.event.inputs.projects_path }}').resolve()
-    repo_root = Path('.').resolve()
+          base = Path('${{ github.event.inputs.projects_path }}').resolve()
+          repo_root = Path('.').resolve()
 
-    if not base.exists():
-      print(f'::error::Base path not found: {base}')
-      sys.exit(1)
+          if not base.exists():
+              print(f'::error::Base path not found: {base}')
+              sys.exit(1)
 
-    projects = []
-    for child in sorted(base.iterdir()):
-      if not child.is_dir():
-        continue
-      pkg = next((p for p in child.rglob('package.nix')), None)
-      if not pkg:
-        continue
-      try:
-        rel_pkg_dir = pkg.parent.relative_to(repo_root)
-      except ValueError:
-        continue
-      projects.append({
-        'project': child.name,
-        'package_dir': str(rel_pkg_dir),
-      })
+          projects = []
+          for child in sorted(base.iterdir()):
+              if not child.is_dir():
+                  continue
+              pkg = next((p for p in child.rglob('package.nix')), None)
+              if not pkg:
+                  continue
+              try:
+                  rel_pkg_dir = pkg.parent.relative_to(repo_root)
+              except ValueError:
+                  continue
+              projects.append({
+                  'project': child.name,
+                  'package_dir': str(rel_pkg_dir),
+              })
 
-    if not projects:
-      print(f'::error::No projects with package.nix found under {base}')
-      sys.exit(1)
+          if not projects:
+              print(f'::error::No projects with package.nix found under {base}')
+              sys.exit(1)
 
-    matrix = {'include': projects}
-    print(json.dumps(matrix))
-    ")
-          echo "matrix=$MATRIX" >> "$GITHUB_OUTPUT"
+          matrix = {'include': projects}
+          print(json.dumps(matrix))
+          ")
+                    echo "matrix=$MATRIX" >> "$GITHUB_OUTPUT"
 
-  maintenance:
-    needs: discover
-    runs-on: ubuntu-latest
-    strategy:
-      matrix: ${{ fromJson(needs.discover.outputs.matrix) }}
-      fail-fast: false
-    steps:
-      - uses: actions/checkout@v4
+            maintenance:
+              needs: discover
+              runs-on: ubuntu-latest
+              strategy:
+                matrix: ${{ fromJson(needs.discover.outputs.matrix) }}
+                fail-fast: false
+              steps:
+                - uses: actions/checkout@v4
 
-      - name: Install Nix
-        uses: cachix/install-nix-action@v31
+                - name: Install Nix
+                  uses: cachix/install-nix-action@v31
 
-      - name: Setup Cachix (optional)
-        uses: cachix/cachix-action@v15
-        if: secrets.CACHIX_TOKEN != ''
-        with:
-          name: vibenix
-          authToken: '${{ secrets.CACHIX_TOKEN }}'
+                - name: Setup Cachix (optional)
+                  uses: cachix/cachix-action@v15
+                  if: secrets.CACHIX_TOKEN != ''
+                  with:
+                    name: vibenix
+                    authToken: '${{ secrets.CACHIX_TOKEN }}'
 
-      - name: Configure Nix access tokens
-        if: secrets.GH_TOKEN != ''
-        run: echo "NIX_CONFIG=access-tokens = github.com=${{ secrets.GH_TOKEN }}" >> $GITHUB_ENV
+                - name: Configure Nix access tokens
+                  if: secrets.GH_TOKEN != ''
+                  run: echo "NIX_CONFIG=access-tokens = github.com=${{ secrets.GH_TOKEN }}" >> $GITHUB_ENV
 
-      - name: Summarize inputs and settings
-        run: |
-          echo "#### Maintenance Run" >> $GITHUB_STEP_SUMMARY
-          echo "- **Project**: ${{ matrix.project }}" >> $GITHUB_STEP_SUMMARY
-          echo "- **Package dir**: ${{ matrix.package_dir }}" >> $GITHUB_STEP_SUMMARY
-          echo "- **Update lock**: ${{ github.event.inputs.update_lock }}" >> $GITHUB_STEP_SUMMARY
-          echo "- **Upgrade lock**: ${{ github.event.inputs.upgrade_lock }}" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "#### Vibenix Settings" >> $GITHUB_STEP_SUMMARY
-          echo '```json' >> $GITHUB_STEP_SUMMARY
-          nix develop -c python -c 'import json; from vibenix.defaults import DEFAULT_VIBENIX_SETTINGS, settings_to_json_format; from vibenix.defaults.vibenix_settings import deep_diff; diff = deep_diff(DEFAULT_VIBENIX_SETTINGS, DEFAULT_VIBENIX_SETTINGS); print(json.dumps(settings_to_json_format(diff), indent=2))' >> $GITHUB_STEP_SUMMARY || echo "{}"  >> $GITHUB_STEP_SUMMARY
-          echo '```' >> $GITHUB_STEP_SUMMARY
+                - name: Summarize inputs and settings
+                  run: |
+                    echo "#### Maintenance Run" >> $GITHUB_STEP_SUMMARY
+                    echo "- **Project**: ${{ matrix.project }}" >> $GITHUB_STEP_SUMMARY
+                    echo "- **Package dir**: ${{ matrix.package_dir }}" >> $GITHUB_STEP_SUMMARY
+                    echo "- **Update lock**: ${{ github.event.inputs.update_lock }}" >> $GITHUB_STEP_SUMMARY
+                    echo "- **Upgrade lock**: ${{ github.event.inputs.upgrade_lock }}" >> $GITHUB_STEP_SUMMARY
+                    echo "" >> $GITHUB_STEP_SUMMARY
+                    echo "#### Vibenix Settings" >> $GITHUB_STEP_SUMMARY
+                    echo '```json' >> $GITHUB_STEP_SUMMARY
+                    nix develop -c python -c 'import json; from vibenix.defaults import DEFAULT_VIBENIX_SETTINGS, settings_to_json_format; from vibenix.defaults.vibenix_settings import deep_diff; diff = deep_diff(DEFAULT_VIBENIX_SETTINGS, DEFAULT_VIBENIX_SETTINGS); print(json.dumps(settings_to_json_format(diff), indent=2))' >> $GITHUB_STEP_SUMMARY || echo "{}"  >> $GITHUB_STEP_SUMMARY
+                    echo '```' >> $GITHUB_STEP_SUMMARY
 
-      - name: Run vibenix maintenance
-        id: run-vibenix
-        run: |
-          set -o pipefail
-          UPDATE_FLAG="${{ github.event.inputs.update_lock }}"
-          UPGRADE_FLAG="${{ github.event.inputs.upgrade_lock }}"
+                - name: Run vibenix maintenance
+                  id: run-vibenix
+                  run: |
+                    set -o pipefail
+                    UPDATE_FLAG="${{ github.event.inputs.update_lock }}"
+                    UPGRADE_FLAG="${{ github.event.inputs.upgrade_lock }}"
 
-          log_file="${{ matrix.project }}.log"
-          echo "status=failed" >> $GITHUB_OUTPUT
+                    log_file="${{ matrix.project }}.log"
+                    echo "status=failed" >> $GITHUB_OUTPUT
 
-          nix develop .# -c python -m vibenix \
-            --raw \
-            --maintenance "${{ matrix.package_dir }}" \
-            --update-lock "$UPDATE_FLAG" \
-            --upgrade-lock "$UPGRADE_FLAG" \
-            2>&1 | tee "$log_file"
-          exit_code=$?
+                    nix develop .# -c python -m vibenix \
+                      --raw \
+                      --maintenance "${{ matrix.package_dir }}" \
+                      --update-lock "$UPDATE_FLAG" \
+                      --upgrade-lock "$UPGRADE_FLAG" \
+                      2>&1 | tee "$log_file"
+                    exit_code=$?
 
-          if [ $exit_code -eq 0 ]; then
-            echo "status=success" >> $GITHUB_OUTPUT
-          else
-            echo "exit_code=$exit_code" >> $GITHUB_OUTPUT
-          fi
+                    if [ $exit_code -eq 0 ]; then
+                      echo "status=success" >> $GITHUB_OUTPUT
+                    else
+                      echo "exit_code=$exit_code" >> $GITHUB_OUTPUT
+                    fi
 
-          echo "log_file=$log_file" >> $GITHUB_OUTPUT
+                    echo "log_file=$log_file" >> $GITHUB_OUTPUT
 
-      - name: Prepare artifact
-        if: always()
-        run: |
-          mkdir -p artifact-${{ matrix.project }}
-          cp "${{ matrix.project }}.log" "artifact-${{ matrix.project }}/" 2>/dev/null || true
-          echo "${{ steps.run-vibenix.outputs.status || 'unknown' }}" > "artifact-${{ matrix.project }}/status.txt" 2>/dev/null || true
+                - name: Prepare artifact
+                  if: always()
+                  run: |
+                    mkdir -p artifact-${{ matrix.project }}
+                    cp "${{ matrix.project }}.log" "artifact-${{ matrix.project }}/" 2>/dev/null || true
+                    echo "${{ steps.run-vibenix.outputs.status || 'unknown' }}" > "artifact-${{ matrix.project }}/status.txt" 2>/dev/null || true
 
-      - name: Upload logs
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: vibenix-maintenance-${{ matrix.project }}
-          path: artifact-${{ matrix.project }}/
-          retention-days: 3
+                - name: Upload logs
+                  if: always()
+                  uses: actions/upload-artifact@v4
+                  with:
+                    name: vibenix-maintenance-${{ matrix.project }}
+                    path: artifact-${{ matrix.project }}/
+                    retention-days: 3
 
-      - name: Summarize run
-        if: always()
-        run: |
-          status="${{ steps.run-vibenix.outputs.status || 'failed' }}"
-          log_file="${{ steps.run-vibenix.outputs.log_file || matrix.project + '.log' }}"
-          if [ "$status" = "success" ]; then
-            status_emoji="✅"; status_text="SUCCESS"
-          else
-            status_emoji="❌"; status_text="FAILED"
-          fi
+                - name: Summarize run
+                  if: always()
+                  run: |
+                    status="${{ steps.run-vibenix.outputs.status || 'failed' }}"
+                    log_file="${{ steps.run-vibenix.outputs.log_file || matrix.project + '.log' }}"
+                    if [ "$status" = "success" ]; then
+                      status_emoji="✅"; status_text="SUCCESS"
+                    else
+                      status_emoji="❌"; status_text="FAILED"
+                    fi
 
-          echo "### ${status_emoji} Maintenance: ${{ matrix.project }}" >> $GITHUB_STEP_SUMMARY
-          echo "- Status: **${status_text}**" >> $GITHUB_STEP_SUMMARY
-          echo "- Package dir: ${{ matrix.package_dir }}" >> $GITHUB_STEP_SUMMARY
-          echo "- Update lock: ${{ github.event.inputs.update_lock }}" >> $GITHUB_STEP_SUMMARY
-          echo "- Upgrade lock: ${{ github.event.inputs.upgrade_lock }}" >> $GITHUB_STEP_SUMMARY
-          if [ -f "$log_file" ]; then
-            echo "- Log size: $(wc -c < "$log_file") bytes" >> $GITHUB_STEP_SUMMARY
-          fi
-          if [ "$status" != "success" ] && [ -f "$log_file" ]; then
-            echo "" >> $GITHUB_STEP_SUMMARY
-            echo "#### Log tail (last 50 lines)" >> $GITHUB_STEP_SUMMARY
-            echo '<pre>' >> $GITHUB_STEP_SUMMARY
-            tail -n 50 "$log_file" >> $GITHUB_STEP_SUMMARY
-            echo '</pre>' >> $GITHUB_STEP_SUMMARY
-          fi
+                    echo "### ${status_emoji} Maintenance: ${{ matrix.project }}" >> $GITHUB_STEP_SUMMARY
+                    echo "- Status: **${status_text}**" >> $GITHUB_STEP_SUMMARY
+                    echo "- Package dir: ${{ matrix.package_dir }}" >> $GITHUB_STEP_SUMMARY
+                    echo "- Update lock: ${{ github.event.inputs.update_lock }}" >> $GITHUB_STEP_SUMMARY
+                    echo "- Upgrade lock: ${{ github.event.inputs.upgrade_lock }}" >> $GITHUB_STEP_SUMMARY
+                    if [ -f "$log_file" ]; then
+                      echo "- Log size: $(wc -c < "$log_file") bytes" >> $GITHUB_STEP_SUMMARY
+                    fi
+                    if [ "$status" != "success" ] && [ -f "$log_file" ]; then
+                      echo "" >> $GITHUB_STEP_SUMMARY
+                      echo "#### Log tail (last 50 lines)" >> $GITHUB_STEP_SUMMARY
+                      echo '<pre>' >> $GITHUB_STEP_SUMMARY
+                      tail -n 50 "$log_file" >> $GITHUB_STEP_SUMMARY
+                      echo '</pre>' >> $GITHUB_STEP_SUMMARY
+                    fi
+
+            aggregate-results:
+              needs: maintenance
+              runs-on: ubuntu-latest
+              if: always()
+              steps:
+                - name: Download all artifacts
+                  uses: actions/download-artifact@v4
+                  with:
+                    path: artifacts
+                    pattern: vibenix-maintenance-*
+
+                - name: Aggregate results
+                  run: |
+                    echo "## Maintenance Batch Results" >> $GITHUB_STEP_SUMMARY
+                    echo "" >> $GITHUB_STEP_SUMMARY
+
+                    total=0
+                    success=0
+                    failed=0
+
+                    shopt -s nullglob
+                    for dir in artifacts/vibenix-maintenance-*; do
+                      if [ -d "$dir" ]; then
+                        total=$((total + 1))
+                        status_file="$dir/status.txt"
+                        status="failed"
+                        if [ -f "$status_file" ]; then
+                          status=$(cat "$status_file" | tr -d '\n' | tr 'A-Z' 'a-z')
+                        fi
+                        if [ "$status" = "success" ]; then
+                          success=$((success + 1))
+                        else
+                          failed=$((failed + 1))
+                        fi
+                      fi
+                    done
+
+                    echo "- Total processed: $total" >> $GITHUB_STEP_SUMMARY
+                    echo "- Successful: $success" >> $GITHUB_STEP_SUMMARY
+                    echo "- Failed: $failed" >> $GITHUB_STEP_SUMMARY
+
+                    if [ $total -gt 0 ]; then
+                      rate=$((success * 100 / total))
+                      echo "- Success rate: ${rate}%" >> $GITHUB_STEP_SUMMARY
+                    fi
+
+                - name: Upload combined results
+                  uses: actions/upload-artifact@v4
+                  with:
+                    name: maintenance-batch-results
+                    path: artifacts/
+                    retention-days: 30
