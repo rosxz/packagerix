@@ -4,10 +4,10 @@ on:
   workflow_dispatch:
     inputs:
       projects_path:
-        description: 'Relative path to directory containing per-project outputs (one project per subdirectory)'
+        description: 'Path relative to research/ containing per-project outputs (one project per subdirectory)'
         required: true
         type: string
-        default: 'output'
+        default: 'maintenance/'
       update_lock:
         description: 'Pass --update-lock (True/False) to maintenance runs'
         required: false
@@ -35,7 +35,7 @@ jobs:
           import json, sys
           from pathlib import Path
 
-          base = Path('${{ github.event.inputs.projects_path }}').resolve()
+          base = Path('research/${{ github.event.inputs.projects_path }}').resolve()
           repo_root = Path('.').resolve()
 
           if not base.exists():
