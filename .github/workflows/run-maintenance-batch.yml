@@ -203,11 +203,8 @@ jobs:
       - name: Install Nix
         uses: cachix/install-nix-action@v31
 
-      - name: Setup Cachix (optional)
+      - name: Setup Cachix
         uses: cachix/cachix-action@v15
-        if: ${{ env.CACHIX_TOKEN != '' }}
-        env:
-          CACHIX_TOKEN: ${{ secrets.CACHIX_TOKEN }}
         with:
           name: vibenix
           authToken: '${{ secrets.CACHIX_TOKEN }}'

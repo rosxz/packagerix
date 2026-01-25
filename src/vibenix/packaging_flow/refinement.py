@@ -141,12 +141,9 @@ def refine_package(curr: Solution, project_page: str, output_dir=None) -> Soluti
         revert_packaging_to_solution(curr)
         ccl_logger.write_kv("type", attempt.result.error.type)
         ccl_logger.write_kv("error", attempt.result.error.truncated())
-<<<<<<< HEAD
     else:
         coordinator_message("Final code improvement successfuly builds.")
         curr = attempt
-=======
->>>>>>> cc6ad4e (fix: revert to curr if improve_code fails, add tree_output to get_feedback, readd run_in_vm instructions to get_feedback)
 
     if iteration > 0:
         ccl_logger.leave_list()
