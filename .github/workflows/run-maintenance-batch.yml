@@ -302,18 +302,45 @@ jobs:
           log_file="${{ matrix.project }}.log"
           echo "status=failed" >> $GITHUB_OUTPUT
 
+          # Create output directory for this run
+          mkdir -p output
+
           nix develop .# -c python -m vibenix \
             --raw \
+            --output-dir output \
             --maintenance "${{ matrix.package_dir }}" \
             --update-lock "$UPDATE_FLAG" \
             --upgrade-lock "$UPGRADE_FLAG" \
             2>&1 | tee "$log_file"
           exit_code=$?
 
+          # Check if the command succeeded AND produced a package.nix file
           if [ $exit_code -eq 0 ]; then
-            echo "status=success" >> $GITHUB_OUTPUT
+            # Command didn't fail, but we need to verify it actually created a package
+            if [ -d output ]; then
+              # Find any package.nix file in subdirectories
+              package_nix_path=$(find output -name "package.nix" -type f | head -n1)
+              if [ -n "$package_nix_path" ]; then
+                # Extract package name from path (e.g., output/packagename/package.nix -> packagename)
+                package_name=$(basename $(dirname "$package_nix_path"))
+                echo "status=success" >> $GITHUB_OUTPUT
+                echo "package_name=$package_name" >> $GITHUB_OUTPUT
+              else
+                echo "status=failed" >> $GITHUB_OUTPUT
+                echo "Command succeeded but no package.nix was generated"
+                exit 1  # Fail the step
+              fi
+            else
+              echo "status=failed" >> $GITHUB_OUTPUT
+              echo "Command succeeded but no output directory was created"
+              exit 1  # Fail the step
+            fi
           else
-            echo "exit_code=$exit_code" >> $GITHUB_OUTPUT
+            echo "status=failed" >> $GITHUB_OUTPUT
+            echo "Exit code: $exit_code"
+            echo "=== Combined log ==="
+            head -n 50 "$log_file" || echo "No log found"
+            exit $exit_code  # Propagate the original exit code
           fi
 
           echo "log_file=$log_file" >> $GITHUB_OUTPUT
@@ -323,6 +350,10 @@ jobs:
         run: |
           mkdir -p artifact-${{ matrix.project }}
           cp "${{ matrix.project }}.log" "artifact-${{ matrix.project }}/" 2>/dev/null || true
+          if [ -d output ]; then
+            cp -r output/* artifact-${{ matrix.project }}/
+          fi
+          cp ~/.vibenix/config.json artifact-${{ matrix.project }}/ 2>/dev/null || true
           echo "${{ steps.run-vibenix.outputs.status || 'unknown' }}" > "artifact-${{ matrix.project }}/status.txt" 2>/dev/null || true
 
       - name: Upload logs
@@ -349,16 +380,44 @@ jobs:
           echo "- Package dir: ${{ matrix.package_dir }}" >> $GITHUB_STEP_SUMMARY
           echo "- Update lock: ${{ github.event.inputs.update_lock }}" >> $GITHUB_STEP_SUMMARY
           echo "- Upgrade lock: ${{ github.event.inputs.upgrade_lock }}" >> $GITHUB_STEP_SUMMARY
+          if [ -n "${{ steps.run-vibenix.outputs.package_name }}" ]; then
+            echo "- Generated package name: ${{ steps.run-vibenix.outputs.package_name }}" >> $GITHUB_STEP_SUMMARY
+          fi
           if [ -f "$log_file" ]; then
             echo "- Log size: $(wc -c < "$log_file") bytes" >> $GITHUB_STEP_SUMMARY
           fi
-          if [ "$status" != "success" ] && [ -f "$log_file" ]; then
+          if [ -f "output/run.ccl" ]; then
+            # Extract total cost from run.ccl if present
+            total_cost=$(grep "total_cost =" "output/run.ccl" | tail -1 | cut -d'=' -f2 | tr -d ' ')
+            if [ -n "$total_cost" ]; then
+              echo "- Total API cost: \$$total_cost" >> $GITHUB_STEP_SUMMARY
+            fi
+          fi
+
+          # On success: show package.nix contents
+          if [ "$status" = "success" ] && [ -f "output/${{ steps.run-vibenix.outputs.package_name }}/package.nix" ]; then
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "#### Generated package.nix:" >> $GITHUB_STEP_SUMMARY
+            echo '```nix' >> $GITHUB_STEP_SUMMARY
+            cat "output/${{ steps.run-vibenix.outputs.package_name }}/package.nix" >> $GITHUB_STEP_SUMMARY
+            echo '```' >> $GITHUB_STEP_SUMMARY
+          fi
+
+          # On failure: show tail of log
+          if [ "$status" != "success" ] && [ -f "$log_file" ] && [ -s "$log_file" ]; then
             echo "" >> $GITHUB_STEP_SUMMARY
             echo "#### Log tail (last 50 lines)" >> $GITHUB_STEP_SUMMARY
             echo '<pre>' >> $GITHUB_STEP_SUMMARY
             tail -n 50 "$log_file" >> $GITHUB_STEP_SUMMARY
             echo '</pre>' >> $GITHUB_STEP_SUMMARY
           fi
+
+      - name: Fail job if maintenance failed
+        if: steps.run-vibenix.outputs.status == 'failed'
+        run: |
+          echo "Maintenance failed, failing the job"
+          echo "Status was: ${{ steps.run-vibenix.outputs.status }}"
+          exit 1
 
   aggregate-results:
     needs: maintenance
@@ -379,20 +438,29 @@ jobs:
           total=0
           success=0
           failed=0
+          total_cost=0
 
           shopt -s nullglob
           for dir in artifacts/vibenix-maintenance-*; do
             if [ -d "$dir" ]; then
               total=$((total + 1))
-              status_file="$dir/status.txt"
-              status="failed"
-              if [ -f "$status_file" ]; then
-                status=$(cat "$status_file" | tr -d '\n' | tr 'A-Z' 'a-z')
-              fi
-              if [ "$status" = "success" ]; then
+              
+              # Check if there's a package.nix file in any subdirectory
+              package_nix_found=$(find "$dir" -name "package.nix" -type f 2>/dev/null | head -1)
+              
+              if [ -n "$package_nix_found" ]; then
                 success=$((success + 1))
               else
                 failed=$((failed + 1))
+              fi
+              
+              # Extract cost from run.ccl if it exists
+              if [ -f "$dir/run.ccl" ]; then
+                cost=$(grep "total_cost =" "$dir/run.ccl" | tail -1 | cut -d'=' -f2 | tr -d ' ')
+                if [ -n "$cost" ]; then
+                  # Add to total using bc for floating point arithmetic
+                  total_cost=$(echo "$total_cost + $cost" | bc)
+                fi
               fi
             fi
           done
@@ -401,9 +469,14 @@ jobs:
           echo "- Successful: $success" >> $GITHUB_STEP_SUMMARY
           echo "- Failed: $failed" >> $GITHUB_STEP_SUMMARY
 
-          if [ $total -gt 0 ]; then
+          if [ $success -gt 0 ] && [ $total -gt 0 ]; then
             rate=$((success * 100 / total))
             echo "- Success rate: ${rate}%" >> $GITHUB_STEP_SUMMARY
+          fi
+          
+          # Show total cost if any
+          if [ $(echo "$total_cost > 0" | bc) -eq 1 ]; then
+            echo "- Total API cost: \$$total_cost" >> $GITHUB_STEP_SUMMARY
           fi
 
       - name: Upload combined results
