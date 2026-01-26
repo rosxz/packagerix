@@ -396,7 +396,7 @@ def main():
                 config.nixpkgs_commit = args.nixpkgs_commit
 
             # Validate output-dir requires some input mode
-            if args.output_dir and not (args.project_url or args.fetcher or csv_pname):
+            if args.output_dir and not (args.project_url or args.fetcher or csv_pname or args.maintenance):
                 parser.error("--output-dir requires a project URL, Nix fetcher, or CSV dataset to be provided")
 
             run_terminal_ui(maintenance=args.maintenance, output_dir=args.output_dir, project_url=args.project_url,

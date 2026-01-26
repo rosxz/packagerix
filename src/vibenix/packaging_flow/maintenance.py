@@ -84,7 +84,7 @@ def update_fetcher(project_url: Optional[str], revision: Optional[str]) -> str:
     package_contents: str = get_package_contents()
     # Build regex pattern to match src = fetch{...} with repo attribute matching pname (case-insensitive)
     import re
-    repo = project_url.split("/")[-1]
+    repo = project_url.split("/")[-1].strip(".git")
     fetcher_pattern = r"src\s+=\s+(fetch[\w]+\s*\{[\s\S]*?repo\s+=\s+\"[^\"]*" + re.escape(repo) + r"[^\"]*\"[\s\S]*?\});"
     # TODO check how much identation previous fetcher had to match or something
     fetcher_match = re.search(fetcher_pattern, package_contents, re.IGNORECASE)
@@ -96,14 +96,12 @@ def update_fetcher(project_url: Optional[str], revision: Optional[str]) -> str:
         coordinator_error(f"No fetcher found with repo matching '{repo}'")
         raise ValueError(f"Could not find fetcher with repo matching '{repo}' in flake.nix")
 
+    coordinator_message(f"Previous fetcher:\n```nix\n{fetcher_content}\n```\nUpdating fetcher to version: {version}")
     # Indent all lines after the first by 2 spaces
     lines = fetcher.split('\n')
     if len(lines) > 1:
         fetcher = lines[0] + '\n' + '\n'.join('  ' + line for line in lines[1:])
     new_package_contents = package_contents.replace(fetcher_content, fetcher)
-    if new_package_contents == package_contents:
-        coordinator_error("Failed to update fetcher in package.nix")
-        raise RuntimeError("Fetcher update did not change package.nix contents")
     from vibenix.flake import update_flake
     update_flake(new_package_contents) # TODO rename update_flake to update_package
     return fetcher
