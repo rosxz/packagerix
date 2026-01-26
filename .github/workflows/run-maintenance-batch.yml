@@ -395,12 +395,21 @@ jobs:
           fi
 
           # On success: show package.nix contents
-          if [ "$status" = "success" ] && [ -f "output/${{ steps.run-vibenix.outputs.package_name }}/package.nix" ]; then
-            echo "" >> $GITHUB_STEP_SUMMARY
-            echo "#### Generated package.nix:" >> $GITHUB_STEP_SUMMARY
-            echo '```nix' >> $GITHUB_STEP_SUMMARY
-            cat "output/${{ steps.run-vibenix.outputs.package_name }}/package.nix" >> $GITHUB_STEP_SUMMARY
-            echo '```' >> $GITHUB_STEP_SUMMARY
+          if [ "$status" = "success" ]; then
+            # Try the expected path first, then fall back to finding any package.nix
+            if [ -f "output/${{ steps.run-vibenix.outputs.package_name }}/package.nix" ]; then
+              package_nix_path="output/${{ steps.run-vibenix.outputs.package_name }}/package.nix"
+            else
+              package_nix_path=$(find output -name "package.nix" -type f | head -n1)
+            fi
+            
+            if [ -n "$package_nix_path" ] && [ -f "$package_nix_path" ]; then
+              echo "" >> $GITHUB_STEP_SUMMARY
+              echo "#### Generated package.nix:" >> $GITHUB_STEP_SUMMARY
+              echo '```nix' >> $GITHUB_STEP_SUMMARY
+              cat "$package_nix_path" >> $GITHUB_STEP_SUMMARY
+              echo '```' >> $GITHUB_STEP_SUMMARY
+            fi
           fi
 
           # On failure: show tail of log
