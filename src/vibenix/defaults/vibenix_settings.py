@@ -83,7 +83,7 @@ def _build_tool_name_map() -> Dict[str, Callable]:
     from vibenix.agent import tool_wrapper
 
     tool_map = {}
-    for func in SEARCH_TOOLS + EDIT_TOOLS + VM_TOOLS: # + OUT_PATH_TOOLS 
+    for func in SEARCH_TOOLS + EDIT_TOOLS + VM_TOOLS + MAINTENANCE_TOOLS: # + OUT_PATH_TOOLS 
         tool_map[func.__name__] = tool_wrapper(func)
     for func in ADDITIONAL_TOOLS:
         tool_map[func] = None
