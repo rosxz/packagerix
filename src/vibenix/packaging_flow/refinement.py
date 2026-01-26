@@ -58,7 +58,7 @@ def get_linter_feedback() -> list[str]:
     return feedback
 
 
-def refine_package(curr: Solution, project_page: str, output_dir=None) -> Solution:
+def refine_package(curr: Solution, project_page: str, output_dir=None, maintenance_mode=False) -> Solution:
     """Refinement cycle to improve the packaging."""
     from vibenix.defaults import get_settings_manager
     # Max iterations for refinement's internal packaging loop (fix build errors)
@@ -100,7 +100,7 @@ def refine_package(curr: Solution, project_page: str, output_dir=None) -> Soluti
 
             ccl_logger.enter_attribute("refinement_packaging_loop")
             max_iterations = get_settings_manager().get_setting_value("refinement.max_iterations")
-            _, attempt, _ = packaging_loop(attempt, project_page, max_iterations)
+            _, attempt, _ = packaging_loop(attempt, project_page, max_iterations, maintenance_mode=maintenance_mode)
             ccl_logger.leave_attribute()
 
         if not attempt.result.success:
