@@ -267,16 +267,21 @@ def run_maintenance(maintenance_dir: str, output_dir: Optional[str] = None,
 
     coordinator_message("Welcome to vibenix!") ###
 
-    flake_nix_path = _validate_required_file("flake.nix")
     package_nix_path = _validate_required_file("package.nix")
     try:
         flake_lock_path = _validate_required_file("flake.lock")
     except FileNotFoundError:
         flake_lock_path = None
+    try:
+        flake_nix_path = _validate_required_file("flake.nix")
+    except FileNotFoundError:
+        flake_nix_path = None
 
     coordinator_message(f"Validated required files: flake.nix at {flake_nix_path}, package.nix at {package_nix_path}")
     if flake_lock_path is None:
         coordinator_message("flake.lock not provided; continuing without it") # TODO make
+    if flake_nix_path is None:
+        coordinator_message("flake.nix not provided; continuing without it") # TODO make
 
     coordinator_message(f"Starting maintenance mode for: {maintenance_path}")
 
