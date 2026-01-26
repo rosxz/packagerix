@@ -84,7 +84,7 @@ def update_fetcher(project_url: Optional[str], revision: Optional[str]) -> str:
     package_contents: str = get_package_contents()
     # Build regex pattern to match src = fetch{...} with repo attribute matching pname (case-insensitive)
     import re
-    repo = project_url.split("/")[-1]
+    repo = project_url.split("/")[-1].strip(".git")
     fetcher_pattern = r"src\s+=\s+(fetch[\w]+\s*\{[\s\S]*?repo\s+=\s+\"[^\"]*" + re.escape(repo) + r"[^\"]*\"[\s\S]*?\});"
     # TODO check how much identation previous fetcher had to match or something
     fetcher_match = re.search(fetcher_pattern, package_contents, re.IGNORECASE)
