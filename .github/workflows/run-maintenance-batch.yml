@@ -148,7 +148,7 @@ jobs:
           dataset_filename = '${{ github.event.inputs.dataset || 'maintenance_02_02_2025.csv' }}'
           dataset_path = f'research/{dataset_filename}'
           # Directory with pre-extracted .nix files (same name as CSV without extension)
-          dataset_dir = f'research/{dataset_filename.rsplit(".", 1)[0]}'
+          dataset_dir = 'research/' + dataset_filename.rsplit('.', 1)[0]
 
           # Read all rows indexed by random_order ID
           rows_by_id = {}
