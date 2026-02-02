@@ -3,11 +3,16 @@ name: Run Maintenance Batch
 on:
   workflow_dispatch:
     inputs:
-      projects_path:
-        description: 'Path relative to research/ containing per-project outputs (one project per subdirectory)'
-        required: true
+      package_ids:
+        description: 'Package IDs to run (e.g., "1-10,12,19"). Max 254 IDs. Leave empty for default (1-5)'
+        required: false
+        default: '1-5'
         type: string
-        default: 'maintenance/'
+      dataset:
+        description: 'Path to CSV dataset file in research/ (e.g., maintenance_02_02_2025.csv)'
+        required: false
+        default: 'maintenance_02_02_2025.csv'
+        type: string
       update_lock:
         description: 'Pass --update-lock (True/False) to maintenance runs'
         required: false
@@ -97,7 +102,8 @@ jobs:
       - name: Create setup summary
         run: |
           echo "#### Workflow Inputs" >> $GITHUB_STEP_SUMMARY
-          echo "- **Projects path**: research/${{ github.event.inputs.projects_path }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Package IDs**: ${{ github.event.inputs.package_ids || '1-5 (default)' }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Dataset**: research/${{ github.event.inputs.dataset || 'maintenance_02_02_2025.csv (default)' }}" >> $GITHUB_STEP_SUMMARY
           echo "- **Update lock**: ${{ github.event.inputs.update_lock || 'true (default)' }}" >> $GITHUB_STEP_SUMMARY
           echo "- **Upgrade lock**: ${{ github.event.inputs.upgrade_lock || 'false (default)' }}" >> $GITHUB_STEP_SUMMARY
           echo "- **Model**: ${{ github.event.inputs.model || 'gemini/gemini-2.5-flash (default)' }}" >> $GITHUB_STEP_SUMMARY
@@ -123,42 +129,90 @@ jobs:
             echo '```' >> $GITHUB_STEP_SUMMARY
           fi
 
-      - name: Build project matrix from path
+      - name: Build project matrix from CSV
         id: build-matrix
         run: |
           set -euo pipefail
           python3 -c "
-          import json, sys
-          from pathlib import Path
+          import csv
+          import json
+          import sys
 
-          base = Path('research/${{ github.event.inputs.projects_path }}').resolve()
-          repo_root = Path('.').resolve()
+          # Add scripts directory to path to import id_range_parser
+          sys.path.insert(0, 'scripts')
+          from id_range_parser import parse_id_ranges, validate_id_range_constraints
 
-          if not base.exists():
-              print(f'::error::Base path not found: {base}', file=sys.stderr)
-              sys.exit(1)
+          matrix_data = []
 
-          projects = []
-          for child in sorted(base.iterdir()):
-              if not child.is_dir():
-                  continue
-              pkg = next((p for p in child.rglob('package.nix')), None)
-              if not pkg:
-                  continue
+          # Dataset path and directory (for pre-extracted package files)
+          dataset_filename = '${{ github.event.inputs.dataset || 'maintenance_02_02_2025.csv' }}'
+          dataset_path = f'research/{dataset_filename}'
+          # Directory with pre-extracted .nix files (same name as CSV without extension)
+          dataset_dir = f'research/{dataset_filename.rsplit(".", 1)[0]}'
+
+          # Read all rows indexed by random_order ID
+          rows_by_id = {}
+          with open(dataset_path, 'r') as f:
+              reader = csv.DictReader(f)
+              for row in reader:
+                  try:
+                      row_id = int(row['random_order'])
+                      rows_by_id[row_id] = row
+                  except (ValueError, KeyError):
+                      print(f'Warning: Skipping row without valid random_order ID', file=sys.stderr)
+
+          # Parse package ID ranges
+          package_ids_input = '${{ github.event.inputs.package_ids || '1-5' }}'.strip()
+
+          if package_ids_input:
+              # Parse the ID range specification
               try:
-                  rel_pkg_dir = pkg.parent.relative_to(repo_root)
-              except ValueError:
-                  continue
-              projects.append({
-                  'project': child.name,
-                  'package_dir': str(rel_pkg_dir),
-              })
+                  selected_ids = parse_id_ranges(package_ids_input)
+                  # Validate constraints (max 254 IDs)
+                  max_id = max(rows_by_id.keys()) if rows_by_id else 1
+                  validate_id_range_constraints(selected_ids, max_count=254, valid_range=(1, max_id))
+              except ValueError as e:
+                  raise ValueError(f'Invalid package_ids input: {e}')
+          else:
+              # Default: IDs 1-5
+              selected_ids = [1, 2, 3, 4, 5]
 
-          if not projects:
-              print(f'::error::No projects with package.nix found under {base}', file=sys.stderr)
+          # Build matrix data from selected IDs
+          for row_id in selected_ids:
+              if row_id in rows_by_id:
+                  row = rows_by_id[row_id]
+                  # Create a project identifier from the package path
+                  package_path = row['package_path']
+                  # Extract package name from path (e.g., pkgs/by-name/de/dependabot-cli/package.nix -> dependabot-cli)
+                  parts = package_path.split('/')
+                  if 'by-name' in parts:
+                      # by-name format: pkgs/by-name/XX/package-name/package.nix
+                      package_name = parts[-2] if parts[-1] == 'package.nix' else parts[-1]
+                  else:
+                      # Other formats: use the second to last part
+                      package_name = parts[-2] if len(parts) >= 2 else parts[-1].replace('.nix', '')
+                  
+                  project_name = f'{row_id}-{package_name}'
+                  
+                  matrix_data.append({
+                      'id': row_id,
+                      'project': project_name,
+                      'package_path': package_path,
+                      'parent_commit': row['parent_commit'],
+                      'pre_version': row['pre_version'],
+                      'post_version': row['post_version'],
+                      'pre_nixpkgs_base': row['pre_nixpkgs_base'],
+                      'pname': row['pre_pname'],
+                      'dataset_dir': dataset_dir,
+                  })
+              else:
+                  print(f'Warning: ID {row_id} not found in dataset', file=sys.stderr)
+
+          if not matrix_data:
+              print('::error::No valid packages found for the specified IDs', file=sys.stderr)
               sys.exit(1)
 
-          matrix = {'include': projects}
+          matrix = {'include': matrix_data}
 
           with open('matrix.json', 'w') as f:
               json.dump(matrix, f)
@@ -170,6 +224,8 @@ jobs:
   maintenance:
     needs: setup
     runs-on: ubuntu-latest
+    name: "${{ matrix.id }}: ${{ matrix.pname }}"
+    timeout-minutes: 65
     strategy:
       matrix: ${{ fromJson(needs.setup.outputs.matrix) }}
       max-parallel: ${{ fromJson(github.event.inputs.concurrent_jobs || '1') }}
@@ -292,6 +348,57 @@ jobs:
           # Set Github token in nix config
           echo "NIX_CONFIG=access-tokens = github.com=${{ secrets.GH_TOKEN }}" >> $GITHUB_ENV
 
+      - name: Prepare maintenance directory from pre-extracted files
+        id: prepare
+        run: |
+          # Create maintenance directory
+          mkdir -p maintenance-input
+
+          # Copy the pre-extracted package.nix from the dataset directory
+          pre_package_file="${{ matrix.dataset_dir }}/${{ matrix.pname }}.nix"
+          echo "Reading pre-state package from: $pre_package_file"
+          
+          if [ ! -f "$pre_package_file" ]; then
+            echo "ERROR: Pre-extracted package file not found: $pre_package_file"
+            exit 1
+          fi
+          
+          cp "$pre_package_file" maintenance-input/package.nix
+
+          # Create a flake.nix for the maintenance directory
+          cat > maintenance-input/flake.nix << 'EOF'
+          {
+            inputs.nixpkgs.url = "github:NixOS/nixpkgs/${{ matrix.pre_nixpkgs_base }}";
+
+            outputs = { self, nixpkgs, ... }:
+              let
+                supportedSystems = [ "x86_64-linux" "aarch64-linux" "x86_64-darwin" "aarch64-darwin" ];
+                forAllSystems = nixpkgs.lib.genAttrs supportedSystems;
+              in
+              {
+                packages = forAllSystems (system:
+                  let
+                    pkgs = import nixpkgs {
+                      inherit system;
+                      config = { allowUnfree = true; };
+                    };
+                  in
+                  {
+                    default = pkgs.callPackage ./package.nix { };
+                  }
+                );
+              };
+          }
+          EOF
+
+          # Log what we prepared
+          echo "=== Maintenance directory contents ==="
+          ls -la maintenance-input/
+          echo "=== package.nix content ==="
+          cat maintenance-input/package.nix
+          echo ""
+          echo "package_dir=maintenance-input" >> $GITHUB_OUTPUT
+
       - name: Run vibenix maintenance
         id: run-vibenix
         run: |
@@ -305,10 +412,14 @@ jobs:
           # Create output directory for this run
           mkdir -p output
 
+          echo "Running maintenance for package: ${{ matrix.pname }}"
+          echo "Pre-version: ${{ matrix.pre_version }}"
+          echo "Target version (post): ${{ matrix.post_version }}"
+
           nix develop .# -c python -m vibenix \
             --raw \
             --output-dir output \
-            --maintenance "${{ matrix.package_dir }}" \
+            --maintenance "${{ steps.prepare.outputs.package_dir }}" \
             --update-lock "$UPDATE_FLAG" \
             --upgrade-lock "$UPGRADE_FLAG" \
             2>&1 | tee "$log_file"
@@ -357,6 +468,18 @@ jobs:
           fi
           cp ~/.vibenix/config.json artifact-${{ matrix.project }}/ 2>/dev/null || true
           echo "${{ steps.run-vibenix.outputs.status || 'unknown' }}" > "artifact-${{ matrix.project }}/status.txt" 2>/dev/null || true
+          
+          # Save metadata for reference
+          cat > "artifact-${{ matrix.project }}/metadata.json" << EOF
+          {
+            "id": ${{ matrix.id }},
+            "pname": "${{ matrix.pname }}",
+            "pre_version": "${{ matrix.pre_version }}",
+            "post_version": "${{ matrix.post_version }}",
+            "parent_commit": "${{ matrix.parent_commit }}",
+            "package_path": "${{ matrix.package_path }}"
+          }
+          EOF
 
       - name: Upload logs
         if: always()
@@ -377,9 +500,12 @@ jobs:
             status_emoji="❌"; status_text="FAILED"
           fi
 
-          echo "### ${status_emoji} Maintenance: ${{ matrix.project }}" >> $GITHUB_STEP_SUMMARY
+          echo "### ${status_emoji} ${{ matrix.id }}: ${{ matrix.pname }}" >> $GITHUB_STEP_SUMMARY
           echo "- Status: **${status_text}**" >> $GITHUB_STEP_SUMMARY
-          echo "- Package dir: ${{ matrix.package_dir }}" >> $GITHUB_STEP_SUMMARY
+          echo "- Package path: ${{ matrix.package_path }}" >> $GITHUB_STEP_SUMMARY
+          echo "- Pre-version: ${{ matrix.pre_version }}" >> $GITHUB_STEP_SUMMARY
+          echo "- Target version: ${{ matrix.post_version }}" >> $GITHUB_STEP_SUMMARY
+          echo "- Parent commit: \`${{ matrix.parent_commit }}\`" >> $GITHUB_STEP_SUMMARY
           echo "- Update lock: ${{ github.event.inputs.update_lock }}" >> $GITHUB_STEP_SUMMARY
           echo "- Upgrade lock: ${{ github.event.inputs.upgrade_lock }}" >> $GITHUB_STEP_SUMMARY
           if [ -n "${{ steps.run-vibenix.outputs.package_name }}" ]; then
