@@ -54,8 +54,41 @@ def inject_final_attrs(package_content: str) -> str:
 
 def update_fetcher(project_url: Optional[str], revision: Optional[str]) -> str:
     """Update the fetcher in package.nix to reflect project updates.
-    Runs nurl to get the fetcher for the provided version (default: latest rev) and replaces it in package.nix."""
+    Runs nurl to get the fetcher for the provided version (default: latest rev) and replaces it in package.nix.
+    
+    Raises an error if the package uses a fetcher not supported by nurl.
+    """
     coordinator_progress("Updating fetcher in flake.nix and flake.lock")
+
+    package_contents: str = get_package_contents()
+    
+    # Get list of supported fetchers from nurl
+    import re
+    try:
+        result = subprocess.run(
+            ["nurl", "-l"],
+            capture_output=True,
+            text=True,
+            check=True,
+        )
+        supported_fetchers = set(result.stdout.strip().split('\n'))
+    except (subprocess.CalledProcessError, FileNotFoundError) as e:
+        raise RuntimeError(f"Failed to get supported fetchers from nurl: {e}")
+    
+    # Find which fetcher is used in the package
+    fetcher_name_pattern = r"src\s+=\s+(fetch\w+)\s*\{"
+    fetcher_match = re.search(fetcher_name_pattern, package_contents)
+    if not fetcher_match:
+        raise ValueError("Could not identify fetcher type in package.nix")
+    
+    fetcher_name = fetcher_match.group(1)
+    
+    if fetcher_name not in supported_fetchers:
+        raise RuntimeError(
+            f"Package uses '{fetcher_name}' which is not supported by nurl.\n"
+            f"Supported fetchers: {', '.join(sorted(supported_fetchers))}\n"
+            f"nurl is a key dependency of vibenix maintenance mode."
+        )
 
     def get_project_url() -> str:
         # The pre-existing package NEEDS to evaluate correctly
