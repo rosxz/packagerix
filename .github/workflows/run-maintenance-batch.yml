@@ -202,6 +202,7 @@ jobs:
                       'pre_version': row['pre_version'],
                       'post_src_ref': row['post_src_ref'],
                       'pre_nixpkgs_base': row['pre_nixpkgs_base'],
+                      'post_nixpkgs_base': row['post_nixpkgs_base'],
                       'pname': row['pre_pname'],
                       'dataset_dir': dataset_dir,
                   })
@@ -354,9 +355,29 @@ jobs:
           # Create maintenance directory
           mkdir -p maintenance-input
 
-          # Copy the pre-extracted package.nix from the dataset directory
+          # Fetch the package directory from nixpkgs at parent_commit using nix flake prefetch
+          # This gets just the store path without building anything
+          echo "Prefetching nixpkgs@${{ matrix.parent_commit }} for auxiliary files..."
+          store_path=$(nix flake prefetch --json "github:NixOS/nixpkgs/${{ matrix.parent_commit }}" | jq -r '.storePath')
+          
+          # Copy all files from the package directory (auxiliary files like patches, configs)
+          package_dir=$(dirname "${{ matrix.package_path }}")
+          src_dir="${store_path}/${package_dir}"
+          echo "Copying auxiliary files from: $src_dir"
+          
+          if [ -d "$src_dir" ]; then
+            cp -r "$src_dir"/* maintenance-input/ 2>/dev/null || true
+            # Make files writable (they're read-only from nix store)
+            chmod -R u+w maintenance-input/
+            echo "Copied files:"
+            ls -la maintenance-input/
+          else
+            echo "Warning: Package directory not found at $src_dir"
+          fi
+
+          # Now override package.nix with our pre-extracted version
           pre_package_file="${{ matrix.dataset_dir }}/${{ matrix.pname }}.nix"
-          echo "Reading pre-state package from: $pre_package_file"
+          echo "Overriding package.nix from: $pre_package_file"
           
           if [ ! -f "$pre_package_file" ]; then
             echo "ERROR: Pre-extracted package file not found: $pre_package_file"
@@ -365,10 +386,11 @@ jobs:
           
           cp "$pre_package_file" maintenance-input/package.nix
 
-          # Create a flake.nix for the maintenance directory
-          cat > maintenance-input/flake.nix << 'EOF'
+          # Create a simple flake.nix that uses nixpkgs' own callPackage
+          # Auxiliary files (patches, etc.) are already copied locally, so relative paths will work
+          cat > maintenance-input/flake.nix << 'FLAKE_EOF'
           {
-            inputs.nixpkgs.url = "github:NixOS/nixpkgs/${{ matrix.pre_nixpkgs_base }}";
+            inputs.nixpkgs.url = "github:NixOS/nixpkgs/${{ matrix.post_nixpkgs_base }}";
 
             outputs = { self, nixpkgs, ... }:
               let
@@ -384,21 +406,26 @@ jobs:
                     pkgs = import nixpkgs {
                       inherit system;
                       config = { allowUnfree = true; };
+                      overlays = [
+                        (final: prev: {
+                          # Override the package using nixpkgs' own callPackage scope
+                          ${{ matrix.pname }} = prev.callPackage ./package.nix { };
+                        })
+                      ];
                     };
                   in
                   {
-                    default = pkgs.callPackage ./package.nix { };
+                    default = pkgs.${{ matrix.pname }};
                   }
                 );
               };
           }
-          EOF
+          FLAKE_EOF
 
           # Log what we prepared
           echo "=== Maintenance directory contents ==="
           ls -la maintenance-input/
-          echo "=== package.nix content ==="
-          cat maintenance-input/package.nix
+          cat maintenance-input/flake.nix
           echo ""
           echo "package_dir=maintenance-input" >> $GITHUB_OUTPUT
 
