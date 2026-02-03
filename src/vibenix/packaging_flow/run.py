@@ -78,7 +78,7 @@ def get_release_data_and_version(url, rev=None):
     ccl_logger.leave_attribute(log_end=True)
     return rev, version
 
-def run_nurl(url, rev=None):
+def run_nurl(url, rev=None, finalAttrs=False):
     """Run nurl command and return the version and fetcher."""
     backoff_time = 5  # seconds
     try:
@@ -102,7 +102,7 @@ def run_nurl(url, rev=None):
         # Format fetcher with version
         ccl_logger.write_kv("fetcher", fetcher)
         if version:
-            fetcher = fetcher.replace(version, "${version}") 
+            fetcher = fetcher.replace(version, "${"+ f"{'finalAttrs.' if finalAttrs else ''}" + "version}") 
         else:
             version = "unstable-${src.rev}"
         ccl_logger.write_kv("version", version)

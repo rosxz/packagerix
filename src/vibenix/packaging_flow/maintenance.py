@@ -16,6 +16,42 @@ from vibenix import config
 
 current_system = ""
 
+def inject_final_attrs(package_content: str) -> str:
+    """
+    Inject finalAttrs into package content if it doesn't already have it.
+    
+    This handles the case where post-state uses finalAttrs but pre-state doesn't.
+    We transform `stdenv.mkDerivation {` into `stdenv.mkDerivation (finalAttrs: {`
+    and the final `}` into `})`.
+    
+    Returns modified package content.
+    """
+    import re
+
+    # Find the builder line pattern: `word.word... {` at start of line
+    # This matches patterns like `stdenv.mkDerivation {`, `buildPythonPackage {`, etc.
+    match = re.search(r'^(\s*\w+(?:\.\w+)*\s*)\{', package_content, re.MULTILINE)
+    if not match:
+        return package_content
+    
+    first_brace_pos = match.end() - 1  # Position of the `{`
+    
+    # Find the last `}` in the content (end of the body)
+    last_brace = package_content.rfind('}')
+    if last_brace == -1 or last_brace <= first_brace_pos:
+        return package_content
+    
+    # Replace first `{` with `(finalAttrs: {` and last `}` with `})`
+    modified = (
+        package_content[:first_brace_pos] +
+        '(finalAttrs: {' +
+        package_content[first_brace_pos + 1:last_brace] +
+        '})'# +
+        #package_content[last_brace + 1:]
+    )
+    
+    return modified
+
 def update_fetcher(project_url: Optional[str], revision: Optional[str]) -> str:
     """Update the fetcher in package.nix to reflect project updates.
     Runs nurl to get the fetcher for the provided version (default: latest rev) and replaces it in package.nix."""
@@ -77,11 +113,16 @@ def update_fetcher(project_url: Optional[str], revision: Optional[str]) -> str:
     if not project_url:
         project_url = get_project_url()
 
-    from vibenix.packaging_flow.run import run_nurl
-    version, fetcher = run_nurl(project_url, revision) # Project should be updated by default, this is maintenance mode after all
-
-    # Update the fetcher in package.nix
     package_contents: str = get_package_contents()
+    has_finalAttrs = "finalAttrs" in package_contents
+    if not has_finalAttrs:
+        package_contents = inject_final_attrs(package_contents)
+        has_finalAttrs = package_contents != get_package_contents() # Whether or not we injected finalAttrs successfully
+
+    from vibenix.packaging_flow.run import run_nurl
+    version, fetcher = run_nurl(project_url, revision, finalAttrs=has_finalAttrs) # Project should be updated by default, this is maintenance mode after all
+
+    # Update the fetcher in package.niX
     # Build regex pattern to match src = fetch{...} with repo attribute matching pname (case-insensitive)
     import re
     repo = project_url.split("/")[-1].strip(".git")

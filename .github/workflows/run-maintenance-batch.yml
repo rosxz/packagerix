@@ -376,6 +376,9 @@ jobs:
                 forAllSystems = nixpkgs.lib.genAttrs supportedSystems;
               in
               {
+                # Required by vibenix
+                nixpkgs-src = nixpkgs.outPath;
+
                 packages = forAllSystems (system:
                   let
                     pkgs = import nixpkgs {
@@ -420,6 +423,7 @@ jobs:
             --raw \
             --output-dir output \
             --maintenance "${{ steps.prepare.outputs.package_dir }}" \
+            --target-version "${{ matrix.post_version }}" \
             --update-lock "$UPDATE_FLAG" \
             --upgrade-lock "$UPGRADE_FLAG" \
             2>&1 | tee "$log_file"
