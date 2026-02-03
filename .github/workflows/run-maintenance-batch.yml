@@ -355,29 +355,31 @@ jobs:
           # Create maintenance directory
           mkdir -p maintenance-input
 
-          # Fetch the package directory from nixpkgs at parent_commit using nix flake prefetch
-          # This gets just the store path without building anything
-          echo "Prefetching nixpkgs@${{ matrix.parent_commit }} for auxiliary files..."
-          store_path=$(nix flake prefetch --json "github:NixOS/nixpkgs/${{ matrix.parent_commit }}" | jq -r '.storePath')
+          ### == Arbitrary auxiliary file support (disabled) ==
+          ## Fetch the package directory from nixpkgs at parent_commit using nix flake prefetch
+          ## This gets just the store path without building anything
+          #echo "Prefetching nixpkgs@${{ matrix.parent_commit }} for auxiliary files..."
+          #store_path=$(nix flake prefetch --json "github:NixOS/nixpkgs/${{ matrix.parent_commit }}" | jq -r '.storePath')
           
-          # Copy all files from the package directory (auxiliary files like patches, configs)
-          package_dir=$(dirname "${{ matrix.package_path }}")
-          src_dir="${store_path}/${package_dir}"
-          echo "Copying auxiliary files from: $src_dir"
+          ## Copy all files from the package directory (auxiliary files like patches, configs)
+          #package_dir=$(dirname "${{ matrix.package_path }}")
+          #src_dir="${store_path}/${package_dir}"
+          #echo "Copying auxiliary files from: $src_dir"
           
-          if [ -d "$src_dir" ]; then
-            cp -r "$src_dir"/* maintenance-input/ 2>/dev/null || true
-            # Make files writable (they're read-only from nix store)
-            chmod -R u+w maintenance-input/
-            echo "Copied files:"
-            ls -la maintenance-input/
-          else
-            echo "Warning: Package directory not found at $src_dir"
-          fi
+          #if [ -d "$src_dir" ]; then
+          #  cp -r "$src_dir"/* maintenance-input/ 2>/dev/null || true
+          #  # Make files writable (they're read-only from nix store)
+          #  chmod -R u+w maintenance-input/
+          #  echo "Copied files:"
+          #  ls -la maintenance-input/
+          #else
+          #  echo "Warning: Package directory not found at $src_dir"
+          #fi
+          #### =======================================
 
-          # Now override package.nix with our pre-extracted version
+          # Now override packaging file with our pre-extracted version (works with package.nix or default.nix)
           pre_package_file="${{ matrix.dataset_dir }}/${{ matrix.pname }}.nix"
-          echo "Overriding package.nix from: $pre_package_file"
+          echo "Overriding packaging file from: $pre_package_file"
           
           if [ ! -f "$pre_package_file" ]; then
             echo "ERROR: Pre-extracted package file not found: $pre_package_file"
