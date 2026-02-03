@@ -102,7 +102,8 @@ def mock_input (ask : str, reply: str):
     return reply
 
 def run_terminal_ui(maintenance=None, output_dir=None, project_url=None, revision=None, fetcher=None,
-                    csv_pname=None, csv_version=None, fetcher_content=None):
+                    csv_pname=None, csv_version=None, fetcher_content=None,
+                    target_version=None, update_lock=True, upgrade_lock=False):
     """Run the terminal-based interface.
 
     Args:
@@ -114,6 +115,9 @@ def run_terminal_ui(maintenance=None, output_dir=None, project_url=None, revisio
         csv_pname: Package name from CSV format (CSV-based mode)
         csv_version: Package version from CSV format (CSV-based mode)
         fetcher_content: Direct fetcher content (alternative to fetcher file path)
+        target_version: Target version to update to (maintenance mode only)
+        update_lock: Whether to update flake.lock (maintenance mode)
+        upgrade_lock: Whether to upgrade nixpkgs (maintenance mode)
     """
     from vibenix.ui.logging_config import enable_console_logging
     enable_console_logging()
@@ -165,7 +169,8 @@ def run_terminal_ui(maintenance=None, output_dir=None, project_url=None, revisio
         try:
             if maintenance:
                 from vibenix.packaging_flow.maintenance import run_maintenance
-                run_maintenance(maintenance, output_dir=output_dir)
+                run_maintenance(maintenance, output_dir=output_dir, revision=target_version,
+                               update_lock=update_lock, upgrade_lock=upgrade_lock)
             else:
                 run_packaging_flow(output_dir=output_dir, project_url=project_url,
                                revision=revision, fetcher=fetcher,
@@ -301,6 +306,14 @@ def main():
     )
 
     parser.add_argument(
+        "--target-version",
+        type=str,
+        default=None,
+        metavar="TARGET_VERSION",
+        help="Target version to update to during maintenance mode. If not provided, updates to latest."
+    )
+
+    parser.add_argument(
         "--version",
         action="version",
         version="vibenix 0.1.0"
@@ -402,7 +415,9 @@ def main():
             run_terminal_ui(maintenance=args.maintenance, output_dir=args.output_dir, project_url=args.project_url,
                             revision=args.revision, fetcher=args.fetcher,
                             csv_pname=csv_pname, csv_version=csv_version,
-                            fetcher_content=fetcher_content)
+                            fetcher_content=fetcher_content,
+                            target_version=args.target_version,
+                            update_lock=args.update_lock, upgrade_lock=args.upgrade_lock)
     except KeyboardInterrupt:
         logger.info("\nExiting...")
         sys.exit(0)
