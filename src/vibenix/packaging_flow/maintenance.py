@@ -58,7 +58,7 @@ def update_fetcher(project_url: Optional[str], revision: Optional[str]) -> str:
     
     Raises an error if the package uses a fetcher not supported by nurl.
     """
-    coordinator_progress("Updating fetcher in flake.nix and flake.lock")
+    coordinator_progress("Updating fetcher in package.nix")
 
     package_contents: str = get_package_contents()
     
@@ -176,6 +176,18 @@ def update_fetcher(project_url: Optional[str], revision: Optional[str]) -> str:
     if len(lines) > 1:
         fetcher = lines[0] + '\n' + '\n'.join('  ' + line for line in lines[1:])
     new_package_contents = package_contents.replace(fetcher_content, fetcher)
+    
+    # Also update the version = "..." line
+    version_pattern = r'(version\s*=\s*)"([^"]+)"'
+    version_match = re.search(version_pattern, new_package_contents)
+    if version_match:
+        old_version = version_match.group(2)
+        coordinator_message(f"Updating version: {old_version} -> {version}")
+        new_package_contents = re.sub(version_pattern, rf'\1"{version}"', new_package_contents, count=1)
+    else:
+        coordinator_error(f"No version = \"...\" found in package.nix, skipping version update")
+        raise ValueError("Could not find version = \"...\" line in package.nix")
+    
     from vibenix.flake import update_flake
     update_flake(new_package_contents) # TODO rename update_flake to update_package
     return fetcher

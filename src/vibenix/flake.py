@@ -65,6 +65,7 @@ def init_flake(reference_dir: Optional[Path] = None) -> None:
     os.chmod(flake_lock_path, 0o644)
 
     ## If reference_dir is provided, copy its contents into the flake directory
+    # Although this is very lenient, should still only be used with [package.nix, flake.lock]
     if reference_dir:
         ref_path = Path(reference_dir).resolve()
         logger.info(f"Copying contents from reference directory: {ref_path}")
