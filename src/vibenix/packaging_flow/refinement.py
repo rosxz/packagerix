@@ -2,7 +2,7 @@ from vibenix.flake import get_package_contents
 from vibenix.ui.conversation import ask_user,  coordinator_message, coordinator_error, coordinator_progress
 from vibenix.nix import eval_progress, execute_build_and_add_to_stack, revert_packaging_to_solution
 from vibenix.packaging_flow.model_prompts import (
-    refine_code, get_feedback, improve_code
+    refine_code, get_feedback, improve_code, mnt_get_feedback
 )
 from vibenix.ccl_log import init_logger, get_logger, close_logger, enum_str
 from vibenix.errors import NixBuildErrorDiff, NixErrorKind, NixBuildResult
@@ -82,7 +82,11 @@ def refine_package(curr: Solution, project_page: str, output_dir=None, maintenan
         ccl_logger.write_kv("code", curr.code)
 
         # Get feedback (VM will be started/stopped automatically by run_in_vm calls)
-        feedback = get_feedback(curr.code, chat_history.copy() if chat_history is not None else None,
+        if not maintenance_mode:
+            feedback = get_feedback(curr.code, chat_history.copy() if chat_history is not None else None,
+                                 project_page=project_page, tree_output=get_tree_output()) # copy to avoid storing
+        else:
+            feedback = mnt_get_feedback(curr.code, chat_history.copy() if chat_history is not None else None,
                                  project_page=project_page, tree_output=get_tree_output()) # copy to avoid storing
         ccl_logger.write_kv("feedback", str(feedback))
 
@@ -112,15 +116,12 @@ def refine_package(curr: Solution, project_page: str, output_dir=None, maintenan
             if refining_error and chat_history is not None:
                 from pydantic_ai.messages import ModelRequest, ModelResponse, UserPromptPart, TextPart
 
-                #get_logger().log_debug(f"Chat history before error append length {len(chat_history)}")
                 error_msg = f"The refined code introduced errors during build: {enum_str(refining_error.type)}.\nError details:\n{refining_error.truncated()}\n\n Please fix them."
-                #get_logger().log_debug(f"Appending to chat history: Prompt({error_msg[:20]}), Code({attempt.code[:20]})")
                 user_message = ModelRequest(parts=[UserPromptPart(content=error_msg)])
                 model_message = ModelResponse(parts=[TextPart(content=attempt.code)])
 
                 chat_history.append(user_message)
                 chat_history.append(model_message)
-                #get_logger().log_debug(f"Chat history after append length: {len(chat_history)}")
                 refining_error = None
             coordinator_progress("Refined packaging code successfuly builds.")
             curr = attempt

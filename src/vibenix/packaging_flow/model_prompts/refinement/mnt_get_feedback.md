@@ -13,9 +13,6 @@ Please identify improvements, if any exist, to the packaging code, in the follow
        - For applications: ensure the binaries run without errors (e.g. `program --version`);
        - For libraries: ensure the main module can be imported/loaded without errors;
        - Ensure the correct Nix builder is used, and identify missing dependencies, if any.
-    2. Once the package is correct, and if there is no test suite or check clearly present that validates the packaging:
-       - Try the most simple Nix builder specific attributes for validation (e.g. `pythonImportsCheck`), and using the project's integrated testing frameworks.
-       - When that proves tricky or not applicable, ensure `doInstallCheck = true;` is present with a meaningful `installCheckPhase` (as in 1.);
     (...)
 
 **Each invocation of `run_in_vm` starts a fresh VM** that boots, executes your script, and shuts down. The VM has **no network access** and **no Nix binary** (on purpose).
