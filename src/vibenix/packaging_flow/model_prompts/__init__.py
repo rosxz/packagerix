@@ -66,6 +66,19 @@ def get_feedback(
     ...
 
 
+@ask_model_prompt('refinement/mnt_get_feedback.md')
+def mnt_get_feedback(
+    code: str,
+    chat_history: Optional[List],
+    lessons_learned: List[str] = [],
+    already_implemented: List[str] = [],
+    project_page: Optional[str] = None,
+    tree_output: Optional[str] = "",
+) -> str:
+    """Get feedback on a successfully built package (maintenance mode)."""
+    ...
+
+
 @run_formatter_after
 @ask_model_prompt('refinement/refine_code.md')
 def refine_code(
