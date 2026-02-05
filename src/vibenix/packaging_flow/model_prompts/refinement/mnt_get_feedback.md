@@ -14,6 +14,7 @@ Please identify improvements, if any exist, to the packaging code, in the follow
        - For libraries: ensure the main module can be imported/loaded without errors;
        - Ensure the correct Nix builder is used, and identify missing dependencies, if any.
     (...)
+    2. Do not destructively change the existing test suite/checks, unless to disable specific tests that explicitly no longer function
 
 **Each invocation of `run_in_vm` starts a fresh VM** that boots, executes your script, and shuts down. The VM has **no network access** and **no Nix binary** (on purpose).
 The VM's environment.systemPackages initially made available (beside generic utilities) are `{{ systemPackages }}`. If additional packages are necessary, change this, before calling `run_in_vm`, with the tool `set_vm_systemPackages`.
