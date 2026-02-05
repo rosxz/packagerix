@@ -97,8 +97,8 @@ DEFAULT_PROMPT_TOOLS: Dict[str, List[str]] = {prompt: [] for prompt in ALL_PROMP
 DEFAULT_PROMPT_TOOLS.update(
     {
         'summarize_project_source': PROJECT_TOOLS,
-        'get_feedback': get_names(SEARCH_TOOLS + VM_TOOLS) + ADDITIONAL_TOOLS, # Access to run_in_vm tools
-        'mnt_get_feedback': get_names(SEARCH_TOOLS + VM_TOOLS) + ADDITIONAL_TOOLS, # Access to run_in_vm tools
+        'get_feedback': get_names(SEARCH_TOOLS + VM_TOOLS) + ADDITIONAL_TOOLS,
+        'mnt_get_feedback': get_names(SEARCH_TOOLS + VM_TOOLS + MAINTENANCE_TOOLS) + ADDITIONAL_TOOLS,
         'refine_code': get_names(SEARCH_TOOLS + EDIT_TOOLS),
         'improve_code': get_names(EDIT_TOOLS),
         'fix_build_error': get_names(SEARCH_TOOLS + EDIT_TOOLS) + ADDITIONAL_TOOLS,
