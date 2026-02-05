@@ -247,20 +247,34 @@ def fetch_project_src(fetcher_contents: str) -> None:
         raise RuntimeError(f"Failed to evaluate project fetcher:\n{error_details}")
 
 def save_package_output(package_directory: Path, output_dir: str) -> None:
-    """Save the fixed package.nix and accompanying files to the output directory."""
+    """Save the fixed package.nix and accompanying files to the output directory.
+    
+    Only copies essential files: package.nix, flake.nix, flake.lock, and run.ccl.
+    Excludes build artifacts like result symlinks, vm-task directory, and packages.nix.
+    """
     output_path = Path(output_dir).resolve()
     output_path.mkdir(parents=True, exist_ok=True)
 
-    def ignore_git(dir, contents):
-        # This will match .git, .gitignore, etc. anywhere in the tree
-        return [c for c in contents if c == ".git" or c.startswith(".git")]
+    # List of files/patterns to exclude from output
+    exclude_items = {'result', 'vm-task', 'packages.nix', '.git', '.gitignore'}
+
+    def ignore_patterns(dir, contents):
+        """Ignore build artifacts and git files."""
+        return [c for c in contents if c in exclude_items or c.startswith(".git")]
 
     # Copy files from package_directory to output_path
     import shutil
     for item in package_directory.iterdir():
+        # Skip excluded items
+        if item.name in exclude_items or item.name.startswith(".git"):
+            continue
+        # Skip symlinks (like result)
+        if item.is_symlink():
+            continue
+            
         dest = output_path / item.name
         if item.is_dir():
-            shutil.copytree(item, dest, dirs_exist_ok=True, ignore=ignore_git)
+            shutil.copytree(item, dest, dirs_exist_ok=True, ignore=ignore_patterns)
         else:
             shutil.copy2(item, dest)
 
