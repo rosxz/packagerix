@@ -495,8 +495,10 @@ jobs:
           mkdir -p artifact-${{ matrix.project }}
           cp "${{ matrix.project }}.log" "artifact-${{ matrix.project }}/" 2>/dev/null || true
           if [ -d output ]; then
-            # Remove result symlink/folder before copying (Nix build artifact)
-            rm -rf output/result 2>/dev/null || true
+            ls -la output
+            # Remove all result symlinks/folders before copying (Nix build artifacts)
+            find output -name "result" -exec rm -rf {} + 2>/dev/null || true
+            # Clean up nix store to free disk space
             cp -r output/* artifact-${{ matrix.project }}/
           fi
           cp ~/.vibenix/config.json artifact-${{ matrix.project }}/ 2>/dev/null || true

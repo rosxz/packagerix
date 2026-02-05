@@ -57,6 +57,7 @@ ALL_PROMPTS = [
     "pick_template",
     "summarize_project_source",
     "get_feedback",
+    "mnt_get_feedback",
     "refine_code",
     "improve_code",
     "fix_build_error",
@@ -97,6 +98,7 @@ DEFAULT_PROMPT_TOOLS.update(
     {
         'summarize_project_source': PROJECT_TOOLS,
         'get_feedback': get_names(SEARCH_TOOLS + VM_TOOLS) + ADDITIONAL_TOOLS, # Access to run_in_vm tools
+        'mnt_get_feedback': get_names(SEARCH_TOOLS + VM_TOOLS) + ADDITIONAL_TOOLS, # Access to run_in_vm tools
         'refine_code': get_names(SEARCH_TOOLS + EDIT_TOOLS),
         'improve_code': get_names(EDIT_TOOLS),
         'fix_build_error': get_names(SEARCH_TOOLS + EDIT_TOOLS) + ADDITIONAL_TOOLS,
