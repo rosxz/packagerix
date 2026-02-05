@@ -539,7 +539,7 @@ def package_project(output_dir=None, project_url=None, revision=None, fetcher=No
     return None
 
 
-def save_package_output(code: str, output_dir: str):
+def save_package_output(code: str, output_dir: str, auxiliary_files: bool=False):
     """Save the package.nix file to the output directory."""
     import os
     import re
@@ -560,6 +560,13 @@ def save_package_output(code: str, output_dir: str):
     # Save package.nix
     package_file = output_path / "package.nix"
     package_file.write_text(code)
+
+    # Save flake.nix and flake.lock
+    for filename in ["flake.nix", "flake.lock"]:
+        src_file = Path(config.flake_dir) / filename
+        if src_file.exists():
+            dest_file = output_path / filename
+            dest_file.write_text(src_file.read_text())
     
     coordinator_message(f"Saved package to: {package_file}")
     from vibenix.ccl_log import get_logger
