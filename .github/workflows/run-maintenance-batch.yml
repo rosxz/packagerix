@@ -9,9 +9,9 @@ on:
         default: '1-5'
         type: string
       dataset:
-        description: 'Path to CSV dataset file in research/ (e.g., maintenance_02_02_2025.csv)'
+        description: 'Path to CSV dataset file in research/ (e.g., maintenance_05_02_2025.csv)'
         required: false
-        default: 'maintenance_02_02_2025.csv'
+        default: 'maintenance_05_02_2025.csv'
         type: string
       update_lock:
         description: 'Pass --update-lock (True/False) to maintenance runs'

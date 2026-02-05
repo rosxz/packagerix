@@ -6,19 +6,32 @@ from typing import Optional, Tuple
 from vibenix.ccl_log import get_logger, log_function_call
 from vibenix.flake import get_package_path
 from vibenix import config
-
+from vibenix.ui.conversation import coordinator_message, ask_user_direct
 
 @log_function_call("upgrade_nixpkgs")
-def upgrade_nixpkgs() -> str:
+def upgrade_nixpkgs(reason: str) -> str:
     """
     Upgrade the nixpkgs release used to the next stable release.
     **Useful when a dependency or dependency version is not present in the nixpkgs used**
     Triple check that required dependency really is not in current nixpkgs before calling this tool.
+
+    Args:
+        reason: A string concisely describing the reason for the upgrade (e.g., "Require jellyfin version > 1.23, current version is 1.21")
     
     Returns:
         A success or error message describing the upgrade result.
     """
-    print(f"📞 Function called: upgrade_nixpkgs")
+    print(f"📞 Function called: upgrade_nixpkgs with reason: `{reason}`")
+    # Ask user for confirmation with 30 second timeout
+    user_resp = ask_user_direct(
+        f"Received request to upgrade nixpkgs release. Reason: {reason}\n\n Accept (y) or reject (N) this request?",
+        timeout=30
+    )
+    if user_resp is None:
+        return "Error: Upgrade request rejected due to timeout"
+    if user_resp.strip().lower() != 'y':
+        return "Error: Upgrade request rejected by user"
+
     return _upgrade_nixpkgs()
 
 
