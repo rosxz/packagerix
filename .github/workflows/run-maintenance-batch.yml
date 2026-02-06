@@ -423,7 +423,7 @@ jobs:
               };
           }
           FLAKE_EOF
-
+          
           echo "package_dir=maintenance-input" >> $GITHUB_OUTPUT
 
       - name: Run vibenix maintenance
@@ -493,6 +493,8 @@ jobs:
             cp -r output/* artifact-${{ matrix.project }}/
           fi
           cp ~/.vibenix/config.json artifact-${{ matrix.project }}/ 2>/dev/null || true
+          cp maintenance-input/flake.nix artifact-${{ matrix.project }}/ 2>/dev/null || true
+          cp maintenance-input/package.nix artifact-${{ matrix.project }}/ 2>/dev/null || true
           echo "${{ steps.run-vibenix.outputs.status || 'unknown' }}" > "artifact-${{ matrix.project }}/status.txt" 2>/dev/null || true
           
           # Save metadata for reference
