@@ -2,6 +2,7 @@
 
 from pathlib import Path
 import subprocess
+import re
 from typing import Optional
 from vibenix.ui.logging_config import logger
 
@@ -9,7 +10,7 @@ from vibenix.ccl_log import init_logger, get_logger, close_logger, enum_str
 from vibenix.git_info import get_git_info
 from vibenix.ui.conversation import coordinator_message, coordinator_error, coordinator_progress
 from vibenix.ui.conversation_templated import get_model_prompt_manager
-from vibenix.flake import init_flake, get_package_contents
+from vibenix.flake import init_flake, get_package_contents, get_current_system
 from vibenix.packaging_flow.model_prompts import analyze_package_failure, classify_packaging_failure, PackagingFailure
 from vibenix.packaging_flow.refinement import refine_package
 from vibenix import config
@@ -26,7 +27,6 @@ def inject_final_attrs(package_content: str) -> str:
     
     Returns modified package content.
     """
-    import re
 
     # Find the builder line pattern: `word.word... {` at start of line
     # This matches patterns like `stdenv.mkDerivation {`, `buildPythonPackage {`, etc.
@@ -61,37 +61,37 @@ def update_fetcher(project_url: Optional[str], revision: Optional[str]) -> str:
     coordinator_progress("Updating fetcher in package.nix")
 
     package_contents: str = get_package_contents()
-    
-    # Get list of supported fetchers from nurl
-    import re
     try:
-        result = subprocess.run(
-            ["nurl", "-l"],
+        pname = subprocess.run(
+            ["nix", "eval", "--raw", f".#packages.{get_current_system()}.default.pname"],
+            cwd=config.flake_dir,
             capture_output=True,
             text=True,
             check=True,
-        )
-        supported_fetchers = set(result.stdout.strip().split('\n'))
-    except (subprocess.CalledProcessError, FileNotFoundError) as e:
-        raise RuntimeError(f"Failed to get supported fetchers from nurl: {e}")
-    
-    # Find which fetcher is used in the package
-    fetcher_name_pattern = r"src\s+=\s+(fetch\w+)\s*\{"
-    fetcher_match = re.search(fetcher_name_pattern, package_contents)
-    if not fetcher_match:
-        raise ValueError("Could not identify fetcher type in package.nix")
-    
-    fetcher_name = fetcher_match.group(1)
-    
-    if fetcher_name not in supported_fetchers:
-        raise RuntimeError(
-            f"Package uses '{fetcher_name}' which is not supported by nurl.\n"
-            f"Supported fetchers: {', '.join(sorted(supported_fetchers))}\n"
-            f"nurl is a key dependency of vibenix maintenance mode."
-        )
+        ).stdout.strip()
+    except subprocess.CalledProcessError:
+        raise RuntimeError("Failed to evaluate pname for the package. Ensure that the package.nix defines a pname attribute.")
 
-    def get_project_url() -> str:
-        # The pre-existing package NEEDS to evaluate correctly
+    def get_src_position() -> Optional[dict]:
+        """Get the file/line/column position of the src attribute using builtins.unsafeGetAttrPos."""
+        import json
+        try:
+            pos_result = subprocess.run(
+                [
+                    "nix", "eval", "--json", "--impure", "--expr",
+                    f'builtins.unsafeGetAttrPos "src" (builtins.getFlake (toString ./.)).packages.{get_current_system()}.default'
+                ],
+                cwd=config.flake_dir,
+                capture_output=True,
+                text=True,
+                check=True,
+            )
+            return json.loads(pos_result.stdout)
+        except (subprocess.CalledProcessError, json.JSONDecodeError):
+            return None
+
+    def get_project_url_from_src(fetcher_name: str) -> tuple[str, str]:
+        """Extract project URL from the package's src attribute."""
         def _normalize_project_url(url: str) -> str:
             """Keep only scheme + host + owner + repo; drop deeper paths."""
             parts = url.split("/")
@@ -99,52 +99,112 @@ def update_fetcher(project_url: Optional[str], revision: Optional[str]) -> str:
                 return "/".join(parts[:5]).rstrip("/")
             return url.rstrip("/")
 
+        # Try gitRepoUrl first 
         try:
-            system_result = subprocess.run(
-                [
-                    "nix",
-                    "eval",
-                    "--raw",
-                    "--impure",
-                    "--expr",
-                    "builtins.currentSystem",
-                ],
-                cwd=config.flake_dir,
-                capture_output=True,
-                text=True,
-                check=True,
-            )
-            global current_system
-            current_system = system_result.stdout.strip()
-
             result = subprocess.run(
-                [
-                    "nix",
-                    "eval",
-                    "--raw",
-                    f".#packages.{current_system}.default.src.url",
-                ],
+                ["nix", "eval", "--raw", f".#packages.{get_current_system()}.default.src.gitRepoUrl"],
                 cwd=config.flake_dir,
                 capture_output=True,
                 text=True,
                 check=True,
             )
-            if result.returncode != 0:
-                ccl_logger = get_logger()
-                ccl_logger.write_kv("nix_eval_error", result.stderr)
-                ccl_logger.leave_attribute(log_end=True)
-                raise RuntimeError(f"{result.stderr}")
+            if result.returncode == 0 and result.stdout.strip():
+                return _normalize_project_url(result.stdout.strip()), None
+        except subprocess.CalledProcessError:
+            pass
+        
+        # Handle special fetchers that don't have gitRepoUrl
+        if fetcher_name == "fetchPypi":
+            # PyPI: construct URL from pname
+            return f"https://pypi.org/project/{pname}", None
+        
+        elif fetcher_name == "fetchsvn":
+            # SVN: use src.url directly (no normalization)
+            try:
+                result = subprocess.run(
+                    ["nix", "eval", "--raw", f".#packages.{get_current_system()}.default.src.url"],
+                    cwd=config.flake_dir,
+                    capture_output=True,
+                    text=True,
+                    check=True,
+                )
+                if result.returncode == 0 and result.stdout.strip():
+                    return result.stdout.strip(), "--fetcher fetchsvn"
+            except subprocess.CalledProcessError:
+                pass
+        
+        # Fallback: try src.url with normalization (fetchgit, fetchurl, etc.)
+        try:
+            result = subprocess.run(
+                ["nix", "eval", "--raw", f".#packages.{get_current_system()}.default.src.url"],
+                cwd=config.flake_dir,
+                capture_output=True,
+                text=True,
+                check=True,
+            )
+            if result.returncode == 0 and result.stdout.strip():
+                return _normalize_project_url(result.stdout.strip()), None
+        except subprocess.CalledProcessError:
+            pass
+        
+        raise RuntimeError(f"Could not determine project URL from src attribute (fetcher: {fetcher_name})")
 
-            project_url = result.stdout.strip()
-        except (subprocess.TimeoutExpired, subprocess.CalledProcessError) as e:
-            raise RuntimeError(f"Failed to evaluate project fetcher: {e}")
+    # Get the fetcher/src attribute content using src position
+    src_pos = get_src_position()
+    fetcher_content = ""
+    if src_pos:
+        src_line = src_pos.get("line", 0)
+        coordinator_message(f"Found src attribute at line {src_line}")
+        
+        # Extract fetcher block starting from src line
+        lines = package_contents.split('\n')
+        if 0 < src_line <= len(lines):
+            # Find the fetcher block by matching braces from src line
+            start_idx = src_line - 1  # 0-indexed
+            brace_count = 0
+            in_fetcher = False
+            end_idx = start_idx
+            
+            for i in range(start_idx, len(lines)):
+                line = lines[i]
+                for char in line:
+                    if char == '{':
+                        brace_count += 1
+                        in_fetcher = True
+                    elif char == '}':
+                        brace_count -= 1
+                        if in_fetcher and brace_count == 0:
+                            end_idx = i
+                            break
+                if in_fetcher and brace_count == 0:
+                    break
+            
+            if in_fetcher:
+                fetcher_content = '\n'.join(lines[start_idx:end_idx + 1])
+                # Remove the `src = ` prefix and trailing `;`
+                fetcher_content = re.sub(r'^(\s*)src\s+=\s*', '', fetcher_content)
+                fetcher_content = fetcher_content.rstrip().rstrip(';')
+                coordinator_message(f"Extracted fetcher from lines {src_line}-{end_idx + 1}")
 
-        # Normalize: keep only https://forge/owner/repo (TODO wont work with forges on subpaths)
-        project_url = _normalize_project_url(project_url)
-        return project_url
+    # Fallback to regex matching if position-based extraction failed
+    if not fetcher_content:
+        # Match any src = fetchXXX { ... }; pattern
+        generic_pattern = r"src\s+=\s+(fetch\w+\s*(?:rec\s*)?\{.*?\});"
+        match = re.search(generic_pattern, package_contents, re.DOTALL)
+        if match:
+            fetcher_content = match.group(1)
+            fetcher_name = re.match(r'^\s*(fetch\w+)', fetcher_content)
+            coordinator_message(f"Found fetcher `{fetcher_name.group(1) if fetcher_name else ''}` via fallback regex! This is less reliable, ensure the correct fetcher block was extracted.")
 
+    # Extract the fetcher name from fetcher content
+    main_fetcher_name, nurl_args = "", ""
+    if fetcher_content:
+        fetcher_name_match = re.match(r'^\s*(fetch\w+)', fetcher_content)
+        if fetcher_name_match:
+            main_fetcher_name = fetcher_name_match.group(1)
+    
     if not project_url:
-        project_url = get_project_url()
+        project_url, nurl_args = get_project_url_from_src(main_fetcher_name) # Extract upstream project URL and necessary nurl args
 
     package_contents: str = get_package_contents()
     has_finalAttrs = "finalAttrs" in package_contents
@@ -153,24 +213,13 @@ def update_fetcher(project_url: Optional[str], revision: Optional[str]) -> str:
         has_finalAttrs = package_contents != get_package_contents() # Whether or not we injected finalAttrs successfully
 
     from vibenix.packaging_flow.run import run_nurl
-    version, fetcher = run_nurl(project_url, revision, finalAttrs=has_finalAttrs) # Project should be updated by default, this is maintenance mode after all
+    version, fetcher = run_nurl(project_url, revision, finalAttrs=has_finalAttrs, extra_args=nurl_args) # Update project with nurl
 
-    # Update the fetcher in package.niX
-    # Build regex pattern to match src = fetch{...} with repo attribute matching pname (case-insensitive)
-    import re
-    repo = project_url.split("/")[-1].removesuffix(".git")
-    fetcher_pattern = r"src\s+=\s+(fetch[\w]+\s*\{[\s\S]*?repo\s+=\s+\"[^\"]*" + re.escape(repo) + r"[^\"]*\"[\s\S]*?\});"
-    # TODO check how much identation previous fetcher had to match or something
-    fetcher_match = re.search(fetcher_pattern, package_contents, re.IGNORECASE)
-    fetcher_content = ""
-    if fetcher_match:
-        fetcher_content = fetcher_match.group(1)
-        coordinator_message(f"Found fetcher with repo matching '{repo}'")
-    else:
-        coordinator_error(f"No fetcher found with repo matching '{repo}'")
-        raise ValueError(f"Could not find fetcher with repo matching '{repo}' in flake.nix")
+    if not fetcher_content:
+        coordinator_error(f"No fetcher found for project '{project_url}'")
+        raise ValueError(f"Could not find fetcher for project in package.nix")
 
-    coordinator_message(f"Previous fetcher:\n```nix\n{fetcher_content}\n```\nUpdating fetcher to version: {version}")
+    coordinator_message(f"Updating project version to `{version}`")
     # Indent all lines after the first by 2 spaces
     lines = fetcher.split('\n')
     if len(lines) > 1:
