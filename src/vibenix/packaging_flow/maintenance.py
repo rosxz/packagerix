@@ -15,7 +15,6 @@ from vibenix.packaging_flow.model_prompts import analyze_package_failure, classi
 from vibenix.packaging_flow.refinement import refine_package
 from vibenix import config
 
-current_system = ""
 
 def inject_final_attrs(package_content: str) -> str:
     """
@@ -275,13 +274,12 @@ def fetch_project_src(fetcher_contents: str) -> None:
     ccl_logger.enter_attribute("load_fetcher", log_start=True)
     ccl_logger.write_kv("fetcher", fetcher_contents)
 
-    global current_system
     # Instantiate fetcher to pull contents to nix store TODO theres probably definetly a better way
     cmd = [
         'nix',
         'build',
         '--impure',
-        f'.#packages.{current_system}.default.src',
+        f'.#packages.{get_current_system()}.default.src',
     ]
     try:
         result = subprocess.run(cmd, cwd=config.flake_dir, capture_output=True, text=True, check=True)
