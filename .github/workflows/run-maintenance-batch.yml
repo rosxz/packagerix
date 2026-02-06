@@ -205,6 +205,8 @@ jobs:
                       'post_nixpkgs_base': row['post_nixpkgs_base'],
                       'pname': row['pre_pname'],
                       'dataset_dir': dataset_dir,
+                      'package_attr': row['package_attr']
+                      'callpkg_set': '' if len(row['package_attr'].split('.')) < 2 else row['package_attr'].rsplit('.', 1)[0] + '.'
                   })
               else:
                   print(f'Warning: ID {row_id} not found in dataset', file=sys.stderr)
@@ -411,13 +413,13 @@ jobs:
                       overlays = [
                         (final: prev: {
                           # Override the package using nixpkgs' own callPackage scope
-                          ${{ matrix.pname }} = prev.callPackage ./package.nix { };
+                          ${{ matrix.package_attr }} = prev.${{ matrix.callpkg_set }}callPackage ./package.nix { };
                         })
                       ];
                     };
                   in
                   {
-                    default = pkgs.${{ matrix.pname }};
+                    default = pkgs.${{ matrix.package_attr }};
                   }
                 );
               };
