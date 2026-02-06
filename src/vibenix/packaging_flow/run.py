@@ -78,7 +78,7 @@ def get_release_data_and_version(url, rev=None):
     ccl_logger.leave_attribute(log_end=True)
     return rev, version
 
-def run_nurl(url, rev=None, finalAttrs=False):
+def run_nurl(url, rev=None, finalAttrs: bool=False, extra_args: str=None):
     """Run nurl command and return the version and fetcher."""
     backoff_time = 5  # seconds
     try:
@@ -90,7 +90,8 @@ def run_nurl(url, rev=None, finalAttrs=False):
         rev, version = get_release_data_and_version(url, rev)
 
         cmd = ['nurl', url, rev] if rev else ['nurl', url]
-        ccl_logger.write_kv("nurl_args", " ".join(cmd[1:]))
+        if extra_args:
+            cmd += extra_args.split()
         result = subprocess.run(
             cmd,
             capture_output=True,

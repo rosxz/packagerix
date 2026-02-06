@@ -424,11 +424,6 @@ jobs:
           }
           FLAKE_EOF
 
-          # Log what we prepared
-          echo "=== Maintenance directory contents ==="
-          ls -la maintenance-input/
-          cat maintenance-input/flake.nix
-          echo ""
           echo "package_dir=maintenance-input" >> $GITHUB_OUTPUT
 
       - name: Run vibenix maintenance

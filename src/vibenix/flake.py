@@ -9,6 +9,7 @@ from vibenix.ui.logging_config import logger
 from vibenix.nixpkgs_lock import get_nixpkgs_lock_info
 
 from pathlib import Path
+import subprocess
 
 def init_flake(reference_dir: Optional[Path] = None) -> None:
 
@@ -122,3 +123,21 @@ def revert_to_commit(commit_hash: str) -> None:
     """
     repo = git.Repo(config.flake_dir.as_posix())
     repo.git.reset('--hard', commit_hash)
+
+
+current_system = None
+
+def get_current_system() -> str:
+    """Get the current Nix system."""
+    global current_system
+    if current_system:
+        return current_system
+    result = subprocess.run(
+        ["nix", "eval", "--raw", "--impure", "--expr", "builtins.currentSystem"],
+        cwd=config.flake_dir,
+        capture_output=True,
+        text=True,
+        check=True,
+    )
+    current_system = result.stdout.strip()
+    return current_system
