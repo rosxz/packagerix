@@ -357,28 +357,56 @@ jobs:
           # Create maintenance directory
           mkdir -p maintenance-input
 
-          ### == Arbitrary auxiliary file support (disabled) ==
-          ## Fetch the package directory from nixpkgs at parent_commit using nix flake prefetch
-          ## This gets just the store path without building anything
-          #echo "Prefetching nixpkgs@${{ matrix.parent_commit }} for auxiliary files..."
-          #store_path=$(nix flake prefetch --json "github:NixOS/nixpkgs/${{ matrix.parent_commit }}" | jq -r '.storePath')
+          ATTR="${{ matrix.package_attr }}"
           
-          ## Copy all files from the package directory (auxiliary files like patches, configs)
-          #package_dir=$(dirname "${{ matrix.package_path }}")
-          #src_dir="${store_path}/${package_dir}"
-          #echo "Copying auxiliary files from: $src_dir"
-          
-          #if [ -d "$src_dir" ]; then
-          #  cp -r "$src_dir"/* maintenance-input/ 2>/dev/null || true
-          #  # Make files writable (they're read-only from nix store)
-          #  chmod -R u+w maintenance-input/
-          #  echo "Copied files:"
-          #  ls -la maintenance-input/
-          #else
-          #  echo "Warning: Package directory not found at $src_dir"
-          #fi
-          #### =======================================
+          if [[ "$ATTR" == *"."* ]]; then
+            # Nested package (e.g., python3Packages.sasmodels)
+            PKG_SET="${ATTR%.*}"
+            PKG_NAME="${ATTR##*.}"
+            
+            # Construct the nested overlay
+            OVERLAY_EXPR="$PKG_SET = prev.$PKG_SET // { $PKG_NAME = final.$PKG_SET.callPackage ./package.nix { }; };"
+          else
+            # Top-level package
+            OVERLAY_EXPR="$ATTR = final.callPackage ./package.nix { };"
+          fi
 
+          # 2. Generate the flake.nix
+          cat > maintenance-input/flake.nix <<FLAKE_EOF
+          {
+            inputs.nixpkgs.url = "github:NixOS/nixpkgs/${{ matrix.post_nixpkgs_base }}";
+
+            outputs = { self, nixpkgs, ... }:
+              let
+                supportedSystems = [ "x86_64-linux" "aarch64-linux" "x86_64-darwin" "aarch64-darwin" ];
+                forAllSystems = nixpkgs.lib.genAttrs supportedSystems;
+              in
+              {
+                nixpkgs-src = nixpkgs.outPath;
+
+                packages = forAllSystems (system:
+                  let
+                    pkgs = import nixpkgs {
+                      inherit system;
+                      config = { allowUnfree = true; };
+                      overlays = [
+                        (final: prev: {
+                          # Injected dynamic overlay
+                          $OVERLAY_EXPR
+                        })
+                      ];
+                    };
+                  in
+                  {
+                    # Access the package dynamically using lib.getAttrFromPath
+                    #default = nixpkgs.lib.getAttrFromPath (nixpkgs.lib.splitString "." "${{ matrix.package_attr }}") pkgs;
+                    default = pkgs.${{ matrix.package_attr }};
+                  }
+                );
+              };
+          }
+          FLAKE_EOF
+          
           # Now override packaging file with our pre-extracted version (works with package.nix or default.nix)
           pre_package_file="${{ matrix.dataset_dir }}/${{ matrix.pname }}.nix"
           echo "Overriding packaging file from: $pre_package_file"
@@ -390,42 +418,6 @@ jobs:
           
           cp "$pre_package_file" maintenance-input/package.nix
 
-          # Create a simple flake.nix that uses nixpkgs' own callPackage
-          # Auxiliary files (patches, etc.) are already copied locally, so relative paths will work
-          cat > maintenance-input/flake.nix << 'FLAKE_EOF'
-          {
-            inputs.nixpkgs.url = "github:NixOS/nixpkgs/${{ matrix.post_nixpkgs_base }}";
-
-            outputs = { self, nixpkgs, ... }:
-              let
-                supportedSystems = [ "x86_64-linux" "aarch64-linux" "x86_64-darwin" "aarch64-darwin" ];
-                forAllSystems = nixpkgs.lib.genAttrs supportedSystems;
-              in
-              {
-                # Required by vibenix
-                nixpkgs-src = nixpkgs.outPath;
-
-                packages = forAllSystems (system:
-                  let
-                    pkgs = import nixpkgs {
-                      inherit system;
-                      config = { allowUnfree = true; };
-                      overlays = [
-                        (final: prev: {
-                          # Override the package using nixpkgs' own callPackage scope
-                          ${{ matrix.package_attr }} = prev.${{ matrix.callpkg_set }}callPackage ./package.nix { };
-                        })
-                      ];
-                    };
-                  in
-                  {
-                    default = pkgs.${{ matrix.package_attr }};
-                  }
-                );
-              };
-          }
-          FLAKE_EOF
-          
           echo "package_dir=maintenance-input" >> $GITHUB_OUTPUT
 
       - name: Run vibenix maintenance

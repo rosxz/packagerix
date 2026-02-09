@@ -226,7 +226,7 @@ def update_fetcher(project_url: Optional[str], revision: Optional[str]) -> str:
     new_package_contents = package_contents.replace(fetcher_content, fetcher)
     
     # Also update the version = "..." line
-    version_pattern = r'(version\s*=\s*)"([^"]+)"'
+    version_pattern = r'(version\s*=\s*)"([^"]+)";'
     version_match = re.search(version_pattern, new_package_contents)
     if version_match:
         old_version = version_match.group(2)
