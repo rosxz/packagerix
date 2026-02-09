@@ -205,7 +205,7 @@ jobs:
                       'post_nixpkgs_base': row['post_nixpkgs_base'],
                       'pname': row['pre_pname'],
                       'dataset_dir': dataset_dir,
-                      'package_attr': row['package_attr']
+                      'package_attr': row['package_attr'],
                       'callpkg_set': '' if len(row['package_attr'].split('.')) < 2 else row['package_attr'].rsplit('.', 1)[0] + '.'
                   })
               else:
