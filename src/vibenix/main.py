@@ -247,10 +247,11 @@ def main():
     )
 
     parser.add_argument(
-        "revision",
+        "--revision", "-r",
+        dest="revision",
         type=str,
         nargs="?",
-        help="Project revision to package (e.g., commit hash, tag, release name) (optional)."
+        help="Project revision to package (e.g., commit hash, tag, release name)."
     )
 
     parser.add_argument(
