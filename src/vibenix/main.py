@@ -115,7 +115,8 @@ def run_terminal_ui(maintenance=None, output_dir=None, project_url=None, revisio
         csv_pname: Package name from CSV format (CSV-based mode)
         csv_version: Package version from CSV format (CSV-based mode)
         fetcher_content: Direct fetcher content (alternative to fetcher file path)
-        target_version: Target version to update to (maintenance mode only)
+        revision: Specific revision to update to (maintenance mode) (e.g., commit hash, tag, release name) (default: latest)
+        target_version: Updated version value (maintenance mode) (default: target_revision)
         update_lock: Whether to update flake.lock (maintenance mode)
         upgrade_lock: Whether to upgrade nixpkgs (maintenance mode)
     """
@@ -169,8 +170,8 @@ def run_terminal_ui(maintenance=None, output_dir=None, project_url=None, revisio
         try:
             if maintenance:
                 from vibenix.packaging_flow.maintenance import run_maintenance
-                run_maintenance(maintenance, output_dir=output_dir, revision=target_version,
-                               update_lock=update_lock, upgrade_lock=upgrade_lock)
+                run_maintenance(maintenance, output_dir=output_dir, revision=revision,
+                               version=target_version, update_lock=update_lock, upgrade_lock=upgrade_lock)
             else:
                 run_packaging_flow(output_dir=output_dir, project_url=project_url,
                                revision=revision, fetcher=fetcher,
@@ -310,7 +311,7 @@ def main():
         type=str,
         default=None,
         metavar="TARGET_VERSION",
-        help="Target version to update to during maintenance mode. If not provided, updates to latest."
+        help="Optional target version to set in package.nix . Requires --maintenance, --revision. Default: --revision value."
     )
 
     parser.add_argument(

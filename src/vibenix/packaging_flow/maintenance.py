@@ -16,228 +16,40 @@ from vibenix.packaging_flow.refinement import refine_package
 from vibenix import config
 
 
-def inject_final_attrs(package_content: str) -> str:
-    """
-    Inject finalAttrs into package content if it doesn't already have it.
-    
-    This handles the case where post-state uses finalAttrs but pre-state doesn't.
-    We transform `stdenv.mkDerivation {` into `stdenv.mkDerivation (finalAttrs: {`
-    and the final `}` into `})`.
-    
-    Returns modified package content.
-    """
-
-    # Find the builder line pattern: `word.word... {` at start of line
-    # This matches patterns like `stdenv.mkDerivation {`, `buildPythonPackage {`, etc.
-    match = re.search(r'^(\s*\w+(?:\.\w+)*\s*)\{', package_content, re.MULTILINE)
-    if not match:
-        return package_content
-    
-    first_brace_pos = match.end() - 1  # Position of the `{`
-    
-    # Find the last `}` in the content (end of the body)
-    last_brace = package_content.rfind('}')
-    if last_brace == -1 or last_brace <= first_brace_pos:
-        return package_content
-    
-    # Replace first `{` with `(finalAttrs: {` and last `}` with `})`
-    modified = (
-        package_content[:first_brace_pos] +
-        '(finalAttrs: {' +
-        package_content[first_brace_pos + 1:last_brace] +
-        '})'# +
-        #package_content[last_brace + 1:]
-    )
-    
-    return modified
-
-def update_fetcher(project_url: Optional[str], revision: Optional[str]) -> str:
+def update_fetcher(project_url: Optional[str], revision: Optional[str], version: Optional[str]) -> str:
     """Update the fetcher in package.nix to reflect project updates.
     Runs nurl to get the fetcher for the provided version (default: latest rev) and replaces it in package.nix.
     
     Raises an error if the package uses a fetcher not supported by nurl.
     """
-    coordinator_progress("Updating fetcher in package.nix")
-
-    package_contents: str = get_package_contents()
-    try:
-        pname = subprocess.run(
-            ["nix", "eval", "--raw", f".#packages.{get_current_system()}.default.pname"],
+    def run_nix_update(project_url: Optional[str], revision: Optional[str]) -> str:
+        """Run nix-update."""
+        res = subprocess.run(
+            ['nix-update', 'default', '--commit', '--flake'] + \
+             (['--version='+version] if version else []) + \
+             (['--url='+project_url] if project_url else []),
             cwd=config.flake_dir,
             capture_output=True,
             text=True,
-            check=True,
-        ).stdout.strip()
-    except subprocess.CalledProcessError:
-        raise RuntimeError("Failed to evaluate pname for the package. Ensure that the package.nix defines a pname attribute.")
+            check=True
+        )
+        if res.returncode != 0:
+            coordinator_error(f"nix-update failed: {res.stderr}")
+            raise RuntimeError(f"nix-update failed: {res.stderr}")
+        return res.stdout.strip()
 
-    def get_src_position() -> Optional[dict]:
-        """Get the file/line/column position of the src attribute using builtins.unsafeGetAttrPos."""
-        import json
-        try:
-            pos_result = subprocess.run(
-                [
-                    "nix", "eval", "--json", "--impure", "--expr",
-                    f'builtins.unsafeGetAttrPos "src" (builtins.getFlake (toString ./.)).packages.{get_current_system()}.default'
-                ],
-                cwd=config.flake_dir,
-                capture_output=True,
-                text=True,
-                check=True,
-            )
-            return json.loads(pos_result.stdout)
-        except (subprocess.CalledProcessError, json.JSONDecodeError):
-            return None
+    coordinator_progress("Updating fetcher in package.nix")
+    run_nix_update(project_url, revision) # This updates the fetcher in package.nix directly
+    if version:
+        from vibenix.flake import get_package_contents, update_flake
+        package_contents = get_package_contents()
 
-    def get_project_url_from_src(fetcher_name: str) -> tuple[str, str]:
-        """Extract project URL from the package's src attribute."""
-        def _normalize_project_url(url: str) -> str:
-            """Keep only scheme + host + owner + repo; drop deeper paths."""
-            parts = url.split("/")
-            if len(parts) >= 5:
-                return "/".join(parts[:5]).rstrip("/")
-            return url.rstrip("/")
+        pattern = r'(version\s*=\s*")' + re.escape(revision) + r'(";)'
+        replacement = rf'\g<1>{version}\g<2>'
+        new_contents = re.sub(pattern, replacement, package_contents, count=1)
 
-        # Try gitRepoUrl first 
-        try:
-            result = subprocess.run(
-                ["nix", "eval", "--raw", f".#packages.{get_current_system()}.default.src.gitRepoUrl"],
-                cwd=config.flake_dir,
-                capture_output=True,
-                text=True,
-                check=True,
-            )
-            if result.returncode == 0 and result.stdout.strip():
-                return _normalize_project_url(result.stdout.strip()), None
-        except subprocess.CalledProcessError:
-            pass
-        
-        # Handle special fetchers that don't have gitRepoUrl
-        if fetcher_name == "fetchPypi":
-            # PyPI: construct URL from pname
-            return f"https://pypi.org/project/{pname}", None
-        
-        elif fetcher_name == "fetchsvn":
-            # SVN: use src.url directly (no normalization)
-            try:
-                result = subprocess.run(
-                    ["nix", "eval", "--raw", f".#packages.{get_current_system()}.default.src.url"],
-                    cwd=config.flake_dir,
-                    capture_output=True,
-                    text=True,
-                    check=True,
-                )
-                if result.returncode == 0 and result.stdout.strip():
-                    return result.stdout.strip(), "--fetcher fetchsvn"
-            except subprocess.CalledProcessError:
-                pass
-        
-        # Fallback: try src.url with normalization (fetchgit, fetchurl, etc.)
-        try:
-            result = subprocess.run(
-                ["nix", "eval", "--raw", f".#packages.{get_current_system()}.default.src.url"],
-                cwd=config.flake_dir,
-                capture_output=True,
-                text=True,
-                check=True,
-            )
-            if result.returncode == 0 and result.stdout.strip():
-                return _normalize_project_url(result.stdout.strip()), None
-        except subprocess.CalledProcessError:
-            pass
-        
-        raise RuntimeError(f"Could not determine project URL from src attribute (fetcher: {fetcher_name})")
+        update_flake(package_contents=new_contents, do_commit=True) # TODO: do_commit should be a string / diff name
 
-    # Get the fetcher/src attribute content using src position
-    src_pos = get_src_position()
-    fetcher_content = ""
-    if src_pos:
-        src_line = src_pos.get("line", 0)
-        coordinator_message(f"Found src attribute at line {src_line}")
-        
-        # Extract fetcher block starting from src line
-        lines = package_contents.split('\n')
-        if 0 < src_line <= len(lines):
-            # Find the fetcher block by matching braces from src line
-            start_idx = src_line - 1  # 0-indexed
-            brace_count = 0
-            in_fetcher = False
-            end_idx = start_idx
-            
-            for i in range(start_idx, len(lines)):
-                line = lines[i]
-                for char in line:
-                    if char == '{':
-                        brace_count += 1
-                        in_fetcher = True
-                    elif char == '}':
-                        brace_count -= 1
-                        if in_fetcher and brace_count == 0:
-                            end_idx = i
-                            break
-                if in_fetcher and brace_count == 0:
-                    break
-            
-            if in_fetcher:
-                fetcher_content = '\n'.join(lines[start_idx:end_idx + 1])
-                # Remove the `src = ` prefix and trailing `;`
-                fetcher_content = re.sub(r'^(\s*)src\s+=\s*', '', fetcher_content)
-                fetcher_content = fetcher_content.rstrip().rstrip(';')
-                coordinator_message(f"Extracted fetcher from lines {src_line}-{end_idx + 1}")
-
-    # Fallback to regex matching if position-based extraction failed
-    if not fetcher_content:
-        # Match any src = fetchXXX { ... }; pattern
-        generic_pattern = r"src\s+=\s+(fetch\w+\s*(?:rec\s*)?\{.*?\});"
-        match = re.search(generic_pattern, package_contents, re.DOTALL)
-        if match:
-            fetcher_content = match.group(1)
-            fetcher_name = re.match(r'^\s*(fetch\w+)', fetcher_content)
-            coordinator_message(f"Found fetcher `{fetcher_name.group(1) if fetcher_name else ''}` via fallback regex! This is less reliable, ensure the correct fetcher block was extracted.")
-
-    # Extract the fetcher name from fetcher content
-    main_fetcher_name, nurl_args = "", ""
-    if fetcher_content:
-        fetcher_name_match = re.match(r'^\s*(fetch\w+)', fetcher_content)
-        if fetcher_name_match:
-            main_fetcher_name = fetcher_name_match.group(1)
-    
-    if not project_url:
-        project_url, nurl_args = get_project_url_from_src(main_fetcher_name) # Extract upstream project URL and necessary nurl args
-
-    package_contents: str = get_package_contents()
-    has_finalAttrs = "finalAttrs" in package_contents
-    if not has_finalAttrs:
-        package_contents = inject_final_attrs(package_contents)
-        has_finalAttrs = package_contents != get_package_contents() # Whether or not we injected finalAttrs successfully
-
-    from vibenix.packaging_flow.run import run_nurl
-    version, fetcher = run_nurl(project_url, revision, finalAttrs=has_finalAttrs, extra_args=nurl_args) # Update project with nurl
-
-    if not fetcher_content:
-        coordinator_error(f"No fetcher found for project '{project_url}'")
-        raise ValueError(f"Could not find fetcher for project in package.nix")
-
-    coordinator_message(f"Updating project version to `{version}`")
-    # Indent all lines after the first by 2 spaces
-    lines = fetcher.split('\n')
-    if len(lines) > 1:
-        fetcher = lines[0] + '\n' + '\n'.join('  ' + line for line in lines[1:])
-    new_package_contents = package_contents.replace(fetcher_content, fetcher)
-    
-    # Also update the version = "..." line
-    version_pattern = r'(version\s*=\s*)"([^"]+)"'
-    version_match = re.search(version_pattern, new_package_contents)
-    if version_match:
-        old_version = version_match.group(2)
-        coordinator_message(f"Updating version: {old_version} -> {version}")
-        new_package_contents = re.sub(version_pattern, rf'\1"{version}"', new_package_contents, count=1)
-    else:
-        coordinator_error(f"No version = \"...\" found in package.nix, skipping version update")
-        raise ValueError("Could not find version = \"...\" line in package.nix")
-    
-    from vibenix.flake import update_flake
-    update_flake(new_package_contents) # TODO rename update_flake to update_package
     return fetcher
 
 
@@ -247,11 +59,7 @@ def update_lock_file() -> None:
     # TODO only update nixpkgs input
     try:
         result = subprocess.run(
-            [
-                "nix",
-                "flake",
-                "update",
-            ],
+            [ "nix", "flake", "update" ],
             cwd=config.flake_dir,
             capture_output=True,
             text=True,
@@ -355,8 +163,8 @@ def create_nixpkgs_function_calls(initial_path: str):
 
 
 def run_maintenance(maintenance_dir: str, output_dir: Optional[str] = None,
-                    revision: Optional[str] = None, upgrade_lock: bool = False,
-                    update_lock: bool = True) -> Optional[str]:
+                    revision: Optional[str] = None, version: Optional[str] = None,
+                    upgrade_lock: bool = False, update_lock: bool = True) -> Optional[str]:
     """Run maintenance mode on an existing Nix package directory.
 
     This mode is for analyzing and fixing existing package directories that
@@ -367,6 +175,7 @@ def run_maintenance(maintenance_dir: str, output_dir: Optional[str] = None,
         maintenance_dir: Directory containing the Nix files to analyze/fix
         output_dir: Directory to save the fixed package.nix file
         revision: Optional project revision to upgrade to
+        version: Optional project version string to set in package.nix (requires revision) (default: revision value)
         upgrade_lock: Whether to upgrade/bump the nixpkgs release used
         update_lock: Whether to update the flake.lock file if present
     """
@@ -441,7 +250,8 @@ def run_maintenance(maintenance_dir: str, output_dir: Optional[str] = None,
     init_flake(reference_dir=maintenance_path)
     coordinator_message(f"Working on temporary flake at {config.flake_dir}")
 
-    fetcher = update_fetcher(None, revision) # Update package src in the package.nix
+    if revision:
+        fetcher = update_fetcher(None, revision, version) # Update package src in the package.nix
     fetch_project_src(fetcher) # Ensure project source is in nix store
     if update_lock:
         update_lock_file()
