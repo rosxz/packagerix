@@ -443,18 +443,26 @@ def package_project(output_dir=None, project_url=None, revision=None, fetcher=No
         return
 
     ccl_logger.log_project_summary_begin()
-    summary = analyze_project(source_info=source_info)
+    if get_settings_manager().get_setting_enabled("analyze_project"):
+        summary = analyze_project(source_info=source_info)
+        if not summary:
+            coordinator_error("Model failed to produce a project summary.")
+    else:
+        summary = ""
+        coordinator_message("Project analysis is disabled, proceeding with empty summary.")
     ccl_logger.log_project_summary_end(summary)
-
-    if not summary:
-        coordinator_error("Model failed to produce a project summary.")
 
     # Step 4: Pick template
     ccl_logger.log_template_selected_begin()
-    template_type = pick_template(summary)
-    if not template_type:
-        coordinator_error("Model failed to pick a template type.")
-        return
+    if get_settings_manager().get_setting_enabled("pick_template"):
+        template_type = pick_template(summary)
+        if not template_type:
+            coordinator_error("Model failed to pick a template type.")
+            return
+    else:
+        from vibenix.template.template_types import TemplateType
+        template_type = TemplateType.GENERIC
+        coordinator_message("Template selection is disabled, defaulting to GENERIC template.")
     coordinator_message(f"Selected template: {template_type.value}")
     template_filename = f"{template_type.value}.nix"
     template_path = config.template_dir / template_filename
