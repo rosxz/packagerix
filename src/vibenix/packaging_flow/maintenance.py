@@ -16,6 +16,26 @@ from vibenix.packaging_flow.refinement import refine_package
 from vibenix import config
 
 
+def get_store_path() -> str:
+    """Nix-eval src get the store path for the project source."""
+    # store path is in outPath
+    try:
+        res = subprocess.run(
+            ['nix', 'eval', '--raw', f'.#packages.{get_current_system()}.default.src.outPath'],
+            cwd=config.flake_dir,
+            capture_output=True,
+            text=True,
+            check=True
+        )
+        if res.returncode != 0:
+            coordinator_error(f"Failed to get store path: {res.stderr}")
+            raise RuntimeError(f"Failed to get store path: {res.stderr}")
+        return res.stdout.strip()
+    except subprocess.CalledProcessError as e:
+        coordinator_error(f"Error executing nix eval: {e.stderr if hasattr(e, 'stderr') else str(e)}")
+        raise RuntimeError(f"Error executing nix eval: {e.stderr if hasattr(e, 'stderr') else str(e)}")
+
+
 def update_fetcher(project_url: Optional[str], revision: Optional[str], version: Optional[str]) -> str:
     """Update the fetcher in package.nix to reflect project updates.
     Runs nurl to get the fetcher for the provided version (default: latest rev) and replaces it in package.nix.
@@ -24,18 +44,22 @@ def update_fetcher(project_url: Optional[str], revision: Optional[str], version:
     """
     def run_nix_update(project_url: Optional[str], revision: Optional[str]) -> str:
         """Run nix-update."""
-        res = subprocess.run(
-            ['nix-update', 'default', '--commit', '--flake'] + \
-             (['--version='+version] if version else []) + \
-             (['--url='+project_url] if project_url else []),
-            cwd=config.flake_dir,
-            capture_output=True,
-            text=True,
-            check=True
-        )
-        if res.returncode != 0:
-            coordinator_error(f"nix-update failed: {res.stderr}")
-            raise RuntimeError(f"nix-update failed: {res.stderr}")
+        try:
+            res = subprocess.run(
+                ['nix-update', 'default', '--commit', '--flake'] + \
+                 (['--version='+version] if version else []) + \
+                 (['--url='+project_url] if project_url else []),
+                cwd=config.flake_dir,
+                capture_output=True,
+                text=True,
+                check=True
+            )
+            if res.returncode != 0:
+                coordinator_error(f"nix-update failed: {res.stderr}")
+                raise RuntimeError(f"nix-update failed: {res.stderr}")
+        except subprocess.CalledProcessError as e:
+            coordinator_error(f"nix-update execution error: {e.stderr if hasattr(e, 'stderr') else str(e)}")
+            raise RuntimeError(f"nix-update execution error: {e.stderr if hasattr(e, 'stderr') else str(e)}")
         return res.stdout.strip()
 
     coordinator_progress("Updating fetcher in package.nix")
@@ -49,8 +73,6 @@ def update_fetcher(project_url: Optional[str], revision: Optional[str], version:
         new_contents = re.sub(pattern, replacement, package_contents, count=1)
 
         update_flake(package_contents=new_contents, do_commit=True) # TODO: do_commit should be a string / diff name
-
-    return fetcher
 
 
 def update_lock_file() -> None:
@@ -75,12 +97,11 @@ def update_lock_file() -> None:
     except (subprocess.TimeoutExpired, subprocess.CalledProcessError) as e:
         raise RuntimeError(f"Failed to update flake.lock file: {e}")
 
-def fetch_project_src(fetcher_contents: str) -> None:
+def fetch_project_src() -> None:
     """Ensure the project source is fetched to the Nix store."""
     coordinator_progress("Fetching project source to Nix store")
     ccl_logger = get_logger()
     ccl_logger.enter_attribute("load_fetcher", log_start=True)
-    ccl_logger.write_kv("fetcher", fetcher_contents)
 
     # Instantiate fetcher to pull contents to nix store TODO theres probably definetly a better way
     cmd = [
@@ -91,6 +112,7 @@ def fetch_project_src(fetcher_contents: str) -> None:
     ]
     try:
         result = subprocess.run(cmd, cwd=config.flake_dir, capture_output=True, text=True, check=True)
+        ccl_logger.leave_attribute(log_end=True)
         if result.returncode != 0:
             ccl_logger.write_kv("nix_eval_error", result.stderr)
             ccl_logger.leave_attribute(log_end=True)
@@ -251,15 +273,15 @@ def run_maintenance(maintenance_dir: str, output_dir: Optional[str] = None,
     coordinator_message(f"Working on temporary flake at {config.flake_dir}")
 
     if revision:
-        fetcher = update_fetcher(None, revision, version) # Update package src in the package.nix
-    fetch_project_src(fetcher) # Ensure project source is in nix store
+        update_fetcher(None, revision, version) # Update package src in the package.nix
+    fetch_project_src() # Ensure project source is in nix store
     if update_lock:
         update_lock_file()
         # upgrade_lock_file() # match closest nixpkgs release # Not doing this anymore
 
     # Create additional (runtime-initialized) tools for model
-    from vibenix.packaging_flow.run import get_nixpkgs_source_path, create_source_function_calls, get_store_path
-    store_path = get_store_path(fetcher)
+    from vibenix.packaging_flow.run import get_nixpkgs_source_path, create_source_function_calls
+    store_path = get_store_path()
     nixpkgs_path = get_nixpkgs_source_path()
     project_functions = create_source_function_calls(store_path, "project_")
     nixpkgs_functions = create_nixpkgs_function_calls(nixpkgs_path) # Dynamic nixpkgs path update
