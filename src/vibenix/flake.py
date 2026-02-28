@@ -86,7 +86,7 @@ def init_flake(reference_dir: Optional[Path] = None) -> None:
     else:
         repo.index.commit("initialize flake from reference directory")
 
-def update_flake(new_content, do_commit: bool = False) -> str:
+def update_flake(new_content, do_commit: str = "") -> str:
     file_path = config.flake_dir / "package.nix"
 
     # Open the file in write mode and overwrite it with new_content
@@ -95,9 +95,9 @@ def update_flake(new_content, do_commit: bool = False) -> str:
 
     repo = git.Repo(config.flake_dir.as_posix())
     repo.git.add('-A')
-    if not do_commit:
+    if do_commit == "":
         return None
-    commit = repo.index.commit("build step")
+    commit = repo.index.commit(commit_msg)
     return commit.hexsha
 
 def get_package_contents() -> str:

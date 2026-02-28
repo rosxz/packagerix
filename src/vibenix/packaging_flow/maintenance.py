@@ -46,7 +46,7 @@ def update_fetcher(project_url: Optional[str], revision: Optional[str], version:
         """Run nix-update."""
         try:
             res = subprocess.run(
-                ['nix-update', 'default', '--commit', '--flake'] + \
+                ['nix-update', 'default', '--flake'] + \
                  (['--version='+version] if version else []) + \
                  (['--url='+project_url] if project_url else []),
                 cwd=config.flake_dir,
@@ -64,15 +64,14 @@ def update_fetcher(project_url: Optional[str], revision: Optional[str], version:
 
     coordinator_progress("Updating fetcher in package.nix")
     run_nix_update(project_url, revision) # This updates the fetcher in package.nix directly
+    from vibenix.flake import update_flake
+    package_contents = get_package_contents()
     if version:
-        from vibenix.flake import get_package_contents, update_flake
-        package_contents = get_package_contents()
-
         pattern = r'(version\s*=\s*")' + re.escape(revision) + r'(";)'
         replacement = rf'\g<1>{version}\g<2>'
-        new_contents = re.sub(pattern, replacement, package_contents, count=1)
+        package_contents = re.sub(pattern, replacement, package_contents, count=1)
 
-        update_flake(package_contents=new_contents, do_commit=True) # TODO: do_commit should be a string / diff name
+    update_flake(package_contents=package_contents, commit_msg="init: nix-update")
 
 
 def update_lock_file() -> None:
