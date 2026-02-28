@@ -71,7 +71,7 @@ def update_fetcher(project_url: Optional[str], revision: Optional[str], version:
         replacement = rf'\g<1>{version}\g<2>'
         package_contents = re.sub(pattern, replacement, package_contents, count=1)
 
-    update_flake(package_contents=package_contents, commit_msg="init: nix-update")
+    update_flake(package_contents, commit_msg="init: nix-update")
 
 
 def update_lock_file() -> None:
