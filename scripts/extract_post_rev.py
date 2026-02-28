@@ -20,47 +20,72 @@ import sys
 from pathlib import Path
 
 
-def extract_ref_from_fetcher(fetcher_content: str, version: str) -> str | None:
-    """Extract the rev or tag value from fetcher content."""
+def extract_ref_from_fetcher(fetcher_content: str, version: str) -> tuple[str, str] | tuple[None, None]:
+    """Extract the rev or tag value from fetcher content.
+    
+    Returns (attr, value) tuple where attr is 'rev' or 'tag'.
+    
+    Handles various patterns:
+    - rev = "v${version}"; -> resolves ${version} to actual version
+    - tag = "v${finalAttrs.version}"; -> resolves to actual version  
+    - rev = "abc123def"; -> returns literal value
+    - tag = finalAttrs.version; -> resolves to version (no quotes)
+    - rev = version; -> resolves to version (no quotes)
+    """
     if not fetcher_content:
-        return None
+        return None, None
     
     # Replace the special newline marker with actual newlines for easier parsing
     content = fetcher_content.replace("␤", "\n")
     
     # Try to find rev = "..." or tag = "..." patterns (quoted values)
-    quoted_match = re.search(r'(rev|tag)\s*=', content)
+    quoted_match = re.search(r'(rev|tag)\s*=\s*"([^"]+)"', content)
     if quoted_match:
         attr = quoted_match.group(1)
-        return attr
+        value = quoted_match.group(2)
+        # Check if it contains version interpolation (with ${} braces)
+        if "${version}" in value:
+            return attr, value.replace("${version}", version)
+        elif "${finalAttrs.version}" in value:
+            return attr, value.replace("${finalAttrs.version}", version)
+        else:
+            # It's a literal value (like a commit hash)
+            return attr, value
     
-    return None
+    # Pattern: rev/tag = finalAttrs.version; (no quotes, direct reference)
+    unquoted_finalattrs = re.search(r'(rev|tag)\s*=\s*finalAttrs\.version\s*;', content)
+    if unquoted_finalattrs:
+        return unquoted_finalattrs.group(1), version
+    
+    # Pattern: rev/tag = version; (no quotes)
+    unquoted_version = re.search(r'(rev|tag)\s*=\s*version\s*;', content)
+    if unquoted_version:
+        return unquoted_version.group(1), version
+    
+    return None, None
 
 
-def get_src_ref_nix_eval(commit: str, package_attr: str) -> str | None:
+def get_src_ref_nix_eval(commit: str, pname: str) -> tuple[str, str] | tuple[None, None]:
     """Fallback use nix eval to get src.rev or src.tag from nixpkgs flake at given commit."""
 
     flake_ref = f"github:NixOS/nixpkgs/{commit}"
-
-    def run_eval(cmd: str) -> str | None:
+    
+    # Try src.rev first (most common)
+    for attr in ["rev", "tag"]:
         try:
             result = subprocess.run(
-                ["nix", "eval", "--raw", cmd],
+                ["nix", "eval", "--raw", f"{flake_ref}#{pname}.src.{attr}"],
                 capture_output=True,
                 text=True,
-                timeout=90,
+                timeout=60,
             )
             if result.returncode == 0 and result.stdout.strip():
-                return result.stdout.strip()
+                return attr, result.stdout.strip()
+        except subprocess.TimeoutExpired:
+            print(f"  Timeout evaluating {pname}.src.{attr}", file=sys.stderr)
         except Exception as e:
-            pass
-        return None
-    
-    for attr in ['rev', 'tag']:
-        eval = run_eval(f"{flake_ref}#{package_attr}.src.{attr}")
-        if eval:
-            return eval
-    return run_eval(f"{flake_ref}#{package_attr}.version") # Fallback: go with version (PyPi)
+            print(f"  Error evaluating {pname}.src.{attr}: {e}", file=sys.stderr)
+    return None, None
 
 
 def get_nurl_supported_fetchers() -> set[str]:
@@ -129,10 +154,11 @@ def main():
 
     # Check if columns already exist
     ref_col = args.column_name
+    attr_col = args.column_name + "_attr"
     nurl_col = "nurl_supported"
     
     fieldnames = list(fieldnames)
-    for col in [ref_col, nurl_col]:
+    for col in [ref_col, attr_col, nurl_col]:
         if col in fieldnames:
             print(f"Warning: Column '{col}' already exists, will be overwritten")
         else:
@@ -154,8 +180,8 @@ def main():
     for i, row in enumerate(rows, 1):
         post_fetcher = row.get('post_fetcher_content', '')
         post_version = row.get('post_version', '')
-        post_nixpkgs_base = row.get('post_nixpkgs_base', '')
-        package_attr = row.get('package_attr', row.get('fully_qualified_name', ''))
+        commit = row.get('commit_hash', '')
+        pname = row.get('post_pname', row.get('pre_pname', ''))
         
         # Check if fetcher is supported by nurl
         fetcher_name = extract_fetcher_name(post_fetcher)
@@ -165,29 +191,37 @@ def main():
                 # Fetcher not supported by nurl - skip extraction
                 row[nurl_col] = f"no ({fetcher_name})"
                 row[ref_col] = "UNSUPPORTED_FETCHER"
+                row[attr_col] = "UNSUPPORTED_FETCHER"
                 unsupported_count += 1
-                print(f"[{i}/{total}] {package_attr} -> UNSUPPORTED_FETCHER ({fetcher_name})")
+                print(f"[{i}/{total}] {pname} -> UNSUPPORTED_FETCHER ({fetcher_name})")
                 continue
             row[nurl_col] = "yes"
         else:
             row[nurl_col] = "unknown"
         
-        ref = get_src_ref_nix_eval(post_nixpkgs_base, package_attr)
+        # Try regex first
+        attr, ref = extract_ref_from_fetcher(post_fetcher, post_version)
+        
         if ref:
-            print(f"[{i}/{total}] {package_attr} -> {ref}")
             extracted_count += 1
+            print(f"[{i}/{total}] {pname} -> {attr}={ref}")
         else:
-            print(f"[{i}/{total}] {package_attr} -> FAIL")
-            failed_count += 1
+            # Fallback to nix eval
+            print(f"[{i}/{total}] {pname} -> regex failed, trying nix eval...", end=" ", flush=True)
+            attr, ref = get_src_ref_nix_eval(commit, pname)
+            if ref:
+                extracted_count += 1
+                print(f"{attr}={ref}")
+            else:
+                failed_count += 1
+                print("FAILED")
         
         row[ref_col] = ref or ''
+        row[attr_col] = attr or ''
 
-    for row in rows:
-        if None in row:
-            del row[None]
     # Write output
     with open(output_path, 'w', newline='', encoding='utf-8') as f:
-        writer = csv.DictWriter(f, fieldnames=fieldnames, extrasaction='ignore')
+        writer = csv.DictWriter(f, fieldnames=fieldnames)
         writer.writeheader()
         writer.writerows(rows)
 

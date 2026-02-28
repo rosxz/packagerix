@@ -200,6 +200,7 @@ jobs:
                       'package_path': package_path,
                       'parent_commit': row['parent_commit'],
                       'pre_version': row['pre_version'],
+                      'post_version': row['post_version'],
                       'post_src_ref': row['post_src_ref'],
                       'pre_nixpkgs_base': row['pre_nixpkgs_base'],
                       'post_nixpkgs_base': row['post_nixpkgs_base'],
@@ -441,7 +442,8 @@ jobs:
             --raw \
             --output-dir output \
             --maintenance "${{ steps.prepare.outputs.package_dir }}" \
-            --target-version "${{ matrix.post_src_ref }}" \
+            --revision "${{ matrix.post_src_ref }}" \
+            --target-version "${{ matrix.post_version }}" \
             --update-lock "$UPDATE_FLAG" \
             --upgrade-lock "$UPGRADE_FLAG" \
             2>&1 | tee "$log_file"
