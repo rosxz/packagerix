@@ -247,10 +247,11 @@ def main():
     )
 
     parser.add_argument(
-        "revision",
+        "--revision", "-r",
+        dest="revision",
         type=str,
         nargs="?",
-        help="Project revision to package (e.g., commit hash, tag, release name) (optional)."
+        help="Project revision to package (e.g., commit hash, tag, release name)."
     )
 
     parser.add_argument(
@@ -335,12 +336,9 @@ def main():
             if not args.raw:
                 parser.error("--maintenance requires --raw to be set")
             
-            # Maintenance mode is incompatible with project_url and revision
+            # Maintenance mode is incompatible with project_url
             if args.project_url:
                 parser.error("--maintenance is incompatible with project_url argument")
-            
-            if args.revision:
-                parser.error("--maintenance is incompatible with revision argument")
             
             # Maintenance mode is incompatible with CSV dataset mode
             if args.csv_dataset or args.csv_package or args.fetcher:
