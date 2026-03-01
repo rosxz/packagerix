@@ -269,6 +269,17 @@ class CCLLogger:
         self.write_kv("cost", f"{iteration_cost:.6f}")
         self.leave_attribute()
 
+    def log_packaging_loop_cost(self, packaging_cost: float, input_tokens: int, 
+                           output_tokens: int, cache_read_tokens: int = 0):
+        """Log the total cost for the packaging loop."""
+        self.enter_attribute("packaging_loop_cost")
+        self.write_kv("input_tokens", str(input_tokens))
+        self.write_kv("output_tokens", str(output_tokens))
+        self.write_kv("cache_read_tokens", str(cache_read_tokens))
+        self.write_kv("total_tokens", str(input_tokens + output_tokens))
+        self.write_kv("packaging_cost", f"{packaging_cost:.6f}")
+        self.leave_attribute()
+
     def log_refinement_cost(self, packaging_cost: float, refinement_cost: float, 
                            input_tokens: int, output_tokens: int, cache_read_tokens: int = 0):
         """Log the total cost for the refinement loop."""
