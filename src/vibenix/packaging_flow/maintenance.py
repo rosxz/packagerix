@@ -327,11 +327,17 @@ def run_maintenance(maintenance_dir: str, output_dir: Optional[str] = None,
 
     # Log the raw package code before refinement or analysis
     ccl_logger.write_kv("raw_package", candidate.code)
+    packaging_usage = get_model_prompt_manager().get_session_usage()
+    ccl_logger.log_packaging_loop_cost(
+        packaging_usage.calculate_cost(),
+        packaging_usage.prompt_tokens,
+        packaging_usage.completion_tokens,
+        packaging_usage.cache_read_tokens
+    )
     
     if candidate.result.success:
         coordinator_message("Build succeeded!")
         if get_settings_manager().get_setting_enabled("refinement.enabled"):
-            packaging_usage = get_model_prompt_manager().get_session_usage()
             candidate = refine_package(candidate, summary, output_dir)
             ccl_logger.write_kv("refined_package", candidate.code)
 
