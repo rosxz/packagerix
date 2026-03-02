@@ -8,7 +8,7 @@ from typing import Callable, Any, List, Optional
 from pydantic_ai import Agent, UnexpectedModelBehavior, capture_run_messages, RunContext, PromptedOutput
 from pydantic_ai.usage import UsageLimits
 from tenacity import retry, stop_after_attempt, wait_exponential, retry_if_exception_type, RetryError
-from pydantic_ai.exceptions import UsageLimitExceeded, UnexpectedModelBehavior
+from pydantic_ai.exceptions import UsageLimitExceeded, UnexpectedModelBehavior, ToolRetryError
 from vibenix.model_config import get_model, use_prompted_output
 from vibenix.ui.conversation import get_ui_adapter, Message, Actor, Usage
 from vibenix.usage_utils import extract_usage_tokens
@@ -51,15 +51,18 @@ class VibenixAgent:
                 self.agent = Agent(
                     model=self.model,
                     output_type=PromptedOutput(output_type, template=json_template),
+                    retries=2,
                 )
             else:
                 self.agent = Agent(
                     model=self.model,
                     output_type=output_type,
+                    retries=2,
                 )
         else:
             self.agent = Agent(
                 model=self.model,
+                retries=2,
             )
         
         self._output_type = output_type  # Store output type for later checks
@@ -71,7 +74,7 @@ class VibenixAgent:
     
     
     @retry(
-      retry=retry_if_exception_type((UsageLimitExceeded, UnexpectedModelBehavior)),
+      retry=retry_if_exception_type((UsageLimitExceeded, UnexpectedModelBehavior, ToolRetryError)),
       stop=stop_after_attempt(3),
       wait=wait_exponential(multiplier=3, max=60),
       before_sleep=lambda retry_state: _capture_failed_usage_before_retry(retry_state, _global_failed_messages)
@@ -88,7 +91,7 @@ class VibenixAgent:
         with capture_run_messages() as messages:
             try:
                 result = await self.agent.run(prompt, usage_limits=usage_limits, message_history=message_history)
-            except (UsageLimitExceeded, UnexpectedModelBehavior) as e:
+            except (UsageLimitExceeded, UnexpectedModelBehavior, ToolRetryError) as e:
                 # Store messages globally for the before_sleep callback
                 _global_failed_messages = list(messages)
                 raise
@@ -118,7 +121,7 @@ class VibenixAgent:
         return loop.run_until_complete(self.run_async(prompt, message_history))
     
     @retry(
-      retry=retry_if_exception_type((UsageLimitExceeded, UnexpectedModelBehavior)),
+      retry=retry_if_exception_type((UsageLimitExceeded, UnexpectedModelBehavior, ToolRetryError)),
       stop=stop_after_attempt(3),
       wait=wait_exponential(multiplier=3, max=60),
       before_sleep=lambda retry_state: _capture_failed_usage_before_retry(retry_state, _global_failed_messages),
@@ -141,7 +144,7 @@ class VibenixAgent:
             with capture_run_messages() as messages:
                 try:
                     result = await self.agent.run(prompt, usage_limits=usage_limits, message_history=message_history)
-                except (UsageLimitExceeded, UnexpectedModelBehavior) as e:
+                except (UsageLimitExceeded, UnexpectedModelBehavior, ToolRetryError) as e:
                     # Store messages globally for the before_sleep callback
                     _global_failed_messages = list(messages)
                     raise
@@ -176,7 +179,7 @@ class VibenixAgent:
                     async with self.agent.run_stream(prompt, usage_limits=usage_limits, message_history=message_history) as result:
                         output = await result.get_output()
                         full_response = str(output)
-                except (UsageLimitExceeded, UnexpectedModelBehavior) as e:
+                except (UsageLimitExceeded, UnexpectedModelBehavior, ToolRetryError) as e:
                     # Store messages globally for the before_sleep callback
                     _global_failed_messages = list(messages)
                     raise
