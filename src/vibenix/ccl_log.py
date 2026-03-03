@@ -181,7 +181,10 @@ class CCLLogger:
         self._current_attr_path = []
 
     
-    def log_session_end(self, signal: str = None, total_cost: float = None):
+    def log_session_end(self, signal: str = None, total_cost: float = None,
+         total_input_tokens: int = None, total_output_tokens: int = None,
+         total_cache_read_tokens: int = None
+        ):
         """Log the end of a packaging session.
         
         Args:
@@ -196,6 +199,12 @@ class CCLLogger:
         self.write_kv("signal", signal)
         if total_cost is not None:
             self.write_kv("total_cost", f"{total_cost:.6f}")
+        if total_input_tokens is not None:
+            self.write_kv("total_input_tokens", str(total_input_tokens))
+        if total_output_tokens is not None:
+            self.write_kv("total_output_tokens", str(total_output_tokens))
+        if total_cache_read_tokens is not None:
+            self.write_kv("total_cache_read_tokens", str(total_cache_read_tokens))
         self.leave_attribute()
     
     def log_exception(self, exception_str: str):

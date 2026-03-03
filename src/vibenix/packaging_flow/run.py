@@ -308,7 +308,7 @@ in with pkgs; stdenv.mkDerivation {{
             raise RuntimeError(f"Timeout evaluating project fetcher: {e}")
 
         ccl_logger.leave_attribute(log_end=True)
-        return content, store_path
+        return store_path
     except Exception as e:
         coordinator_error(f"Error evaluating fetcher content: {e}")
         raise
@@ -400,7 +400,7 @@ def package_project(output_dir=None, project_url=None, revision=None, fetcher=No
         ccl_logger.write_kv("csv_pname", csv_pname)
         ccl_logger.write_kv("csv_version", csv_version)
         # fetcher_content is already set from CSV parsing in main.py
-        fetcher_content, store_path = evaluate_fetcher_content(fetcher_content, csv_version, csv_pname)
+        store_path = evaluate_fetcher_content(fetcher_content, csv_version, csv_pname)
         pname = csv_pname
         version = csv_version
     elif fetcher:
@@ -525,7 +525,11 @@ def package_project(output_dir=None, project_url=None, revision=None, fetcher=No
         
         ccl_logger.log_total_tool_cost()
         # Always log success and return, regardless of refinement outcome
-        ccl_logger.log_session_end(signal=None, total_cost=get_model_prompt_manager().get_session_cost())
+        ccl_logger.log_session_end(signal=None, total_cost=get_model_prompt_manager().get_session_cost(),
+                total_input_tokens=get_model_prompt_manager().get_session_input_tokens(),
+                total_output_tokens=get_model_prompt_manager().get_session_output_tokens()
+                total_cache_read_tokens=get_model_prompt_manager().get_session_cache_read_tokens()
+        )
         if output_dir:
             save_package_output(candidate.code, output_dir)
         close_logger()
@@ -549,7 +553,11 @@ def package_project(output_dir=None, project_url=None, revision=None, fetcher=No
         coordinator_message(f"Packaging failure type: {packaging_failure}\nDetails:\n{details}\n")
 
     ccl_logger.log_total_tool_cost()
-    ccl_logger.log_session_end(signal=None, total_cost=get_model_prompt_manager().get_session_cost())
+    ccl_logger.log_session_end(signal=None, total_cost=get_model_prompt_manager().get_session_cost(),
+            total_input_tokens=get_model_prompt_manager().get_session_input_tokens(),
+            total_output_tokens=get_model_prompt_manager().get_session_output_tokens()
+            total_cache_read_tokens=get_model_prompt_manager().get_session_cache_read_tokens()
+    )
     close_logger()
     return None
 
@@ -606,6 +614,10 @@ def run_packaging_flow(output_dir=None, project_url=None, revision=None, fetcher
         coordinator_error(f"Unexpected error: {e}")
         from vibenix.ccl_log import get_logger
         get_logger().log_total_tool_cost()
-        get_logger().log_session_end(signal=None, total_cost=get_model_prompt_manager().get_session_cost())
+        get_logger().log_session_end(signal=None, total_cost=get_model_prompt_manager().get_session_cost(),
+                total_input_tokens=get_model_prompt_manager().get_session_input_tokens(),
+                total_output_tokens=get_model_prompt_manager().get_session_output_tokens()
+                total_cache_read_tokens=get_model_prompt_manager().get_session_cache_read_tokens()
+        )
         close_logger()
         raise
