@@ -270,7 +270,7 @@ jobs:
           elif [[ "$model" == gemini/* || "$model" == *gemini* ]]; then
             provider="gemini"
           else
-            provider="openai"  # Default to openai if unknown
+            provider=$(echo "$model" | cut -d'/' -f1)
           fi
           echo "provider=$provider" >> $GITHUB_OUTPUT
       
