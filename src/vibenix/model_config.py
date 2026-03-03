@@ -321,25 +321,7 @@ def initialize_model_config(model_settings = None):
                 if not api_key:
                     raise ValueError("OPENROUTER_API_KEY not found in environment or secure storage. Run interactively to configure.")
 
-            # OpenRouter requires provider prefix in model name (e.g., "openai/gpt-4")
-            # If the model name doesn't have a prefix, try to infer it
-            if '/' not in model_name:
-                # Try to infer provider from model name
-                if model_name.startswith('gpt'):
-                    model_name = f"openai/{model_name}"
-                    logger.warning(f"Model name missing provider prefix for OpenRouter. Inferred: {model_name}")
-                elif model_name.startswith('claude'):
-                    model_name = f"anthropic/{model_name}"
-                    logger.warning(f"Model name missing provider prefix for OpenRouter. Inferred: {model_name}")
-                elif model_name.startswith('gemini'):
-                    model_name = f"google/{model_name}"
-                    logger.warning(f"Model name missing provider prefix for OpenRouter. Inferred: {model_name}")
-                else:
-                    logger.error(f"Cannot infer provider prefix for OpenRouter model: {model_name}")
-                    raise ValueError(
-                        f"OpenRouter requires provider prefix in model name (e.g., 'openai/gpt-4'). "
-                        f"Got: '{model_name}'. Please reconfigure with the full model name."
-                    )
+            model_name = provider_name + "/" + model_name if '/' not in model_name else model_name
 
             logger.info(f"Using OpenRouter model: {model_name}")
             provider = OpenRouterProvider(api_key=api_key, http_client=create_retrying_client())

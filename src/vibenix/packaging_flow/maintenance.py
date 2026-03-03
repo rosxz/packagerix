@@ -16,26 +16,6 @@ from vibenix.packaging_flow.refinement import refine_package
 from vibenix import config
 
 
-def get_store_path() -> str:
-    """Nix-eval src get the store path for the project source."""
-    # store path is in outPath
-    try:
-        res = subprocess.run(
-            ['nix', 'eval', '--raw', f'.#packages.{get_current_system()}.default.src.outPath'],
-            cwd=config.flake_dir,
-            capture_output=True,
-            text=True,
-            check=True
-        )
-        if res.returncode != 0:
-            coordinator_error(f"Failed to get store path: {res.stderr}")
-            raise RuntimeError(f"Failed to get store path: {res.stderr}")
-        return res.stdout.strip()
-    except subprocess.CalledProcessError as e:
-        coordinator_error(f"Error executing nix eval: {e.stderr if hasattr(e, 'stderr') else str(e)}")
-        raise RuntimeError(f"Error executing nix eval: {e.stderr if hasattr(e, 'stderr') else str(e)}")
-
-
 def update_fetcher(project_url: Optional[str], revision: Optional[str], version: Optional[str]) -> str:
     """Update the fetcher in package.nix to reflect project updates.
     Runs nurl to get the fetcher for the provided version (default: latest rev) and replaces it in package.nix.
@@ -96,31 +76,91 @@ def update_lock_file() -> None:
     except (subprocess.TimeoutExpired, subprocess.CalledProcessError) as e:
         raise RuntimeError(f"Failed to update flake.lock file: {e}")
 
-def fetch_project_src() -> None:
-    """Ensure the project source is fetched to the Nix store."""
-    coordinator_progress("Fetching project source to Nix store")
+def fetch_project_src() -> str:
+    """Fetch and unpack the project source to the Nix store.
+    
+    Returns:
+        The store path to the unpacked source directory.
+    """
+    coordinator_progress("Fetching and unpacking project source to Nix store")
     ccl_logger = get_logger()
     ccl_logger.enter_attribute("load_fetcher", log_start=True)
 
-    # Instantiate fetcher to pull contents to nix store TODO theres probably definetly a better way
+    # Build a minimal derivation that fetches and unpacks the source
+    # Similar to evaluate_fetcher_content but uses the src from the local flake directly
+    nix_expr = f"""
+let pkgs = (builtins.getFlake (toString ./.)).inputs.nixpkgs.legacyPackages.${{builtins.currentSystem}};
+    localFlake = builtins.getFlake (toString ./.);
+    packageDrv = localFlake.packages.${{builtins.currentSystem}}.default;
+in with pkgs; stdenv.mkDerivation {{
+  # Inherit pname, version, and src from the local package
+  pname = packageDrv.pname or "package";
+  version = packageDrv.version or "unknown";
+  src = packageDrv.src;
+  
+  sourceRoot = ".";
+  dontBuild = true;
+  dontConfigure = true;
+  dontFixup = true;
+  installPhase = ''
+    shopt -s dotglob nullglob
+    entries=(*)
+    # Filter out env-vars file
+    filtered=()
+    for entry in "''${{entries[@]}}"; do
+      if [[ "''$entry" != "env-vars" ]]; then
+        filtered+=("''$entry")
+      fi
+    done
+    # If there's exactly one directory, copy its contents
+    if [[ ''${{#filtered[@]}} -eq 1 && -d "''${{filtered[0]}}" ]]; then
+      cp -r "''${{filtered[0]}}/." $out
+    else
+      # Multiple items or not a single directory, copy everything except env-vars
+      for entry in "''${{filtered[@]}}"; do
+        cp -r "''$entry" $out/
+      done
+    fi
+  '';
+}}
+"""
     cmd = [
         'nix',
         'build',
         '--impure',
-        f'.#packages.{get_current_system()}.default.src',
+        '--print-out-paths',
+        '--expr',
+        nix_expr
     ]
     try:
         result = subprocess.run(cmd, cwd=config.flake_dir, capture_output=True, text=True, check=True)
+        # Extract the store path from the output
+        store_path = result.stdout.strip()
+        ccl_logger.write_kv("fetcher_store_path", store_path)
+
+        # If the store path contains only a single directory (ignoring hidden files),
+        # navigate into it automatically so README detection and file tools work correctly
+        from pathlib import Path as PathLib
+        store_path_obj = PathLib(store_path)
+        entries = list(store_path_obj.iterdir())
+        non_hidden_dirs = [e for e in entries if e.is_dir() and not e.name.startswith('.')]
+
+        if len(non_hidden_dirs) == 1 and len([e for e in entries if not e.name.startswith('.')]) == 1:
+            # Only one non-hidden directory exists - use it as the source root
+            store_path = str(non_hidden_dirs[0])
+            ccl_logger.write_kv("auto_navigated_to", store_path)
+        
         ccl_logger.leave_attribute(log_end=True)
-        if result.returncode != 0:
-            ccl_logger.write_kv("nix_eval_error", result.stderr)
-            ccl_logger.leave_attribute(log_end=True)
-            raise RuntimeError(f"{result.stderr}")
+        return store_path
     except subprocess.CalledProcessError as e:
         error_details = e.stderr if hasattr(e, 'stderr') else str(e)
         ccl_logger.write_kv("nix_eval_error", error_details)
         ccl_logger.leave_attribute(log_end=True)
         raise RuntimeError(f"Failed to evaluate project fetcher:\n{error_details}")
+    except subprocess.TimeoutExpired as e:
+        ccl_logger.write_kv("nix_eval_timeout", str(e))
+        ccl_logger.leave_attribute(log_end=True)
+        raise RuntimeError(f"Timeout evaluating project fetcher: {e}")
 
 def save_package_output(package_directory: Path, output_dir: str) -> None:
     """Save the fixed package.nix and accompanying files to the output directory.
@@ -273,14 +313,13 @@ def run_maintenance(maintenance_dir: str, output_dir: Optional[str] = None,
 
     if revision:
         update_fetcher(None, revision, version) # Update package src in the package.nix
-    fetch_project_src() # Ensure project source is in nix store
+    store_path = fetch_project_src() # Fetch and unpack project source to nix store
     if update_lock:
         update_lock_file()
         # upgrade_lock_file() # match closest nixpkgs release # Not doing this anymore
 
     # Create additional (runtime-initialized) tools for model
     from vibenix.packaging_flow.run import get_nixpkgs_source_path, create_source_function_calls
-    store_path = get_store_path()
     nixpkgs_path = get_nixpkgs_source_path()
     project_functions = create_source_function_calls(store_path, "project_")
     nixpkgs_functions = create_nixpkgs_function_calls(nixpkgs_path) # Dynamic nixpkgs path update
@@ -352,7 +391,11 @@ def run_maintenance(maintenance_dir: str, output_dir: Optional[str] = None,
         
         ccl_logger.log_total_tool_cost()
         # Always log success and return, regardless of refinement outcome
-        ccl_logger.log_session_end(signal=None, total_cost=get_model_prompt_manager().get_session_cost())
+        ccl_logger.log_session_end(signal=None, total_cost=get_model_prompt_manager().get_session_cost(),
+                total_input_tokens=get_model_prompt_manager().get_session_input_tokens(),
+                total_output_tokens=get_model_prompt_manager().get_session_output_tokens()
+                total_cache_read_tokens=get_model_prompt_manager().get_session_cache_read_tokens()
+        )
         if output_dir:
             from vibenix.flake import get_package_path
             package_directory = Path(get_package_path()).parent
@@ -378,7 +421,11 @@ def run_maintenance(maintenance_dir: str, output_dir: Optional[str] = None,
         coordinator_message(f"Packaging failure type: {packaging_failure}\nDetails:\n{details}\n")
 
     ccl_logger.log_total_tool_cost()
-    ccl_logger.log_session_end(signal=None, total_cost=get_model_prompt_manager().get_session_cost())
+    ccl_logger.log_session_end(signal=None, total_cost=get_model_prompt_manager().get_session_cost(),
+            total_input_tokens=get_model_prompt_manager().get_session_input_tokens(),
+            total_output_tokens=get_model_prompt_manager().get_session_output_tokens()
+            total_cache_read_tokens=get_model_prompt_manager().get_session_cache_read_tokens()
+    )
     close_logger()
     return None
 

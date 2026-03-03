@@ -24,9 +24,13 @@ def ensure_log_cleanup(signal_name: Optional[str] = None):
         from vibenix.ui.conversation_templated import get_model_prompt_manager
         logger.log_clear_path()
         logger.log_total_tool_cost()
+        session_usage = get_model_prompt_manager().get_session_usage()
         logger.log_session_end(
             signal=signal_name,
-            total_cost=get_model_prompt_manager().get_session_cost()
+            total_cost=get_model_prompt_manager().get_session_cost(),
+            total_input_tokens=session_usage.prompt_tokens,
+            total_output_tokens=session_usage.completion_tokens,
+            total_cache_read_tokens=session_usage.cache_read_tokens,
         )
         close_logger()
     except Exception:
