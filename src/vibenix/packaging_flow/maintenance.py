@@ -391,10 +391,11 @@ def run_maintenance(maintenance_dir: str, output_dir: Optional[str] = None,
         
         ccl_logger.log_total_tool_cost()
         # Always log success and return, regardless of refinement outcome
+        session_usage = get_model_prompt_manager().get_session_usage()
         ccl_logger.log_session_end(signal=None, total_cost=get_model_prompt_manager().get_session_cost(),
-                total_input_tokens=get_model_prompt_manager().get_session_input_tokens(),
-                total_output_tokens=get_model_prompt_manager().get_session_output_tokens()
-                total_cache_read_tokens=get_model_prompt_manager().get_session_cache_read_tokens()
+                total_input_tokens=session_usage.prompt_tokens,
+                total_output_tokens=session_usage.completion_tokens,
+                total_cache_read_tokens=session_usage.cache_read_tokens
         )
         if output_dir:
             from vibenix.flake import get_package_path
@@ -421,10 +422,11 @@ def run_maintenance(maintenance_dir: str, output_dir: Optional[str] = None,
         coordinator_message(f"Packaging failure type: {packaging_failure}\nDetails:\n{details}\n")
 
     ccl_logger.log_total_tool_cost()
+    session_usage = get_model_prompt_manager().get_session_usage()
     ccl_logger.log_session_end(signal=None, total_cost=get_model_prompt_manager().get_session_cost(),
-            total_input_tokens=get_model_prompt_manager().get_session_input_tokens(),
-            total_output_tokens=get_model_prompt_manager().get_session_output_tokens()
-            total_cache_read_tokens=get_model_prompt_manager().get_session_cache_read_tokens()
+            total_input_tokens=session_usage.prompt_tokens,
+            total_output_tokens=session_usage.completion_tokens,
+            total_cache_read_tokens=session_usage.cache_read_tokens
     )
     close_logger()
     return None
