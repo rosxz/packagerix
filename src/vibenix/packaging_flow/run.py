@@ -525,10 +525,11 @@ def package_project(output_dir=None, project_url=None, revision=None, fetcher=No
         
         ccl_logger.log_total_tool_cost()
         # Always log success and return, regardless of refinement outcome
+        session_usage = get_model_prompt_manager().get_session_usage()
         ccl_logger.log_session_end(signal=None, total_cost=get_model_prompt_manager().get_session_cost(),
-                total_input_tokens=get_model_prompt_manager().get_session_input_tokens(),
-                total_output_tokens=get_model_prompt_manager().get_session_output_tokens()
-                total_cache_read_tokens=get_model_prompt_manager().get_session_cache_read_tokens()
+                total_input_tokens=session_usage.prompt_tokens,
+                total_output_tokens=session_usage.completion_tokens,
+                total_cache_read_tokens=session_usage.cache_read_tokens
         )
         if output_dir:
             save_package_output(candidate.code, output_dir)
@@ -553,10 +554,11 @@ def package_project(output_dir=None, project_url=None, revision=None, fetcher=No
         coordinator_message(f"Packaging failure type: {packaging_failure}\nDetails:\n{details}\n")
 
     ccl_logger.log_total_tool_cost()
+    session_usage = get_model_prompt_manager().get_session_usage()
     ccl_logger.log_session_end(signal=None, total_cost=get_model_prompt_manager().get_session_cost(),
-            total_input_tokens=get_model_prompt_manager().get_session_input_tokens(),
-            total_output_tokens=get_model_prompt_manager().get_session_output_tokens()
-            total_cache_read_tokens=get_model_prompt_manager().get_session_cache_read_tokens()
+            total_input_tokens=session_usage.prompt_tokens,
+            total_output_tokens=session_usage.completion_tokens,
+            total_cache_read_tokens=session_usage.cache_read_tokens
     )
     close_logger()
     return None
@@ -614,10 +616,11 @@ def run_packaging_flow(output_dir=None, project_url=None, revision=None, fetcher
         coordinator_error(f"Unexpected error: {e}")
         from vibenix.ccl_log import get_logger
         get_logger().log_total_tool_cost()
+        session_usage = get_model_prompt_manager().get_session_usage()
         get_logger().log_session_end(signal=None, total_cost=get_model_prompt_manager().get_session_cost(),
-                total_input_tokens=get_model_prompt_manager().get_session_input_tokens(),
-                total_output_tokens=get_model_prompt_manager().get_session_output_tokens()
-                total_cache_read_tokens=get_model_prompt_manager().get_session_cache_read_tokens()
+                total_input_tokens=session_usage.prompt_tokens,
+                total_output_tokens=session_usage.completion_tokens,
+                total_cache_read_tokens=session_usage.cache_read_tokens
         )
         close_logger()
         raise

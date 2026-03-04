@@ -9,7 +9,8 @@ from typing import Optional, Dict, Any, Tuple
 from pydantic_ai.models import Model
 from pydantic_ai.models.openai import OpenAIChatModel, OpenAIChatModelSettings
 from pydantic_ai.providers.openai import OpenAIProvider
-from pydantic_ai.providers.openrouter import OpenRouterProvider, OpenRouterModel, OpenRouterModelSettings
+from pydantic_ai.providers.openrouter import OpenRouterProvider
+from pydantic_ai.models.openrouter import OpenRouterModel, OpenRouterModelSettings
 from pydantic_ai.models.anthropic import AnthropicModel, AnthropicModelSettings
 from pydantic_ai.providers.anthropic import AnthropicProvider
 from pydantic_ai.models.google import GoogleModel, GoogleModelSettings
@@ -437,6 +438,7 @@ def create_retrying_client():
                 f"Request failed (attempt {attempt_number}/10). "
                 f"Using exponential backoff: waiting {wait_seconds:.1f} seconds... "
                 f"Error: {type(exception).__name__}"
+                f": {str(exception)[:200].replace(chr(10), ' ')}"
             )
 
     transport = AsyncTenacityTransport(
