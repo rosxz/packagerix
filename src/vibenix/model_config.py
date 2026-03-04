@@ -9,7 +9,7 @@ from typing import Optional, Dict, Any, Tuple
 from pydantic_ai.models import Model
 from pydantic_ai.models.openai import OpenAIChatModel, OpenAIChatModelSettings
 from pydantic_ai.providers.openai import OpenAIProvider
-from pydantic_ai.providers.openrouter import OpenRouterProvider
+from pydantic_ai.providers.openrouter import OpenRouterProvider, OpenRouterModel, OpenRouterModelSettings
 from pydantic_ai.models.anthropic import AnthropicModel, AnthropicModelSettings
 from pydantic_ai.providers.anthropic import AnthropicProvider
 from pydantic_ai.models.google import GoogleModel, GoogleModelSettings
@@ -220,6 +220,14 @@ def create_anthropic_settings(settings: Dict[str, Any]) -> AnthropicModelSetting
     logger.info(f"Creating Anthropic settings: max_tokens={merged_settings.get('max_tokens')}, temperature={merged_settings.get('temperature')}, anthropic_thinking={merged_settings.get('anthropic_thinking')}")
     return AnthropicModelSettings(**merged_settings)
 
+def create_openrouter_settings(settings: Dict[str, Any]) -> OpenRouterModelSettings:
+    """Create OpenRouterModelSettings from config dict."""
+    # Use constants for defaults
+    defaults = DEFAULT_MODEL_SETTINGS["openrouter"].copy()
+    
+    merged_settings = {**defaults, **settings}
+    logger.info(f"Creating OpenRouter settings: max_tokens={merged_settings.get('max_tokens')}, temperature={merged_settings.get('temperature')}")
+    return OpenRouterModelSettings(**merged_settings)
 
 def initialize_model_config(model_settings = None):
     """Initialize model configuration and create model instance. Must be called once at startup."""
@@ -328,6 +336,11 @@ def initialize_model_config(model_settings = None):
 
             # Update the config cache with the corrected model name
             _cached_config["model_name"] = model_name
+
+            if not model_settings:
+                env_settings = load_model_settings_from_env("openrouter")
+                model_settings = create_openrouter_settings(env_settings)
+            _cached_model = OpenRouterModel(model_name, provider=provider, settings=model_settings)
         else:
             # Use OpenAIProvider for other OpenAI-compatible endpoints
             from vibenix.secure_keys import get_api_key

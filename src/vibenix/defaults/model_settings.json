@@ -7,5 +7,10 @@
     },
     "openai": {
         "parallel_tool_calls": false
-    }
+    },
+    "openrouter": {
+		"transforms": [
+			"middle-out"
+		]
+	}
 }
