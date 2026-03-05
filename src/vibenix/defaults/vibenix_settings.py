@@ -12,6 +12,7 @@ from vibenix.tools import (
 )
 from vibenix.tools.file_tools import create_source_function_calls
 from vibenix.tools.out_path_file_tools import create_out_path_file_tools
+from vibenix.template.template_types import TemplateType
 
 
 def deep_merge(original, update):
@@ -125,6 +126,8 @@ DEFAULT_VIBENIX_SETTINGS = {
 
     # Per-prompt tool configuration
     "prompt_tools": {prompt: DEFAULT_PROMPT_TOOLS[prompt] for prompt in ALL_PROMPTS},
+
+    "templates": {template.value: True for template in TemplateType},
 
     # General behavior, misc
     "behaviour": {
@@ -369,6 +372,15 @@ class VibenixSettingsManager:
         all_tools = {name: True for name in ALL_TOOLS}
         all_tools.update({name: False for name in to_disable})
         self.settings["tools"] = all_tools
+
+    def get_enabled_templates(self) -> List[str]:
+        """Get a list of enabled template types.
+        
+        Returns:
+            List of enabled template type names
+        """
+        templates = self.settings.get("templates", {})
+        return [name for name, is_enabled in templates.items() if is_enabled]
 
     # Prompt tools
     def list_all_tools(self) -> List[str]:

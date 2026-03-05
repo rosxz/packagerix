@@ -22,6 +22,7 @@ from vibenix.ccl_log import init_logger, get_logger, close_logger, enum_str
 from vibenix.git_info import get_git_info
 from vibenix.tools.view import _view as view_package_contents
 from vibenix.defaults.vibenix_settings import get_settings_manager
+from vibenix.template.template_types import TemplateType
 
 
 def _get_nixpkgs_source_path() -> str:
@@ -455,12 +456,16 @@ def package_project(output_dir=None, project_url=None, revision=None, fetcher=No
     # Step 4: Pick template
     ccl_logger.log_template_selected_begin()
     if get_settings_manager().get_setting_enabled("pick_template"):
-        template_type = pick_template(summary)
+        template_type = pick_template(get_settings_manager().get_enabled_templates(), summary)
         if not template_type:
             coordinator_error("Model failed to pick a template type.")
             return
+        try:
+            template_type = TemplateType[template_type]  # Convert string back to enum
+        except KeyError:
+            coordinator_error(f"Model returned selected invalid template type: '{template_type}' (non existent or not enabled).")
+            return
     else:
-        from vibenix.template.template_types import TemplateType
         template_type = TemplateType.GENERIC
         coordinator_message("Template selection is disabled, defaulting to GENERIC template.")
     coordinator_message(f"Selected template: {template_type.value}")
