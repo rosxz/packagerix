@@ -34,7 +34,7 @@ def run_formatter_after(func):
 
 
 @ask_model_prompt('pick_template.md')
-def pick_template(project_page: str) -> TemplateType:
+def pick_template(templates: List[str], project_page: str) -> str:
     """Select the appropriate template for a project."""
     ...
 
