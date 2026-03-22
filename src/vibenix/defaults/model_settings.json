@@ -9,9 +9,6 @@
         "parallel_tool_calls": false
     },
     "openrouter": {
-        "openrouter_reasoning": {
-            "effort": "medium"
-        },
 		"openrouter_transforms": [
 			"middle-out"
 		]
