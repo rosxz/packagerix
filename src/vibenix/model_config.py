@@ -56,13 +56,13 @@ def load_saved_configuration() -> Optional[Tuple[str, str, Optional[str], Option
     return None
 
 
-def get_model_config() -> dict:
+def get_model_config(use_cached: bool=True, remove_model_prefix: bool=True) -> dict:
     """Get the model configuration from saved config, and model settings from env."""
     
     global _cached_config
     
     # Return cached config if available
-    if _cached_config is not None:
+    if _cached_config is not None and use_cached:
         return _cached_config
     
     # Try to load saved configuration
@@ -72,7 +72,7 @@ def get_model_config() -> dict:
         provider_name, model, ollama_host, openai_api_base = saved_config
         
         # Remove provider prefix from model if present
-        if "/" in model:
+        if "/" in model and remove_model_prefix:
             model_name = model.split("/", 1)[1]
         else:
             model_name = model
@@ -330,6 +330,8 @@ def initialize_model_config(model_settings = None):
                 if not api_key:
                     raise ValueError("OPENROUTER_API_KEY not found in environment or secure storage. Run interactively to configure.")
 
+            config = get_model_config(use_cached=False, remove_model_prefix=False)
+            model_name = config.get("model_name")
             model_name = provider_name + "/" + model_name if '/' not in model_name else model_name
 
             logger.info(f"Using OpenRouter model: {model_name}")
