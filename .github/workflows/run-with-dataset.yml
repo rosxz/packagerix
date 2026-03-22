@@ -303,6 +303,10 @@ jobs:
           # Convert ollama/modelname to openai/modelname (no-op for other providers)
           model="${{ github.event.inputs.model || 'gemini/gemini-2.5-flash' }}"
           model_converted=$(echo "$model" | sed 's|^ollama/|openai/|')
+          if [[ "$model_converted" =~ .*/.*/.* ]]; then
+            # Keep everything starting from the second segment
+            model_converted=$(echo "$model_converted" | cut -d'/' -f2-)
+          fi
           
           # Use openai provider if ollama was selected
           provider="${{ steps.provider.outputs.provider }}"
@@ -332,10 +336,9 @@ jobs:
       - name: Setup environment
         run: |
           # Set API keys as environment variables based on provider
-          # If api_base_url points to OpenRouter, always set OPENROUTER_API_KEY so models like Mistral work even when provider detection yields a different provider string
-          if [[ "${{ github.event.inputs.api_base_url }}" == *"openrouter.ai"* ]]; then
+          if [[ "${{ steps.provider.outputs.provider }}" = "openrouter" || "${{ github.event.inputs.api_base_url }}" == *"openrouter.ai"* ]]; then
             echo "OPENROUTER_API_KEY=${{ secrets.OPENROUTER_API_KEY }}" >> $GITHUB_ENV
-          elif [[ "${{ github.event.inputs.api_base_url }}" == *"bedrock"*"api.aws"* ]]; then
+          elif [[ "${{ steps.provider.outputs.provider }}" = "bedrock" || "${{ github.event.inputs.api_base_url }}" == *"bedrock"*"api.aws"* ]]; then
             echo "AWS_BEARER_TOKEN_BEDROCK=${{ secrets.AWS_BEARER_TOKEN_BEDROCK }}" >> $GITHUB_ENV
           fi
 
