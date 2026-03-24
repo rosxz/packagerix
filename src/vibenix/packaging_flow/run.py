@@ -460,11 +460,6 @@ def package_project(output_dir=None, project_url=None, revision=None, fetcher=No
         if not template_type:
             coordinator_error("Model failed to pick a template type.")
             return
-        try:
-            template_type = TemplateType[template_type]  # Convert string back to enum
-        except KeyError:
-            coordinator_error(f"Model returned selected invalid template type: '{template_type}' (non existent or not enabled).")
-            return
     else:
         template_type = TemplateType.GENERIC
         coordinator_message("Template selection is disabled, defaulting to GENERIC template.")

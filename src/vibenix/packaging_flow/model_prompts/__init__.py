@@ -32,11 +32,43 @@ def run_formatter_after(func):
         return result
     return wrapper
 
+def pick_template(templates: List[str], project_page: str) -> TemplateType:
+    """Select the appropriate template for a project.
 
-@ask_model_prompt('pick_template.md')
-def pick_template(templates: List[str], project_page: str) -> str:
-    """Select the appropriate template for a project."""
-    ...
+    The underlying model is constrained to an Enum built from the
+    provided templates argument (intersected with TemplateType). The
+    result is then mapped back to TemplateType for callers.
+    """
+    enabled_members = {}
+    for item in templates:
+        for name, member in TemplateType.__members__.items():
+            if member.value == item:
+                enabled_members[name] = member.value
+                break
+
+    if enabled_members:
+        EnabledTemplateType = Enum("EnabledTemplateType", enabled_members)
+    else:
+        print("⚠️  Warning: No valid templates provided for model prompt, falling back to full TemplateType.")
+        # If nothing valid was provided, fall back to full TemplateType
+        # so the prompt still has a usable schema.
+        EnabledTemplateType = TemplateType
+
+    print(f"Debug: Enabled templates for model prompt: {list(EnabledTemplateType)}")
+    # func name itself not relevant, prompt key is derived from template_path
+    @ask_model_prompt('pick_template.md')
+    def _pick_template_inner(templates: List[str], project_page: str) -> EnabledTemplateType:
+        ...
+
+    result = _pick_template_inner(templates, project_page)
+
+    # If our enabled enum fell back to TemplateType, the result is
+    # already the desired type.
+    if isinstance(result, TemplateType):
+        return result
+
+    # Otherwise, map by enum member name back into TemplateType.
+    return TemplateType[result.name]
 
 
 @ask_model_prompt('summarize_project_source.md')
@@ -219,4 +251,6 @@ __all__ = [
     "analyze_package_failure",
     "choose_builders",
     "compare_template_builders",
+    "mnt_get_feedback",
+    "fix_build_error_maintenance",
 ]
