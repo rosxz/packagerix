@@ -3,9 +3,10 @@
 import subprocess
 import json
 from vibenix.ccl_log import get_logger, log_function_call
+from typing import Optional
 
 @log_function_call("search_nixpkgs_for_package_literal")
-def search_nixpkgs_for_package_literal(query: str, package_set_unique: str = None) -> str:
+def search_nixpkgs_for_package_literal(query: str, package_set_unique: Optional[str] = None) -> str:
     """Search the nixpkgs repository of Nix code for the given package using fuzzy search.
     Try separating compound word package names into substrings for more results (e.g. "nvimtreesitter" -> "nvim treesitter", "fast-ssh" -> "fast ssh").
     
@@ -18,7 +19,7 @@ def search_nixpkgs_for_package_literal(query: str, package_set_unique: str = Non
     print(f"📞 Function called: search_nixpkgs_for_package_literal with query: {query}, package_set_unique: {package_set_unique}")
     return _search_nixpkgs_for_package_literal(query, package_set_unique)
 
-def _search_nixpkgs_for_package_literal(query: str, package_set_unique: str = None) -> str:
+def _search_nixpkgs_for_package_literal(query: str, package_set_unique: Optional[str] = None) -> str:
     """Search the nixpkgs repository of Nix code for the given package using fuzzy search."""
     
     # Get all packages (using ^ to match everything)

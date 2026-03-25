@@ -54,7 +54,6 @@ def pick_template(templates: List[str], project_page: str) -> TemplateType:
         # so the prompt still has a usable schema.
         EnabledTemplateType = TemplateType
 
-    print(f"Debug: Enabled templates for model prompt: {list(EnabledTemplateType)}")
     # func name itself not relevant, prompt key is derived from template_path
     @ask_model_prompt('pick_template.md')
     def _pick_template_inner(templates: List[str], project_page: str) -> EnabledTemplateType:
