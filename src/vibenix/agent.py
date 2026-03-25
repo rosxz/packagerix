@@ -4,6 +4,7 @@ This module provides the core agent functionality using pydantic-ai.
 """
 
 import asyncio
+import json
 from typing import Callable, Any, List, Optional
 from pydantic_ai import Agent, UnexpectedModelBehavior, capture_run_messages, RunContext, PromptedOutput
 from pydantic_ai.usage import UsageLimits
@@ -72,9 +73,9 @@ class VibenixAgent:
         # Otherwise, need to add or inject RunContext[<deps-type>] into each tool   
         self.agent.tool_plain(func, sequential=True)
     
-    
     @retry(
-      retry=retry_if_exception_type((UsageLimitExceeded, UnexpectedModelBehavior, ToolRetryError)),
+      # model-behavior issues are handled by pydantic-ai's own internal retry mechanism on the Agent.
+      retry=retry_if_exception_type(UsageLimitExceeded),
       stop=stop_after_attempt(3),
       wait=wait_exponential(multiplier=3, max=60),
       before_sleep=lambda retry_state: _capture_failed_usage_before_retry(retry_state, _global_failed_messages)
@@ -92,9 +93,11 @@ class VibenixAgent:
             try:
                 result = await self.agent.run(prompt, usage_limits=usage_limits, message_history=message_history)
             except (UsageLimitExceeded, UnexpectedModelBehavior, ToolRetryError) as e:
-                # Store messages globally for the before_sleep callback
+                # Store messages globally for the before_sleep callback and log failure details
                 _global_failed_messages = list(messages)
+                _log_model_failure(messages, e)
                 raise
+        _log_internal_retry_responses(messages, level="warning", log_when_none=False)
         
         # Convert pydantic-ai usage to our Usage dataclass
         usage_data = result.usage() if hasattr(result, 'usage') else None
@@ -121,7 +124,8 @@ class VibenixAgent:
         return loop.run_until_complete(self.run_async(prompt, message_history))
     
     @retry(
-      retry=retry_if_exception_type((UsageLimitExceeded, UnexpectedModelBehavior, ToolRetryError)),
+      # model-behavior issues are handled by pydantic-ai's own internal retry mechanism on the Agent.
+      retry=retry_if_exception_type(UsageLimitExceeded),
       stop=stop_after_attempt(3),
       wait=wait_exponential(multiplier=3, max=60),
       before_sleep=lambda retry_state: _capture_failed_usage_before_retry(retry_state, _global_failed_messages),
@@ -145,9 +149,11 @@ class VibenixAgent:
                 try:
                     result = await self.agent.run(prompt, usage_limits=usage_limits, message_history=message_history)
                 except (UsageLimitExceeded, UnexpectedModelBehavior, ToolRetryError) as e:
-                    # Store messages globally for the before_sleep callback
+                    # Store messages globally for the before_sleep callback and log failure details
                     _global_failed_messages = list(messages)
+                    _log_model_failure(messages, e)
                     raise
+            _log_internal_retry_responses(messages, level="warning", log_when_none=False)
             
             # Get the text output
             output = result.output
@@ -180,9 +186,11 @@ class VibenixAgent:
                         output = await result.get_output()
                         full_response = str(output)
                 except (UsageLimitExceeded, UnexpectedModelBehavior, ToolRetryError) as e:
-                    # Store messages globally for the before_sleep callback
+                    # Store messages globally for the before_sleep callback and log failure details
                     _global_failed_messages = list(messages)
+                    _log_model_failure(messages, e)
                     raise
+                _log_internal_retry_responses(messages, level="warning", log_when_none=False)
                 print(full_response)
                 
                 # Get usage data
@@ -268,6 +276,170 @@ def _capture_failed_usage_before_retry(retry_state, failed_messages=None):
         if isinstance(exception, RetryError):
             raise exception
 
+# DEBUGGING UTILS - Can remove at any point later
+def _log_model_failure(messages, exception):
+    """Log minimal details about model output before validation/tool errors.
+
+    This helps diagnose UnexpectedModelBehavior / ToolRetryError cases by
+    recording the last model-related message without dumping huge transcripts.
+    """
+    try:
+        logger.error("Model failure: %s: %s", type(exception).__name__, str(exception))
+
+        if not messages:
+            return
+
+        logger.error("Captured model messages for this run (may include multiple retries):")
+
+        for idx, msg in enumerate(messages):
+            content = _extract_message_content(msg)
+            if content is not None:
+                logger.error("  Message %d content: %s", idx, content[:2000])
+            else:
+                logger.error("  Message %d (repr): %r", idx, msg)
+
+        _log_internal_retry_responses(messages, level="error", log_when_none=True)
+    except Exception as log_exc:
+        # Never let logging failures interfere with the main error path
+        logger.warning("Failed to log model failure details: %s", log_exc)
+
+
+def _extract_message_content(message) -> Optional[str]:
+    """Best-effort extraction of readable content from pydantic-ai messages."""
+    try:
+        # Some message objects may expose direct content-like fields
+        for attr in ("content", "text", "output", "message"):
+            if hasattr(message, attr):
+                value = getattr(message, attr)
+                if value:
+                    return str(value)
+
+        parts = getattr(message, "parts", None)
+        if not parts:
+            return None
+
+        chunks = []
+        for part in parts:
+            part_type = type(part).__name__
+            part_content = None
+
+            if hasattr(part, "content") and getattr(part, "content"):
+                part_content = str(getattr(part, "content"))
+            elif hasattr(part, "text") and getattr(part, "text"):
+                part_content = str(getattr(part, "text"))
+            elif hasattr(part, "args") and getattr(part, "args") is not None:
+                part_content = str(getattr(part, "args"))
+            elif hasattr(part, "tool_name") and getattr(part, "tool_name"):
+                part_content = f"tool={getattr(part, 'tool_name')}"
+            else:
+                part_content = str(part)
+
+            chunks.append(f"[{part_type}] {part_content}")
+
+        return "\n".join(chunks)
+    except Exception:
+        return None
+
+
+def _serialize_message_raw(message) -> str:
+    """Serialize message in a raw form (prefer JSON) for debugging schema mismatches."""
+    try:
+        if hasattr(message, "model_dump_json"):
+            return message.model_dump_json()
+
+        if hasattr(message, "model_dump"):
+            return json.dumps(message.model_dump(), default=str)
+
+        if hasattr(message, "__dict__"):
+            return json.dumps(message.__dict__, default=str)
+
+        return str(message)
+    except Exception:
+        return repr(message)
+
+
+def _has_retry_prompt_part(message) -> bool:
+    """Check whether a message includes a pydantic-ai RetryPromptPart."""
+    try:
+        parts = getattr(message, "parts", None)
+        if not parts:
+            return False
+        return any(type(part).__name__ == "RetryPromptPart" for part in parts)
+    except Exception:
+        return False
+
+
+def _is_model_response_message(message) -> bool:
+    """Check whether message looks like a model response message."""
+    try:
+        if type(message).__name__ == "ModelResponse":
+            return True
+
+        parts = getattr(message, "parts", None)
+        if not parts:
+            return False
+
+        response_like_part_names = {
+            "TextPart",
+            "ThinkingPart",
+            "ToolCallPart",
+            "BuiltinToolCallPart",
+            "BuiltinToolReturnPart",
+            "ToolReturnPart",
+        }
+        return any(type(part).__name__ in response_like_part_names for part in parts)
+    except Exception:
+        return False
+
+
+def _log_internal_retry_responses(messages, level: str = "warning", log_when_none: bool = False) -> None:
+    """Log model response content that led to each internal pydantic-ai retry."""
+    try:
+        log_func = getattr(logger, level, logger.warning)
+        retry_count = 0
+
+        for idx, message in enumerate(messages):
+            if not _has_retry_prompt_part(message):
+                continue
+
+            retry_count += 1
+            retry_prompt_content = _extract_message_content(message)
+
+            prev_response_content = None
+            prev_response_index = None
+            for prev_idx in range(idx - 1, -1, -1):
+                candidate = messages[prev_idx]
+                if _is_model_response_message(candidate):
+                    prev_response_index = prev_idx
+                    prev_response_content = _extract_message_content(candidate)
+                    break
+
+            log_func("Internal pydantic-ai retry #%d detected.", retry_count)
+
+            current_retry_message_content = _extract_message_content(message)
+            log_func(
+                "  Current retry-triggering message (message %d): %s",
+                idx,
+                (current_retry_message_content or "<no extractable content>")[:2000],
+            )
+
+            if prev_response_index is not None:
+                log_func(
+                    "  Response that led to retry (message %d): %s",
+                    prev_response_index,
+                    (prev_response_content or "<no extractable content>")[:2000],
+                )
+            else:
+                log_func("  Could not find preceding model response for this retry.")
+
+            if retry_prompt_content:
+                log_func("  Retry prompt details: %s", retry_prompt_content[:2000])
+
+        if retry_count == 0 and log_when_none:
+            log_func("No internal pydantic-ai retry prompts were captured in messages.")
+    except Exception as e:
+        logger.warning("Could not log internal retry response details: %s", e)
+#### END OF DEBUGGING UTILS
 
 def tool_wrapper(original_func):
     """Decorator to wrap tool functions for usage tracking."""

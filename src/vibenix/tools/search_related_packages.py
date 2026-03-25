@@ -75,7 +75,7 @@ def _get_builder_functions() -> List[str]:
         print(f"⚠️ Failed to cache results: {e}")
     return builders
 
-def _extract_builders(path: str, cache: List[str] = None) -> List[str]:
+def _extract_builders(path: str, cache: Optional[List[str]] = None) -> List[str]:
     """Extract builder functions from all expressions on a directory or file.
 
     Args:
@@ -325,7 +325,7 @@ def _create_find_similar_builder_patterns(use_cache: bool = False):
         return _get_builder_combinations(builders, keyword)
     return find_similar_builder_patterns
 
-def _get_builder_combinations(chosen_builders: List[str], keyword: str = None) -> str:
+def _get_builder_combinations(chosen_builders: List[str], keyword: Optional[str] = None) -> str:
     try:
         nixpkgs_path = _get_nixpkgs_source_path()
     except Exception as e:
