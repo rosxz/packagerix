@@ -15,8 +15,12 @@ from pydantic_ai.models.anthropic import AnthropicModel, AnthropicModelSettings
 from pydantic_ai.providers.anthropic import AnthropicProvider
 from pydantic_ai.models.google import GoogleModel, GoogleModelSettings
 from pydantic_ai.providers.google import GoogleProvider
+from pydantic_ai.models.bedrock import BedrockConverseModel, BedrockModelSettings
+from pydantic_ai.providers.bedrock import BedrockProvider
 from vibenix.ui.logging_config import logger
 
+from botocore.config import Config
+import boto3
 
 from vibenix.defaults import DEFAULT_MODEL_SETTINGS, DEFAULT_USAGE_LIMITS
 # Cache for model configuration to avoid repeated loading and logging
@@ -230,6 +234,15 @@ def create_openrouter_settings(settings: Dict[str, Any]) -> OpenRouterModelSetti
     logger.info(f"Creating OpenRouter settings: max_tokens={merged_settings.get('max_tokens')}, temperature={merged_settings.get('temperature')}")
     return OpenRouterModelSettings(**merged_settings)
 
+def create_bedrock_settings(settings: Dict[str, Any]) -> BedrockModelSettings:
+    """Create BedrockModelSettings from config dict."""
+    # Use constants for defaults
+    defaults = DEFAULT_MODEL_SETTINGS["bedrock"].copy()
+    
+    merged_settings = {**defaults, **settings}
+    logger.info(f"Creating Bedrock settings: max_tokens={merged_settings.get('max_tokens')}, temperature={merged_settings.get('temperature')}")
+    return BedrockModelSettings(**merged_settings)
+
 def initialize_model_config(model_settings = None):
     """Initialize model configuration and create model instance. Must be called once at startup."""
     global _cached_model, _use_prompted_output
@@ -301,8 +314,8 @@ def initialize_model_config(model_settings = None):
         base_url = config.get("base_url")
 
         # Check if using OpenRouter or AWS Bedrock
-        is_openrouter = base_url and 'openrouter.ai' in base_url
-        is_bedrock = base_url and 'bedrock' in base_url and 'api.aws' in base_url
+        is_openrouter = provider_name == "openrouter" or (base_url and 'openrouter.ai' in base_url)
+        is_bedrock = provider_name == "bedrock" or (base_url and 'bedrock' in base_url and 'api.aws' in base_url)
 
         # Auto-enable PromptedOutput mode for endpoints that don't reliably support tool-based structured outputs
         if is_openrouter or is_bedrock:
@@ -310,7 +323,6 @@ def initialize_model_config(model_settings = None):
             logger.info("Auto-enabled PromptedOutput mode for better compatibility with this endpoint")
 
         if is_bedrock:
-            # Use OpenAI-compatible provider for AWS Bedrock
             from vibenix.secure_keys import get_api_key
             api_key = os.environ.get("AWS_BEARER_TOKEN_BEDROCK")
             if not api_key:
@@ -318,8 +330,36 @@ def initialize_model_config(model_settings = None):
                 if not api_key:
                     raise ValueError("AWS_BEARER_TOKEN_BEDROCK not found in environment or secure storage. Run interactively to configure.")
 
+            #config = get_model_config(use_cached=False, remove_model_prefix=False)
+            #model_name = config.get("model_name")
+            #model_name = provider_name + "/" + model_name if '/' not in model_name else model_name
+
             logger.info(f"Using AWS Bedrock model: {model_name} at {base_url}")
-            provider = OpenAIProvider(base_url=base_url, api_key=api_key, http_client=create_retrying_client())
+            #provider = OpenAIProvider(base_url=base_url, api_key=api_key, http_client=create_retrying_client())
+            config = Config(
+                retries={
+                    'max_attempts': 3,
+                    'mode': 'adaptive'
+                }
+            )
+            bedrock_client = boto3.client(
+                'bedrock-runtime',
+                region_name='us-east-1',
+                config=config
+            )
+            bedrock_provider = BedrockProvider(bedrock_client=bedrock_client, api_key=api_key)
+
+            # Update the config cache with the corrected model name
+            #_cached_config["model_name"] = model_name
+
+            if not model_settings:
+                env_settings = load_model_settings_from_env("bedrock")
+                model_settings = create_bedrock_settings(env_settings)
+            _cached_model = BedrockConverseModel(model_name, provider=bedrock_provider, settings=model_settings)
+            #if not model_settings:
+            #    env_settings = load_model_settings_from_env("bedrock")
+            #    model_settings = create_openai_settings(env_settings)
+            #_cached_model = OpenAIChatModel(config["model_name"], provider=provider, settings=model_settings)
 
         elif is_openrouter:
             # Use OpenRouterProvider for OpenRouter endpoints
@@ -362,10 +402,10 @@ def initialize_model_config(model_settings = None):
             logger.info(f"Using OpenAI-compatible model: {model_name} at {base_url}")
             provider = OpenAIProvider(base_url=base_url, api_key=api_key, http_client=create_retrying_client())
 
-        if not model_settings:
-            env_settings = load_model_settings_from_env("openai")
-            model_settings = create_openai_settings(env_settings)
-        _cached_model = OpenAIChatModel(config["model_name"], provider=provider, settings=model_settings)
+            if not model_settings:
+                env_settings = load_model_settings_from_env("openai")
+                model_settings = create_openai_settings(env_settings)
+            _cached_model = OpenAIChatModel(config["model_name"], provider=provider, settings=model_settings)
 
 
 def calc_model_pricing(model: str, prompt_tokens: int, completion_tokens: int,
