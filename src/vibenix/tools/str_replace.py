@@ -31,20 +31,37 @@ def _str_replace(old_str: str, new_str: str, occurrence: int = None) -> str:
         previous_content = current_content
         
         if not old_str:
-            error_msg = f"Error: `old_str` cannot be empty."
-            return error_msg
-        count = current_content.count(old_str)
-        if count == 0:
-            os_strp = old_str.rstrip() # Try removing trailing whitespace
-            current_content = current_content.rstrip()
-            count = current_content.count(os_strp)
-            if count > 0:
-                old_str = os_strp
-            else:
-                return f"Error: Text not found in packaging expression."
+            return f"Error replacing: `old_str` cannot be empty."
 
         if old_str == new_str:
-            return f"Error: `old_str` and `new_str` are identical; no changes made."
+            return f"Error replacing: `old_str` and `new_str` are identical; no changes made."
+
+        count = current_content.count(old_str)
+        if count == 0:
+            import re
+            # Use regex instead for flexible whitespace matching
+            escaped_old = re.escape(old_str.strip())
+                
+            # Replace literal spaces in the escaped string with \s+ (one or more whitespace)
+            pattern = escaped_old.replace(r'\ ', r'\s+')
+            matches = list(re.finditer(pattern, current_content))
+            
+            if not matches:
+                return "Error replacing: Text not found in packaging expression (even with flexible whitespace)."
+            
+            if len(matches) < occurrence:
+                return f"Error replacing: Only found {len(matches)} occurrences."
+            
+            # Perform the replacement at the specific match location
+            match = matches[occurrence - 1]
+            new_content = (
+                current_content[:match.start()] + 
+                new_str + 
+                current_content[match.end():]
+            )
+            
+            update_flake(new_content)
+            return f"Successfully replaced text."
 
         # Validate occurrence parameter
         if count > 1 and occurrence:

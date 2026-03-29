@@ -11,6 +11,20 @@
     "openrouter": {
 		"openrouter_transforms": [
 			"middle-out"
-		]
-	}
+		],
+        "extra_body": {
+            "provider": {
+                "order": ["groq"],
+                "only": ["groq"],
+                "allow_fallbacks": false
+            },
+            "transforms": ["middle-out"]
+        }
+	},
+    "bedrock": {
+        "bedrock_cache_messages": true,
+        "bedrock_cache_tool_definitions": true,
+        "bedrock_cache_messages": true,
+        "parallel_tool_calls": false
+    }
 }

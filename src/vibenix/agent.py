@@ -52,18 +52,18 @@ class VibenixAgent:
                 self.agent = Agent(
                     model=self.model,
                     output_type=PromptedOutput(output_type, template=json_template),
-                    retries=2,
+                    retries=3,
                 )
             else:
                 self.agent = Agent(
                     model=self.model,
                     output_type=output_type,
-                    retries=2,
+                    retries=3,
                 )
         else:
             self.agent = Agent(
                 model=self.model,
-                retries=2,
+                retries=3,
             )
         
         self._output_type = output_type  # Store output type for later checks
