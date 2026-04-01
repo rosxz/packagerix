@@ -14,8 +14,8 @@
 		],
         "extra_body": {
             "provider": {
-                "order": ["fireworks"],
-                "only": ["fireworks"],
+                "order": ["groq"],
+                "only": ["groq"],
                 "allow_fallbacks": false
             },
             "transforms": ["middle-out"]
