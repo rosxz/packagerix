@@ -5,6 +5,7 @@ This module provides model configuration compatible with the previous litellm-ba
 
 import os
 import json
+import re
 from typing import Optional, Dict, Any, Tuple
 from pydantic_ai.models import Model
 from pydantic_ai.models.openai import OpenAIChatModel, OpenAIChatModelSettings
@@ -20,6 +21,7 @@ from pydantic_ai.providers.bedrock import BedrockProvider
 from vibenix.ui.logging_config import logger
 
 from botocore.config import Config
+from botocore.exceptions import ClientError
 import boto3
 
 from vibenix.defaults import DEFAULT_MODEL_SETTINGS, DEFAULT_USAGE_LIMITS
@@ -27,6 +29,111 @@ from vibenix.defaults import DEFAULT_MODEL_SETTINGS, DEFAULT_USAGE_LIMITS
 _cached_config = None
 _cached_model = None
 _use_prompted_output = False  # Whether to use PromptedOutput mode for structured outputs
+_BEDROCK_TOOL_NAME_PATTERN = re.compile(r"^[a-zA-Z0-9_-]+$")
+
+
+def _extract_bedrock_tool_uses(messages: list[dict]) -> list[dict[str, Any]]:
+    """Extract toolUse entries from Bedrock converse messages for diagnostics."""
+    tool_uses: list[dict[str, Any]] = []
+
+    for message_index, message in enumerate(messages):
+        content_blocks = message.get("content", []) if isinstance(message, dict) else []
+        if not isinstance(content_blocks, list):
+            continue
+
+        for content_index, content_block in enumerate(content_blocks):
+            if not isinstance(content_block, dict):
+                continue
+            tool_use = content_block.get("toolUse")
+            if isinstance(tool_use, dict):
+                tool_uses.append(
+                    {
+                        "message_index": message_index,
+                        "content_index": content_index,
+                        "tool_use": tool_use,
+                    }
+                )
+
+    return tool_uses
+
+
+def _log_bedrock_retry_diagnostics(error: Exception, params: dict[str, Any], retry_number: int, max_retries: int) -> None:
+    """Log details before retrying a failed Bedrock converse call."""
+    messages = params.get("messages", [])
+    tool_uses = _extract_bedrock_tool_uses(messages if isinstance(messages, list) else [])
+
+    invalid_tool_names: list[dict[str, Any]] = []
+    for entry in tool_uses:
+        tool_use = entry["tool_use"]
+        tool_name = tool_use.get("name")
+        if not isinstance(tool_name, str) or not _BEDROCK_TOOL_NAME_PATTERN.match(tool_name):
+            invalid_tool_names.append(
+                {
+                    "message_index": entry["message_index"],
+                    "content_index": entry["content_index"],
+                    "tool_name": tool_name,
+                }
+            )
+
+    logger.warning(
+        "Bedrock converse failed before retry %s/%s: %s",
+        retry_number,
+        max_retries,
+        str(error),
+    )
+
+    if invalid_tool_names:
+        logger.warning("Detected invalid Bedrock toolUse.name entries: %s", invalid_tool_names)
+    elif tool_uses:
+        logger.warning(
+            "Found Bedrock toolUse entries but all names matched pattern [a-zA-Z0-9_-]+: %s",
+            [entry["tool_use"].get("name") for entry in tool_uses],
+        )
+    else:
+        logger.warning("No toolUse entries found in Bedrock request messages")
+
+
+class RetryingBedrockClient:
+    """Wrapper around boto Bedrock runtime client with deterministic retry behavior."""
+
+    def __init__(self, bedrock_client, max_retries: int = 2):
+        self._client = bedrock_client
+        self._max_retries = max_retries
+
+    def __getattr__(self, name: str):
+        return getattr(self._client, name)
+
+    def converse(self, **params):
+        total_attempts = self._max_retries + 1
+
+        for attempt in range(1, total_attempts + 1):
+            try:
+                return self._client.converse(**params)
+            except ClientError as error:
+                error_code = error.response.get("Error", {}).get("Code")
+                if attempt >= total_attempts:
+                    raise
+
+                if error_code == "ValidationException":
+                    _log_bedrock_retry_diagnostics(error, params, retry_number=attempt, max_retries=self._max_retries)
+                else:
+                    logger.warning(
+                        "Bedrock client error before retry %s/%s: code=%s, message=%s",
+                        attempt,
+                        self._max_retries,
+                        error_code,
+                        str(error),
+                    )
+            except Exception as error:
+                if attempt >= total_attempts:
+                    raise
+
+                logger.warning(
+                    "Bedrock unexpected error before retry %s/%s: %s",
+                    attempt,
+                    self._max_retries,
+                    str(error),
+                )
 
 
 def load_saved_configuration() -> Optional[Tuple[str, str, Optional[str], Optional[str]]]:
@@ -336,17 +443,18 @@ def initialize_model_config(model_settings = None):
 
             logger.info(f"Using AWS Bedrock model: {model_name} at {base_url}")
             #provider = OpenAIProvider(base_url=base_url, api_key=api_key, http_client=create_retrying_client())
-            config = Config(
+            bedrock_boto_config = Config(
                 retries={
-                    'max_attempts': 3,
-                    'mode': 'adaptive'
+                    'mode': 'standard',
+                    'total_max_attempts': 1
                 }
             )
-            bedrock_client = boto3.client(
+            raw_bedrock_client = boto3.client(
                 'bedrock-runtime',
                 region_name='us-east-1',
-                config=config
+                config=bedrock_boto_config
             )
+            bedrock_client = RetryingBedrockClient(raw_bedrock_client, max_retries=2)
             bedrock_provider = BedrockProvider(bedrock_client=bedrock_client, api_key=api_key)
 
             # Update the config cache with the corrected model name
