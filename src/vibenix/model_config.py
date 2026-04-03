@@ -30,6 +30,7 @@ _cached_config = None
 _cached_model = None
 _use_prompted_output = False  # Whether to use PromptedOutput mode for structured outputs
 _BEDROCK_TOOL_NAME_PATTERN = re.compile(r"^[a-zA-Z0-9_-]+$")
+_BEDROCK_TOOL_NAME_PATH_PATTERN = re.compile(r"messages\.(\d+)\.member\.content\.(\d+)\.member\.toolUse\.name")
 
 
 def _extract_bedrock_tool_uses(messages: list[dict]) -> list[dict[str, Any]]:
@@ -57,10 +58,56 @@ def _extract_bedrock_tool_uses(messages: list[dict]) -> list[dict[str, Any]]:
     return tool_uses
 
 
+def _extract_bedrock_tool_name_at_path(messages: list[dict], message_index: int, content_index: int) -> Any:
+    """Return toolUse.name value at the specific Bedrock error path indices."""
+    if message_index < 0 or content_index < 0:
+        return None
+    if message_index >= len(messages):
+        return None
+
+    message = messages[message_index]
+    if not isinstance(message, dict):
+        return None
+
+    content_blocks = message.get("content")
+    if not isinstance(content_blocks, list) or content_index >= len(content_blocks):
+        return None
+
+    content_block = content_blocks[content_index]
+    if not isinstance(content_block, dict):
+        return None
+
+    tool_use = content_block.get("toolUse")
+    if not isinstance(tool_use, dict):
+        return None
+
+    return tool_use.get("name")
+
+
+def _extract_failed_tool_name_from_error(error: Exception, messages: list[dict]) -> dict[str, Any] | None:
+    """Parse Bedrock validation path from error text and return the referenced tool name."""
+    match = _BEDROCK_TOOL_NAME_PATH_PATTERN.search(str(error))
+    if not match:
+        return None
+
+    message_index = int(match.group(1))
+    content_index = int(match.group(2))
+    tool_name = _extract_bedrock_tool_name_at_path(messages, message_index, content_index)
+
+    return {
+        "message_index": message_index,
+        "content_index": content_index,
+        "tool_name": tool_name,
+        "tool_name_repr": repr(tool_name),
+    }
+
+
 def _log_bedrock_retry_diagnostics(error: Exception, params: dict[str, Any], retry_number: int, max_retries: int) -> None:
     """Log details before retrying a failed Bedrock converse call."""
     messages = params.get("messages", [])
-    tool_uses = _extract_bedrock_tool_uses(messages if isinstance(messages, list) else [])
+    parsed_messages = messages if isinstance(messages, list) else []
+    tool_uses = _extract_bedrock_tool_uses(parsed_messages)
+    failing_tool_from_error = _extract_failed_tool_name_from_error(error, parsed_messages)
 
     invalid_tool_names: list[dict[str, Any]] = []
     for entry in tool_uses:
@@ -72,22 +119,34 @@ def _log_bedrock_retry_diagnostics(error: Exception, params: dict[str, Any], ret
                     "message_index": entry["message_index"],
                     "content_index": entry["content_index"],
                     "tool_name": tool_name,
+                    "tool_name_repr": repr(tool_name),
                 }
             )
 
-    logger.warning(
-        "Bedrock converse failed before retry %s/%s: %s",
-        retry_number,
-        max_retries,
-        str(error),
-    )
+    all_tool_names = [
+        {
+            "message_index": entry["message_index"],
+            "content_index": entry["content_index"],
+            "tool_name": entry["tool_use"].get("name"),
+            "tool_name_repr": repr(entry["tool_use"].get("name")),
+        }
+        for entry in tool_uses
+    ]
+
+    logger.warning(f"Bedrock converse failed before retry {retry_number}/{max_retries}: {str(error)}")
+
+    if failing_tool_from_error:
+        logger.warning(f"Bedrock error path points to toolUse.name: {failing_tool_from_error}")
+
+    if all_tool_names:
+        logger.warning(f"All outgoing Bedrock toolUse.name entries: {all_tool_names}")
 
     if invalid_tool_names:
-        logger.warning("Detected invalid Bedrock toolUse.name entries: %s", invalid_tool_names)
+        logger.warning(f"Detected invalid Bedrock toolUse.name entries: {invalid_tool_names}")
     elif tool_uses:
         logger.warning(
-            "Found Bedrock toolUse entries but all names matched pattern [a-zA-Z0-9_-]+: %s",
-            [entry["tool_use"].get("name") for entry in tool_uses],
+            f"Found Bedrock toolUse entries but all names matched pattern [a-zA-Z0-9_-]+: "
+            f"{[repr(entry['tool_use'].get('name')) for entry in tool_uses]}"
         )
     else:
         logger.warning("No toolUse entries found in Bedrock request messages")
@@ -118,22 +177,14 @@ class RetryingBedrockClient:
                     _log_bedrock_retry_diagnostics(error, params, retry_number=attempt, max_retries=self._max_retries)
                 else:
                     logger.warning(
-                        "Bedrock client error before retry %s/%s: code=%s, message=%s",
-                        attempt,
-                        self._max_retries,
-                        error_code,
-                        str(error),
+                        f"Bedrock client error before retry {attempt}/{self._max_retries}: "
+                        f"code={error_code}, message={str(error)}"
                     )
             except Exception as error:
                 if attempt >= total_attempts:
                     raise
 
-                logger.warning(
-                    "Bedrock unexpected error before retry %s/%s: %s",
-                    attempt,
-                    self._max_retries,
-                    str(error),
-                )
+                logger.warning(f"Bedrock unexpected error before retry {attempt}/{self._max_retries}: {str(error)}")
 
 
 def load_saved_configuration() -> Optional[Tuple[str, str, Optional[str], Optional[str]]]:
