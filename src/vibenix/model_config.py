@@ -31,6 +31,7 @@ _cached_model = None
 _use_prompted_output = False  # Whether to use PromptedOutput mode for structured outputs
 _BEDROCK_TOOL_NAME_PATTERN = re.compile(r"^[a-zA-Z0-9_-]+$")
 _BEDROCK_TOOL_NAME_PATH_PATTERN = re.compile(r"messages\.(\d+)\.member\.content\.(\d+)\.member\.toolUse\.name")
+_BEDROCK_CHANNEL_SUFFIX_PATTERN = re.compile(r"<\|[^|]+\|>.*$")
 
 
 def _safe_json_dumps(value: Any) -> str:
@@ -108,6 +109,49 @@ def _extract_failed_tool_name_from_error(error: Exception, messages: list[dict])
         "tool_name": tool_name,
         "tool_name_repr": repr(tool_name),
     }
+
+
+def _normalize_bedrock_tool_name(tool_name: Any) -> str:
+    """Drop everything from the first <|...|> marker onward."""
+    normalized = str(tool_name) if tool_name is not None else ""
+    return _BEDROCK_CHANNEL_SUFFIX_PATTERN.sub("", normalized)
+
+
+def _normalize_bedrock_tool_names_in_messages(messages: list[dict]) -> list[dict[str, Any]]:
+    """Normalize toolUse.name entries in outgoing Bedrock messages in-place."""
+    rewrites: list[dict[str, Any]] = []
+
+    for message_index, message in enumerate(messages):
+        if not isinstance(message, dict):
+            continue
+
+        content_blocks = message.get("content", [])
+        if not isinstance(content_blocks, list):
+            continue
+
+        for content_index, content_block in enumerate(content_blocks):
+            if not isinstance(content_block, dict):
+                continue
+
+            tool_use = content_block.get("toolUse")
+            if not isinstance(tool_use, dict):
+                continue
+
+            original_name = tool_use.get("name")
+            normalized_name = _normalize_bedrock_tool_name(original_name)
+
+            if original_name != normalized_name:
+                tool_use["name"] = normalized_name
+                rewrites.append(
+                    {
+                        "message_index": message_index,
+                        "content_index": content_index,
+                        "old_name": original_name,
+                        "new_name": normalized_name,
+                    }
+                )
+
+    return rewrites
 
 
 def _log_bedrock_retry_diagnostics(error: Exception, params: dict[str, Any], retry_number: int, max_retries: int) -> None:
@@ -196,6 +240,11 @@ class RetryingBedrockClient:
 
     def converse(self, **params):
         total_attempts = self._max_retries + 1
+        messages = params.get("messages")
+        if isinstance(messages, list):
+            rewrites = _normalize_bedrock_tool_names_in_messages(messages)
+            if rewrites:
+                logger.warning(f"Normalized Bedrock toolUse.name values before request: {rewrites}")
 
         for attempt in range(1, total_attempts + 1):
             try:
