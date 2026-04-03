@@ -33,6 +33,14 @@ _BEDROCK_TOOL_NAME_PATTERN = re.compile(r"^[a-zA-Z0-9_-]+$")
 _BEDROCK_TOOL_NAME_PATH_PATTERN = re.compile(r"messages\.(\d+)\.member\.content\.(\d+)\.member\.toolUse\.name")
 
 
+def _safe_json_dumps(value: Any) -> str:
+    """Safely serialize arbitrary values for debug logging."""
+    try:
+        return json.dumps(value, ensure_ascii=False, default=str)
+    except Exception:
+        return repr(value)
+
+
 def _extract_bedrock_tool_uses(messages: list[dict]) -> list[dict[str, Any]]:
     """Extract toolUse entries from Bedrock converse messages for diagnostics."""
     tool_uses: list[dict[str, Any]] = []
@@ -150,6 +158,30 @@ def _log_bedrock_retry_diagnostics(error: Exception, params: dict[str, Any], ret
         )
     else:
         logger.warning("No toolUse entries found in Bedrock request messages")
+
+    if failing_tool_from_error:
+        message_index = failing_tool_from_error["message_index"]
+        content_index = failing_tool_from_error["content_index"]
+
+        previous_message = parsed_messages[message_index - 1] if 0 <= message_index - 1 < len(parsed_messages) else None
+        failing_message = parsed_messages[message_index] if 0 <= message_index < len(parsed_messages) else None
+        failing_content_block = None
+
+        if isinstance(failing_message, dict):
+            failing_content = failing_message.get("content")
+            if isinstance(failing_content, list) and 0 <= content_index < len(failing_content):
+                failing_content_block = failing_content[content_index]
+
+        logger.warning(
+            f"Bedrock previous message (index={message_index - 1}): {_safe_json_dumps(previous_message)}"
+        )
+        logger.warning(
+            f"Bedrock failing message (index={message_index}): {_safe_json_dumps(failing_message)}"
+        )
+        logger.warning(
+            f"Bedrock failing content block (message_index={message_index}, content_index={content_index}): "
+            f"{_safe_json_dumps(failing_content_block)}"
+        )
 
 
 class RetryingBedrockClient:
