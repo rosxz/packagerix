@@ -30,6 +30,18 @@ _cached_config = None
 _cached_model = None
 _use_prompted_output = False  # Whether to use PromptedOutput mode for structured outputs
 _BEDROCK_TOOL_NAME_PATTERN = re.compile(r"^[a-zA-Z0-9_-]+$")
+_BEDROCK_TOOL_FIELD_PATH_PATTERN = re.compile(
+    r"messages\.(\d+)(?:\.member)?\.content\.(\d+)(?:\.member)?\.toolUse\.(name|input)"
+)
+_ENDOFTEXT_MARKER = "<|endoftext|>"
+
+
+def _safe_json_dumps(value: Any) -> str:
+    """Safely serialize arbitrary values for debug logging."""
+    try:
+        return json.dumps(value, ensure_ascii=False, default=str)
+    except Exception:
+        return repr(value)
 
 
 def _extract_bedrock_tool_uses(messages: list[dict]) -> list[dict[str, Any]]:
@@ -57,10 +69,104 @@ def _extract_bedrock_tool_uses(messages: list[dict]) -> list[dict[str, Any]]:
     return tool_uses
 
 
+def _extract_bedrock_tool_field_at_path(messages: list[dict], message_index: int, content_index: int, field_name: str) -> Any:
+    """Return toolUse.<field_name> at the specific Bedrock error path indices."""
+    if message_index < 0 or content_index < 0:
+        return None
+    if message_index >= len(messages):
+        return None
+
+    message = messages[message_index]
+    if not isinstance(message, dict):
+        return None
+
+    content_blocks = message.get("content")
+    if not isinstance(content_blocks, list) or content_index >= len(content_blocks):
+        return None
+
+    content_block = content_blocks[content_index]
+    if not isinstance(content_block, dict):
+        return None
+
+    tool_use = content_block.get("toolUse")
+    if not isinstance(tool_use, dict):
+        return None
+
+    return tool_use.get(field_name)
+
+
+def _extract_failed_tool_field_from_error(error: Exception, messages: list[dict]) -> dict[str, Any] | None:
+    """Parse Bedrock validation path and return referenced toolUse field value."""
+    match = _BEDROCK_TOOL_FIELD_PATH_PATTERN.search(str(error))
+    if not match:
+        return None
+
+    message_index = int(match.group(1))
+    content_index = int(match.group(2))
+    field_name = match.group(3)
+    field_value = _extract_bedrock_tool_field_at_path(messages, message_index, content_index, field_name)
+    # Whats going on here actually????
+
+    return {
+        "message_index": message_index,
+        "content_index": content_index,
+        "field_name": field_name,
+        "field_value": field_value,
+        "field_value_repr": repr(field_value),
+        "field_value_type": type(field_value).__name__,
+    }
+
+
+def _normalize_bedrock_tool_name(tool_name: Any) -> str:
+    """Drop everything from the first non-[a-zA-Z0-9_-] character onward."""
+    normalized = str(tool_name) if tool_name is not None else ""
+    match = re.match(r"[a-zA-Z0-9_-]+", normalized)
+    return match.group(0) if match else ""
+
+
+def _normalize_bedrock_tool_names_in_messages(messages: list[dict]) -> list[dict[str, Any]]:
+    """Normalize toolUse.name entries in outgoing Bedrock messages in-place."""
+    rewrites: list[dict[str, Any]] = []
+
+    for message_index, message in enumerate(messages):
+        if not isinstance(message, dict):
+            continue
+
+        content_blocks = message.get("content", [])
+        if not isinstance(content_blocks, list):
+            continue
+
+        for content_index, content_block in enumerate(content_blocks):
+            if not isinstance(content_block, dict):
+                continue
+
+            tool_use = content_block.get("toolUse")
+            if not isinstance(tool_use, dict):
+                continue
+
+            original_name = tool_use.get("name")
+            normalized_name = _normalize_bedrock_tool_name(original_name)
+
+            if original_name != normalized_name:
+                tool_use["name"] = normalized_name
+                rewrites.append(
+                    {
+                        "message_index": message_index,
+                        "content_index": content_index,
+                        "old_name": original_name,
+                        "new_name": normalized_name,
+                    }
+                )
+
+    return rewrites
+
+
 def _log_bedrock_retry_diagnostics(error: Exception, params: dict[str, Any], retry_number: int, max_retries: int) -> None:
     """Log details before retrying a failed Bedrock converse call."""
     messages = params.get("messages", [])
-    tool_uses = _extract_bedrock_tool_uses(messages if isinstance(messages, list) else [])
+    parsed_messages = messages if isinstance(messages, list) else []
+    tool_uses = _extract_bedrock_tool_uses(parsed_messages)
+    failing_tool_from_error = _extract_failed_tool_field_from_error(error, parsed_messages)
 
     invalid_tool_names: list[dict[str, Any]] = []
     for entry in tool_uses:
@@ -72,25 +178,78 @@ def _log_bedrock_retry_diagnostics(error: Exception, params: dict[str, Any], ret
                     "message_index": entry["message_index"],
                     "content_index": entry["content_index"],
                     "tool_name": tool_name,
+                    "tool_name_repr": repr(tool_name),
                 }
             )
 
-    logger.warning(
-        "Bedrock converse failed before retry %s/%s: %s",
-        retry_number,
-        max_retries,
-        str(error),
-    )
+    all_tool_names = [
+        {
+            "message_index": entry["message_index"],
+            "content_index": entry["content_index"],
+            "tool_name": entry["tool_use"].get("name"),
+            "tool_name_repr": repr(entry["tool_use"].get("name")),
+        }
+        for entry in tool_uses
+    ]
+
+    all_tool_inputs = [
+        {
+            "message_index": entry["message_index"],
+            "content_index": entry["content_index"],
+            "tool_input": entry["tool_use"].get("input"),
+            "tool_input_repr": repr(entry["tool_use"].get("input")),
+            "tool_input_type": type(entry["tool_use"].get("input")).__name__,
+        }
+        for entry in tool_uses
+    ]
+
+    logger.warning(f"Bedrock converse failed before retry {retry_number}/{max_retries}: {str(error)}")
+
+    if failing_tool_from_error:
+        logger.warning(
+            f"Bedrock error path points to toolUse.{failing_tool_from_error['field_name']}: "
+            f"{failing_tool_from_error}"
+        )
+
+    if all_tool_names:
+        logger.warning(f"All outgoing Bedrock toolUse.name entries: {all_tool_names}")
+
+    if all_tool_inputs:
+        logger.warning(f"All outgoing Bedrock toolUse.input entries: {all_tool_inputs}")
 
     if invalid_tool_names:
-        logger.warning("Detected invalid Bedrock toolUse.name entries: %s", invalid_tool_names)
+        logger.warning(f"Detected invalid Bedrock toolUse.name entries: {invalid_tool_names}")
     elif tool_uses:
         logger.warning(
-            "Found Bedrock toolUse entries but all names matched pattern [a-zA-Z0-9_-]+: %s",
-            [entry["tool_use"].get("name") for entry in tool_uses],
+            f"Found Bedrock toolUse entries but all names matched pattern [a-zA-Z0-9_-]+: "
+            f"{[repr(entry['tool_use'].get('name')) for entry in tool_uses]}"
         )
     else:
         logger.warning("No toolUse entries found in Bedrock request messages")
+
+    if failing_tool_from_error:
+        message_index = failing_tool_from_error["message_index"]
+        content_index = failing_tool_from_error["content_index"]
+
+        previous_message = parsed_messages[message_index - 1] if 0 <= message_index - 1 < len(parsed_messages) else None
+        failing_message = parsed_messages[message_index] if 0 <= message_index < len(parsed_messages) else None
+        failing_content_block = None
+
+        if isinstance(failing_message, dict):
+            failing_content = failing_message.get("content")
+            if isinstance(failing_content, list) and 0 <= content_index < len(failing_content):
+                failing_content_block = failing_content[content_index]
+
+        logger.warning(
+            f"Bedrock previous message (index={message_index - 1}): {_safe_json_dumps(previous_message)}"
+        )
+        logger.warning(
+            f"Bedrock failing message (index={message_index}): {_safe_json_dumps(failing_message)}"
+        )
+        logger.warning(
+            f"Bedrock failing content block (message_index={message_index}, content_index={content_index}): "
+            f"{_safe_json_dumps(failing_content_block)}"
+        )
 
 
 class RetryingBedrockClient:
@@ -106,6 +265,12 @@ class RetryingBedrockClient:
     def converse(self, **params):
         total_attempts = self._max_retries + 1
 
+        messages = params.get("messages")
+        if isinstance(messages, list):
+            rewrites = _normalize_bedrock_tool_names_in_messages(messages)
+            if rewrites:
+                logger.warning(f"Normalized Bedrock toolUse.name values before request: {rewrites}")
+
         for attempt in range(1, total_attempts + 1):
             try:
                 return self._client.converse(**params)
@@ -118,22 +283,14 @@ class RetryingBedrockClient:
                     _log_bedrock_retry_diagnostics(error, params, retry_number=attempt, max_retries=self._max_retries)
                 else:
                     logger.warning(
-                        "Bedrock client error before retry %s/%s: code=%s, message=%s",
-                        attempt,
-                        self._max_retries,
-                        error_code,
-                        str(error),
+                        f"Bedrock client error before retry {attempt}/{self._max_retries}: "
+                        f"code={error_code}, message={str(error)}"
                     )
             except Exception as error:
                 if attempt >= total_attempts:
                     raise
 
-                logger.warning(
-                    "Bedrock unexpected error before retry %s/%s: %s",
-                    attempt,
-                    self._max_retries,
-                    str(error),
-                )
+                logger.warning(f"Bedrock unexpected error before retry {attempt}/{self._max_retries}: {str(error)}")
 
 
 def load_saved_configuration() -> Optional[Tuple[str, str, Optional[str], Optional[str]]]:
