@@ -30,8 +30,10 @@ _cached_config = None
 _cached_model = None
 _use_prompted_output = False  # Whether to use PromptedOutput mode for structured outputs
 _BEDROCK_TOOL_NAME_PATTERN = re.compile(r"^[a-zA-Z0-9_-]+$")
-_BEDROCK_TOOL_NAME_PATH_PATTERN = re.compile(r"messages\.(\d+)\.member\.content\.(\d+)\.member\.toolUse\.name")
-_BEDROCK_CHANNEL_SUFFIX_PATTERN = re.compile(r"<\|[^|]+\|>.*$")
+_BEDROCK_TOOL_FIELD_PATH_PATTERN = re.compile(
+    r"messages\.(\d+)(?:\.member)?\.content\.(\d+)(?:\.member)?\.toolUse\.(name|input)"
+)
+_ENDOFTEXT_MARKER = "<|endoftext|>"
 
 
 def _safe_json_dumps(value: Any) -> str:
@@ -67,8 +69,8 @@ def _extract_bedrock_tool_uses(messages: list[dict]) -> list[dict[str, Any]]:
     return tool_uses
 
 
-def _extract_bedrock_tool_name_at_path(messages: list[dict], message_index: int, content_index: int) -> Any:
-    """Return toolUse.name value at the specific Bedrock error path indices."""
+def _extract_bedrock_tool_field_at_path(messages: list[dict], message_index: int, content_index: int, field_name: str) -> Any:
+    """Return toolUse.<field_name> at the specific Bedrock error path indices."""
     if message_index < 0 or content_index < 0:
         return None
     if message_index >= len(messages):
@@ -90,31 +92,63 @@ def _extract_bedrock_tool_name_at_path(messages: list[dict], message_index: int,
     if not isinstance(tool_use, dict):
         return None
 
-    return tool_use.get("name")
+    return tool_use.get(field_name)
 
 
-def _extract_failed_tool_name_from_error(error: Exception, messages: list[dict]) -> dict[str, Any] | None:
-    """Parse Bedrock validation path from error text and return the referenced tool name."""
-    match = _BEDROCK_TOOL_NAME_PATH_PATTERN.search(str(error))
+def _extract_failed_tool_field_from_error(error: Exception, messages: list[dict]) -> dict[str, Any] | None:
+    """Parse Bedrock validation path and return referenced toolUse field value."""
+    match = _BEDROCK_TOOL_FIELD_PATH_PATTERN.search(str(error))
     if not match:
         return None
 
     message_index = int(match.group(1))
     content_index = int(match.group(2))
-    tool_name = _extract_bedrock_tool_name_at_path(messages, message_index, content_index)
+    field_name = match.group(3)
+    field_value = _extract_bedrock_tool_field_at_path(messages, message_index, content_index, field_name)
+    # Whats going on here actually????
 
     return {
         "message_index": message_index,
         "content_index": content_index,
-        "tool_name": tool_name,
-        "tool_name_repr": repr(tool_name),
+        "field_name": field_name,
+        "field_value": field_value,
+        "field_value_repr": repr(field_value),
+        "field_value_type": type(field_value).__name__,
     }
 
 
 def _normalize_bedrock_tool_name(tool_name: Any) -> str:
-    """Drop everything from the first <|...|> marker onward."""
+    """Drop everything from the first non-[a-zA-Z0-9_-] character onward."""
     normalized = str(tool_name) if tool_name is not None else ""
-    return _BEDROCK_CHANNEL_SUFFIX_PATTERN.sub("", normalized)
+    match = re.match(r"[a-zA-Z0-9_-]+", normalized)
+    return match.group(0) if match else ""
+
+
+def _truncate_endoftext_in_text_fields(value: Any, path: str = "root") -> list[dict[str, Any]]:
+    """Truncate all text fields at the first <|endoftext|> marker in-place."""
+    rewrites: list[dict[str, Any]] = []
+
+    if isinstance(value, dict):
+        for key, child_value in value.items():
+            child_path = f"{path}.{key}"
+            if key == "text" and isinstance(child_value, str):
+                marker_index = child_value.find(_ENDOFTEXT_MARKER)
+                if marker_index >= 0:
+                    value[key] = child_value[:marker_index]
+                    rewrites.append(
+                        {
+                            "path": child_path,
+                            "original_length": len(child_value),
+                            "new_length": len(value[key]),
+                        }
+                    )
+            else:
+                rewrites.extend(_truncate_endoftext_in_text_fields(child_value, child_path))
+    elif isinstance(value, list):
+        for index, child_value in enumerate(value):
+            rewrites.extend(_truncate_endoftext_in_text_fields(child_value, f"{path}[{index}]"))
+
+    return rewrites
 
 
 def _normalize_bedrock_tool_names_in_messages(messages: list[dict]) -> list[dict[str, Any]]:
@@ -159,7 +193,7 @@ def _log_bedrock_retry_diagnostics(error: Exception, params: dict[str, Any], ret
     messages = params.get("messages", [])
     parsed_messages = messages if isinstance(messages, list) else []
     tool_uses = _extract_bedrock_tool_uses(parsed_messages)
-    failing_tool_from_error = _extract_failed_tool_name_from_error(error, parsed_messages)
+    failing_tool_from_error = _extract_failed_tool_field_from_error(error, parsed_messages)
 
     invalid_tool_names: list[dict[str, Any]] = []
     for entry in tool_uses:
@@ -185,13 +219,30 @@ def _log_bedrock_retry_diagnostics(error: Exception, params: dict[str, Any], ret
         for entry in tool_uses
     ]
 
+    all_tool_inputs = [
+        {
+            "message_index": entry["message_index"],
+            "content_index": entry["content_index"],
+            "tool_input": entry["tool_use"].get("input"),
+            "tool_input_repr": repr(entry["tool_use"].get("input")),
+            "tool_input_type": type(entry["tool_use"].get("input")).__name__,
+        }
+        for entry in tool_uses
+    ]
+
     logger.warning(f"Bedrock converse failed before retry {retry_number}/{max_retries}: {str(error)}")
 
     if failing_tool_from_error:
-        logger.warning(f"Bedrock error path points to toolUse.name: {failing_tool_from_error}")
+        logger.warning(
+            f"Bedrock error path points to toolUse.{failing_tool_from_error['field_name']}: "
+            f"{failing_tool_from_error}"
+        )
 
     if all_tool_names:
         logger.warning(f"All outgoing Bedrock toolUse.name entries: {all_tool_names}")
+
+    if all_tool_inputs:
+        logger.warning(f"All outgoing Bedrock toolUse.input entries: {all_tool_inputs}")
 
     if invalid_tool_names:
         logger.warning(f"Detected invalid Bedrock toolUse.name entries: {invalid_tool_names}")
@@ -240,6 +291,19 @@ class RetryingBedrockClient:
 
     def converse(self, **params):
         total_attempts = self._max_retries + 1
+
+        text_truncations: list[dict[str, Any]] = []
+        messages = params.get("messages")
+        if isinstance(messages, list):
+            text_truncations.extend(_truncate_endoftext_in_text_fields(messages, "messages"))
+
+        system = params.get("system")
+        if isinstance(system, (list, dict)):
+            text_truncations.extend(_truncate_endoftext_in_text_fields(system, "system"))
+
+        if text_truncations:
+            logger.warning(f"Truncated text fields at {_ENDOFTEXT_MARKER}: {text_truncations}")
+
         messages = params.get("messages")
         if isinstance(messages, list):
             rewrites = _normalize_bedrock_tool_names_in_messages(messages)

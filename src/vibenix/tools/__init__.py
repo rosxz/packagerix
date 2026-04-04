@@ -31,8 +31,8 @@ __all__ = [
     'insert_line_after',
     'view',
     'error_pagination',
-    'build_package',
     'run_in_vm',
+    'set_vm_systemPackages',
     'upgrade_nixpkgs',
     'noop_tool',
 ]
