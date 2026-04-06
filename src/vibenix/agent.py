@@ -42,14 +42,7 @@ class VibenixAgent:
                 json_template = (
                     "Respond with valid JSON matching this schema:\n"
                     "{schema}\n\n"
-                    "CRITICAL OUTPUT RULES:\n"
-                    "1) Output ONLY one JSON object. No markdown, no prose, no code fences.\n"
-                    "2) Do NOT emit tool-call wrappers, function-call syntax, or tool metadata (toolUse, toolResult, toolUseId, name, input) unless those keys are explicitly required by the schema.\n"
-                    "3) Do NOT emit any control/special marker tokens such as <|...|> (for example <|endoftext|> or <|channel|>).\n"
-                    "4) If any value would contain <|...|>, remove everything from the first '<|' onward.\n"
-                    "5) For enum fields, output exactly one allowed enum value and nothing else.\n"
-                    "6) For object fields, output valid JSON objects (never strings containing pseudo-JSON).\n"
-                    "7) For arrays, output valid JSON arrays with schema-compatible item types.\n\n"
+                    "IMPORTANT: Output ONLY the JSON object, with no additional text or markdown formatting.\n\n"
                     "Examples of correct JSON output:\n"
                     '- For enums: {{"response": "rust"}} or {{"response": "python"}}\n'
                     '- For lists: {{"response": ["item1", "item2"]}}\n'

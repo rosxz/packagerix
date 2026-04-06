@@ -124,33 +124,6 @@ def _normalize_bedrock_tool_name(tool_name: Any) -> str:
     return match.group(0) if match else ""
 
 
-def _truncate_endoftext_in_text_fields(value: Any, path: str = "root") -> list[dict[str, Any]]:
-    """Truncate all text fields at the first <|endoftext|> marker in-place."""
-    rewrites: list[dict[str, Any]] = []
-
-    if isinstance(value, dict):
-        for key, child_value in value.items():
-            child_path = f"{path}.{key}"
-            if key == "text" and isinstance(child_value, str):
-                marker_index = child_value.find(_ENDOFTEXT_MARKER)
-                if marker_index >= 0:
-                    value[key] = child_value[:marker_index]
-                    rewrites.append(
-                        {
-                            "path": child_path,
-                            "original_length": len(child_value),
-                            "new_length": len(value[key]),
-                        }
-                    )
-            else:
-                rewrites.extend(_truncate_endoftext_in_text_fields(child_value, child_path))
-    elif isinstance(value, list):
-        for index, child_value in enumerate(value):
-            rewrites.extend(_truncate_endoftext_in_text_fields(child_value, f"{path}[{index}]"))
-
-    return rewrites
-
-
 def _normalize_bedrock_tool_names_in_messages(messages: list[dict]) -> list[dict[str, Any]]:
     """Normalize toolUse.name entries in outgoing Bedrock messages in-place."""
     rewrites: list[dict[str, Any]] = []
@@ -291,18 +264,6 @@ class RetryingBedrockClient:
 
     def converse(self, **params):
         total_attempts = self._max_retries + 1
-
-        text_truncations: list[dict[str, Any]] = []
-        messages = params.get("messages")
-        if isinstance(messages, list):
-            text_truncations.extend(_truncate_endoftext_in_text_fields(messages, "messages"))
-
-        system = params.get("system")
-        if isinstance(system, (list, dict)):
-            text_truncations.extend(_truncate_endoftext_in_text_fields(system, "system"))
-
-        if text_truncations:
-            logger.warning(f"Truncated text fields at {_ENDOFTEXT_MARKER}: {text_truncations}")
 
         messages = params.get("messages")
         if isinstance(messages, list):
