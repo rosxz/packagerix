@@ -318,6 +318,12 @@ jobs:
       - name: Setup environment
         run: |
           # Set API keys as environment variables based on provider
+          if [[ "${{ steps.provider.outputs.provider }}" = "openrouter" || "${{ github.event.inputs.api_base_url }}" == *"openrouter.ai"* ]]; then
+            echo "OPENROUTER_API_KEY=${{ secrets.OPENROUTER_API_KEY }}" >> $GITHUB_ENV
+          elif [[ "${{ steps.provider.outputs.provider }}" = "bedrock" || "${{ github.event.inputs.api_base_url }}" == *"bedrock"*"api.aws"* ]]; then
+            echo "AWS_BEARER_TOKEN_BEDROCK=${{ secrets.AWS_BEARER_TOKEN_BEDROCK }}" >> $GITHUB_ENV
+          fi
+
           if [ "${{ steps.provider.outputs.provider }}" = "anthropic" ]; then
             echo "ANTHROPIC_API_KEY=${{ secrets.ANTHROPIC_API_KEY }}" >> $GITHUB_ENV
           elif [ "${{ steps.provider.outputs.provider }}" = "gemini" ]; then
@@ -336,13 +342,9 @@ jobs:
           elif [ "${{ steps.provider.outputs.provider }}" = "ollama" ]; then
             # For Ollama via OpenAI endpoint, set a dummy API key if needed
             echo "OPENAI_API_KEY=dummy" >> $GITHUB_ENV
-          elif [ "${{ steps.provider.outputs.provider }}" = "openai" || "${{ github.event.inputs.api_base_url }}" != "https://api.openai.com" ]; then
-            # Check if using OpenRouter, AWS Bedrock, or local llama.cpp based on the api_base_url
-            if [[ "${{ github.event.inputs.api_base_url }}" == *"openrouter.ai"* ]]; then
-              echo "OPENROUTER_API_KEY=${{ secrets.OPENROUTER_API_KEY }}" >> $GITHUB_ENV
-            elif [[ "${{ github.event.inputs.api_base_url }}" == *"bedrock"*"api.aws"* ]]; then
-              echo "AWS_BEARER_TOKEN_BEDROCK=${{ secrets.AWS_BEARER_TOKEN_BEDROCK }}" >> $GITHUB_ENV
-            elif [[ "${{ github.event.inputs.api_base_url }}" == *"hive.van-duck.ts.net"* ]]; then
+          elif [ "${{ steps.provider.outputs.provider }}" = "openai" ]; then
+            # Check if using local llama.cpp based on the api_base_url
+            if [[ "${{ github.event.inputs.api_base_url }}" != *"openai.com"* ]]; then
               echo "OPENAI_API_KEY=dummy" >> $GITHUB_ENV
             else
               echo "OPENAI_API_KEY=${{ secrets.OPENAI_API_KEY }}" >> $GITHUB_ENV
