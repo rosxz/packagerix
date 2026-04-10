@@ -315,6 +315,7 @@ def run_maintenance(maintenance_dir: str, output_dir: Optional[str] = None,
         update_fetcher(None, revision, version) # Update package src in the package.nix
     store_path = fetch_project_src() # Fetch and unpack project source to nix store
     if update_lock:
+        coordinator_message("Updating flake.lock.")
         update_lock_file()
         # upgrade_lock_file() # match closest nixpkgs release # Not doing this anymore
 

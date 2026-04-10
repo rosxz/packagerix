@@ -103,7 +103,7 @@ def mock_input (ask : str, reply: str):
 
 def run_terminal_ui(maintenance=None, output_dir=None, project_url=None, revision=None, fetcher=None,
                     csv_pname=None, csv_version=None, fetcher_content=None,
-                    target_version=None, update_lock=True, upgrade_lock=False):
+                    target_version=None, update_lock=False, upgrade_lock=False):
     """Run the terminal-based interface.
 
     Args:
@@ -294,9 +294,9 @@ def main():
     parser.add_argument(
         "--update-lock",
         type=bool,
-        default=True,
+        default=False,
         metavar="UPDATE_LOCK",
-        help="Whether to update the flake.lock file if present during maintenance mode. Requires --raw. Default: True"
+        help="Whether to update the flake.lock file if present during maintenance mode. Requires --raw. Default: False"
     )
 
     parser.add_argument(
