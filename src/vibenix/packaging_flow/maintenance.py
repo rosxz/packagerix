@@ -17,16 +17,20 @@ from vibenix import config
 
 
 def update_fetcher(project_url: Optional[str], revision: Optional[str], version: Optional[str]) -> str:
-    """Update the fetcher in package.nix to reflect project updates.
-    Runs nurl to get the fetcher for the provided version (default: latest rev) and replaces it in package.nix.
-    
-    Raises an error if the package uses a fetcher not supported by nurl.
-    """
+    """Update the fetcher in package.nix to reflect project updates (default: latest rev) and replaces it in package.nix."""
+    def get_clean_version_arg(input_str: str):
+        # commit hash (hexadecimal, 7-40 chars)
+        is_hash = bool(re.fullmatch(r'[0-9a-f]{7,40}', input_str, re.IGNORECASE))
+
+        return f"branch={input_str}" if is_hash else input_str
+
     def run_nix_update(project_url: Optional[str], revision: Optional[str]) -> str:
         """Run nix-update."""
         try:
+            version_arg = get_clean_version_arg(revision) if revision else None
+
             cmd = ['nix-update', 'default', '--flake'] + \
-                 (['--version='+revision] if revision else []) + \
+                 (['--version='+version_arg] if version_arg else []) + \
                  (['--url='+project_url] if project_url else [])
 
             coordinator_message(f"Running nix-update with command: {' '.join(cmd)}")
