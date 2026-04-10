@@ -25,10 +25,13 @@ def update_fetcher(project_url: Optional[str], revision: Optional[str], version:
     def run_nix_update(project_url: Optional[str], revision: Optional[str]) -> str:
         """Run nix-update."""
         try:
+            cmd = ['nix-update', 'default', '--flake'] + \
+                 (['--version='+revision] if revision else []) + \
+                 (['--url='+project_url] if project_url else [])
+
+            coordinator_message(f"Running nix-update with command: {' '.join(cmd)}")
             res = subprocess.run(
-                ['nix-update', 'default', '--flake'] + \
-                 (['--version='+version] if version else []) + \
-                 (['--url='+project_url] if project_url else []),
+                cmd,
                 cwd=config.flake_dir,
                 capture_output=True,
                 text=True,
@@ -46,10 +49,12 @@ def update_fetcher(project_url: Optional[str], revision: Optional[str], version:
     run_nix_update(project_url, revision) # This updates the fetcher in package.nix directly
     from vibenix.flake import update_flake
     package_contents = get_package_contents()
-    if version:
+    if version and revision:
         pattern = r'(version\s*=\s*")' + re.escape(revision) + r'(";)'
         replacement = rf'\g<1>{version}\g<2>'
         package_contents = re.sub(pattern, replacement, package_contents, count=1)
+        if package_contents == get_package_contents():
+            coordinator_message("Packaging did not change from substitution, likely failed.")
 
     update_flake(package_contents, commit_msg="init: nix-update")
 
