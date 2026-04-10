@@ -16,7 +16,7 @@ on:
       update_lock:
         description: 'Pass --update-lock (True/False) to maintenance runs'
         required: false
-        default: true
+        default: false
         type: boolean
       upgrade_lock:
         description: 'Pass --upgrade-lock (True/False) to maintenance runs'
@@ -104,7 +104,7 @@ jobs:
           echo "#### Workflow Inputs" >> $GITHUB_STEP_SUMMARY
           echo "- **Package IDs**: ${{ github.event.inputs.package_ids || '1-5 (default)' }}" >> $GITHUB_STEP_SUMMARY
           echo "- **Dataset**: research/${{ github.event.inputs.dataset || 'maintenance_02_02_2025.csv (default)' }}" >> $GITHUB_STEP_SUMMARY
-          echo "- **Update lock**: ${{ github.event.inputs.update_lock || 'true (default)' }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Update lock**: ${{ github.event.inputs.update_lock || 'false (default)' }}" >> $GITHUB_STEP_SUMMARY
           echo "- **Upgrade lock**: ${{ github.event.inputs.upgrade_lock || 'false (default)' }}" >> $GITHUB_STEP_SUMMARY
           echo "- **Model**: ${{ github.event.inputs.model || 'gemini/gemini-2.5-flash (default)' }}" >> $GITHUB_STEP_SUMMARY
           echo "- **Concurrent jobs**: ${{ github.event.inputs.concurrent_jobs || '1 (default)' }}" >> $GITHUB_STEP_SUMMARY
@@ -427,8 +427,6 @@ jobs:
         id: run-vibenix
         run: |
           set -o pipefail
-          UPDATE_FLAG="${{ github.event.inputs.update_lock }}"
-          UPGRADE_FLAG="${{ github.event.inputs.upgrade_lock }}"
 
           log_file="${{ matrix.project }}.log"
           echo "status=failed" >> $GITHUB_OUTPUT
@@ -440,15 +438,24 @@ jobs:
           echo "Pre-version: ${{ matrix.pre_version }}"
           echo "Target version (post): ${{ matrix.post_version }}"
 
-          nix develop .# -c python -m vibenix \
-            --raw \
-            --output-dir output \
-            --maintenance "${{ steps.prepare.outputs.package_dir }}" \
-            --revision "${{ matrix.post_src_ref }}" \
-            --target-version "${{ matrix.post_version }}" \
-            --update-lock "$UPDATE_FLAG" \
-            --upgrade-lock "$UPGRADE_FLAG" \
-            2>&1 | tee "$log_file"
+          CMD=(
+            nix develop .# -c python -m vibenix
+            --raw
+            --output-dir output
+            --maintenance "${{ steps.prepare.outputs.package_dir }}"
+            --revision "${{ matrix.post_src_ref }}"
+            --target-version "${{ matrix.post_version }}"
+          )
+
+          if [[ "${{ github.event.inputs.update_lock }}" == "true" ]]; then
+            CMD+=(--update-lock True)
+          fi
+
+          if [[ "${{ github.event.inputs.upgrade_lock }}" == "true" ]]; then
+            CMD+=(--upgrade-lock True)
+          fi
+
+          "${CMD[@]}" 2>&1 | tee "$log_file"
           exit_code=$?
 
           # Check if the command succeeded AND produced a package.nix file
