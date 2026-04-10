@@ -279,13 +279,13 @@ def get_model_config(use_cached: bool=True, remove_model_prefix: bool=True) -> d
     saved_config = load_saved_configuration()
     
     if saved_config:
-        provider_name, model, ollama_host, openai_api_base = saved_config
+        provider_name, model_name, ollama_host, openai_api_base = saved_config
         
         # Remove provider prefix from model if present
-        if "/" in model and remove_model_prefix:
-            model_name = model.split("/", 1)[1]
-        else:
-            model_name = model
+        #if "/" in model and remove_model_prefix:
+        #    model_name = model.split("/", 1)[1]
+        #else:
+        #    model_name = model
         
         # Determine base URL
         if openai_api_base:
