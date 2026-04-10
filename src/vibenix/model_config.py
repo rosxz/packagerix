@@ -36,14 +36,6 @@ _BEDROCK_TOOL_FIELD_PATH_PATTERN = re.compile(
 _ENDOFTEXT_MARKER = "<|endoftext|>"
 
 
-def _safe_json_dumps(value: Any) -> str:
-    """Safely serialize arbitrary values for debug logging."""
-    try:
-        return json.dumps(value, ensure_ascii=False, default=str)
-    except Exception:
-        return repr(value)
-
-
 def _extract_bedrock_tool_uses(messages: list[dict]) -> list[dict[str, Any]]:
     """Extract toolUse entries from Bedrock converse messages for diagnostics."""
     tool_uses: list[dict[str, Any]] = []
@@ -162,7 +154,7 @@ def _normalize_bedrock_tool_names_in_messages(messages: list[dict]) -> list[dict
 
 
 def _log_bedrock_retry_diagnostics(error: Exception, params: dict[str, Any], retry_number: int, max_retries: int) -> None:
-    """Log details before retrying a failed Bedrock converse call."""
+    """Log concise diagnostics before retrying a failed Bedrock converse call."""
     messages = params.get("messages", [])
     parsed_messages = messages if isinstance(messages, list) else []
     tool_uses = _extract_bedrock_tool_uses(parsed_messages)
@@ -182,74 +174,22 @@ def _log_bedrock_retry_diagnostics(error: Exception, params: dict[str, Any], ret
                 }
             )
 
-    all_tool_names = [
-        {
-            "message_index": entry["message_index"],
-            "content_index": entry["content_index"],
-            "tool_name": entry["tool_use"].get("name"),
-            "tool_name_repr": repr(entry["tool_use"].get("name")),
-        }
-        for entry in tool_uses
-    ]
-
-    all_tool_inputs = [
-        {
-            "message_index": entry["message_index"],
-            "content_index": entry["content_index"],
-            "tool_input": entry["tool_use"].get("input"),
-            "tool_input_repr": repr(entry["tool_use"].get("input")),
-            "tool_input_type": type(entry["tool_use"].get("input")).__name__,
-        }
-        for entry in tool_uses
-    ]
-
-    logger.warning(f"Bedrock converse failed before retry {retry_number}/{max_retries}: {str(error)}")
+    error_summary = str(error).replace("\n", " ")[:220]
+    logger.warning(
+        f"Bedrock retry {retry_number}/{max_retries} after ValidationException: {error_summary}"
+    )
 
     if failing_tool_from_error:
-        logger.warning(
-            f"Bedrock error path points to toolUse.{failing_tool_from_error['field_name']}: "
-            f"{failing_tool_from_error}"
-        )
-
-    if all_tool_names:
-        logger.warning(f"All outgoing Bedrock toolUse.name entries: {all_tool_names}")
-
-    if all_tool_inputs:
-        logger.warning(f"All outgoing Bedrock toolUse.input entries: {all_tool_inputs}")
+        field_name = failing_tool_from_error["field_name"]
+        field_type = failing_tool_from_error["field_value_type"]
+        logger.warning(f"Bedrock validation target: toolUse.{field_name} (type={field_type})")
 
     if invalid_tool_names:
-        logger.warning(f"Detected invalid Bedrock toolUse.name entries: {invalid_tool_names}")
+        logger.warning(f"Bedrock detected {len(invalid_tool_names)} invalid toolUse.name value(s)")
     elif tool_uses:
-        logger.warning(
-            f"Found Bedrock toolUse entries but all names matched pattern [a-zA-Z0-9_-]+: "
-            f"{[repr(entry['tool_use'].get('name')) for entry in tool_uses]}"
-        )
+        logger.warning(f"Bedrock request contains {len(tool_uses)} toolUse block(s); names look valid")
     else:
-        logger.warning("No toolUse entries found in Bedrock request messages")
-
-    if failing_tool_from_error:
-        message_index = failing_tool_from_error["message_index"]
-        content_index = failing_tool_from_error["content_index"]
-
-        previous_message = parsed_messages[message_index - 1] if 0 <= message_index - 1 < len(parsed_messages) else None
-        failing_message = parsed_messages[message_index] if 0 <= message_index < len(parsed_messages) else None
-        failing_content_block = None
-
-        if isinstance(failing_message, dict):
-            failing_content = failing_message.get("content")
-            if isinstance(failing_content, list) and 0 <= content_index < len(failing_content):
-                failing_content_block = failing_content[content_index]
-
-        logger.warning(
-            f"Bedrock previous message (index={message_index - 1}): {_safe_json_dumps(previous_message)}"
-        )
-        logger.warning(
-            f"Bedrock failing message (index={message_index}): {_safe_json_dumps(failing_message)}"
-        )
-        logger.warning(
-            f"Bedrock failing content block (message_index={message_index}, content_index={content_index}): "
-            f"{_safe_json_dumps(failing_content_block)}"
-        )
+        logger.warning("Bedrock request contains no toolUse blocks")
 
 
 class RetryingBedrockClient:
@@ -269,7 +209,9 @@ class RetryingBedrockClient:
         if isinstance(messages, list):
             rewrites = _normalize_bedrock_tool_names_in_messages(messages)
             if rewrites:
-                logger.warning(f"Normalized Bedrock toolUse.name values before request: {rewrites}")
+                logger.warning(
+                    f"Applied Bedrock toolUse.name normalization to {len(rewrites)} entr{'y' if len(rewrites) == 1 else 'ies'} before request"
+                )
 
         for attempt in range(1, total_attempts + 1):
             try:
