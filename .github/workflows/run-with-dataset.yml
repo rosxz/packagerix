@@ -262,7 +262,7 @@ jobs:
           # Determine provider from model input
           model="${{ github.event.inputs.model || 'gemini/gemini-2.5-flash' }}"
           if [[ "$model" == ollama/* ]]; then
-            provider="ollama"
+            provider="openai"
           elif [[ "$model" == openai/* || "$model" == gpt-* ]]; then
             provider="openai"
           elif [[ "$model" == anthropic/* || "$model" == claude-* ]]; then
@@ -303,16 +303,8 @@ jobs:
           # Convert ollama/modelname to openai/modelname (no-op for other providers)
           model="${{ github.event.inputs.model || 'gemini/gemini-2.5-flash' }}"
           model_converted=$(echo "$model" | sed 's|^ollama/|openai/|')
-          if [[ "$model_converted" =~ .*/.*/.* ]]; then
-            # Keep everything starting from the second segment
-            model_converted=$(echo "$model_converted" | cut -d'/' -f2-)
-          fi
-          
-          # Use openai provider if ollama was selected
-          provider="${{ steps.provider.outputs.provider }}"
-          if [ "$provider" = "ollama" ]; then
-            provider="openai"
-          fi
+          # Gets everything after the first '/'
+          model_converted=$(echo "$model_converted" | cut -d'/' -f2-)
           
           # Build config JSON dynamically
           config_json='{"provider": "'$provider'", "model": "'$model_converted'", "backend": "litellm"'
