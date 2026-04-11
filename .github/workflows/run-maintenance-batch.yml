@@ -445,6 +445,7 @@ jobs:
             --maintenance "${{ steps.prepare.outputs.package_dir }}"
             --revision "${{ matrix.post_src_ref }}"
             --target-version "${{ matrix.post_version }}"
+            --nixpkgs-commit "${{ matrix.parent_commit }}"
           )
 
           if [[ "${{ github.event.inputs.update_lock }}" == "true" ]]; then
