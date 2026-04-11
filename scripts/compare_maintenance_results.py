@@ -601,7 +601,10 @@ def build_entries(
             continue
 
         job_dir = job_dirs[job_id]
-        generated_package_path = find_generated_package(job_dir)
+        try:
+            generated_package_path = find_generated_package(job_dir)
+        except FileNotFoundError:
+            continue
         entries.append(
             JobEntry(
                 job_id=job_id,
@@ -768,7 +771,10 @@ def main() -> int:
             compare_diff_patches=args.compare_diff_patches,
             position=(idx, len(entries)),
         )
-        print(report)
+        try:
+            print(report)
+        except BrokenPipeError:
+            return 0
     return 0
 
 
