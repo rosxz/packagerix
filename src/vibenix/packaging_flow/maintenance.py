@@ -49,7 +49,7 @@ def update_fetcher(project_url: Optional[str], revision: Optional[str], version:
             version_arg, is_hash = get_clean_version_arg(revision) if revision else (None, False)
             if is_hash:
                 # remove any existing rev,tag,branch specifiers from the src attribute
-                from flake import get_attr_pos, get_package_path
+                from vibenix.flake import get_attr_pos, get_package_path
                 src_pos = get_attr_pos("src")
                 seed_nix_rev(get_package_path(), src_pos)
 
