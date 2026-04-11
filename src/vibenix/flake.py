@@ -141,3 +141,20 @@ def get_current_system() -> str:
     )
     current_system = result.stdout.strip()
     return current_system
+
+def get_attr_pos(attr: str) -> Optional[int]:
+    """Get the line number of an attribute in package.nix."""
+    result = subprocess.run(
+        ["nix", "eval", "--raw", "--impure", "--apply", f'pkg: (builtins.unsafeGetAttrPos "{attr}" pkg).line'],
+        cwd=config.flake_dir,
+        capture_output=True,
+        text=True,
+        check=True,
+    )
+    if result.returncode != 0:
+        raise RuntimeError(f"get_attr_pos: Failed to get attribute position: {result.stderr}")
+    pos_str = result.stdout.strip()
+    try:
+        return int(pos_str)
+    except ValueError:
+        raise RuntimeError(f"get_attr_pos: Failed to parse attribute position: {pos_str}")
