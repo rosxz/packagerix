@@ -16,7 +16,8 @@ from vibenix.packaging_flow.refinement import refine_package
 from vibenix import config
 
 
-def update_fetcher(project_url: Optional[str], revision: Optional[str], version: Optional[str]) -> str:
+def update_fetcher(project_url: Optional[str], revision: Optional[str],
+                   version: Optional[str], update_lock: Optional[bool] = False) -> str:
     """Update the fetcher in package.nix to reflect project updates (default: latest rev) and replaces it in package.nix."""
     def get_clean_version_arg(input_str: str):
         """Get the version argument to use with nix-update."""
@@ -52,6 +53,11 @@ def update_fetcher(project_url: Optional[str], revision: Optional[str], version:
                 from vibenix.flake import get_attr_pos, get_package_path
                 src_pos = get_attr_pos("src")
                 seed_nix_rev(get_package_path(), src_pos)
+            if not update_lock:
+                # nix-update modifies the flake.lock (and .nix) by default
+                from vibenix.flake import stash_flake_lock
+                stash_flake_lock()
+                coordinator_message("Stashed flake.lock file to prevent nix-update from modifying it.")
 
             cmd = ['nix-update', 'default', '--flake'] + \
                  (['--version='+version_arg] if version_arg else []) + \
@@ -68,6 +74,11 @@ def update_fetcher(project_url: Optional[str], revision: Optional[str], version:
             if res.returncode != 0:
                 coordinator_error(f"nix-update failed: {res.stderr}")
                 raise RuntimeError(f"nix-update failed: {res.stderr}")
+
+            if not update_lock:
+                from vibenix.flake import unstash_flake_lock
+                coordinator_message("Restoring flake.lock file after nix-update.")
+                unstash_flake_lock()
         except subprocess.CalledProcessError as e:
             coordinator_error(f"nix-update execution error: {e.stderr if hasattr(e, 'stderr') else str(e)}")
             raise RuntimeError(f"nix-update execution error: {e.stderr if hasattr(e, 'stderr') else str(e)}")
@@ -345,7 +356,7 @@ def run_maintenance(maintenance_dir: str, output_dir: Optional[str] = None,
     coordinator_message(f"Working on temporary flake at {config.flake_dir}")
 
     if revision:
-        update_fetcher(None, revision, version) # Update package src in the package.nix
+        update_fetcher(None, revision, version, update_lock=update_lock) # Update package src in the package.nix
     store_path = fetch_project_src() # Fetch and unpack project source to nix store
     if update_lock:
         coordinator_message("Updating flake.lock.")
