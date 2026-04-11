@@ -145,7 +145,7 @@ def get_current_system() -> str:
 def get_attr_pos(attr: str) -> Optional[int]:
     """Get the line number of an attribute in package.nix."""
     result = subprocess.run(
-        ["nix", "eval", "--raw", "--impure", "--apply", f'pkg: (builtins.unsafeGetAttrPos "{attr}" pkg).line'],
+        ["nix", "eval", "--impure", "--apply", f'pkg: (builtins.unsafeGetAttrPos "{attr}" pkg).line'],
         cwd=config.flake_dir,
         capture_output=True,
         text=True,
@@ -158,3 +158,15 @@ def get_attr_pos(attr: str) -> Optional[int]:
         return int(pos_str)
     except ValueError:
         raise RuntimeError(f"get_attr_pos: Failed to parse attribute position: {pos_str}")
+
+def stash_flake_lock() -> None:
+    """Stash the flake.lock file to prevent it from being modified during package updates."""
+    lock_path = config.flake_dir / "flake.lock"
+    if lock_path.exists():
+        lock_path.rename(config.flake_dir / "flake.lock.stash")
+
+def unstash_flake_lock() -> None:
+    """Unstash the flake.lock file after package updates."""
+    stashed_lock_path = config.flake_dir / "flake.lock.stash"
+    if stashed_lock_path.exists():
+        stashed_lock_path.rename(config.flake_dir / "flake.lock")
