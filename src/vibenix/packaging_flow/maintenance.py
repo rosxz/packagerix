@@ -19,15 +19,39 @@ from vibenix import config
 def update_fetcher(project_url: Optional[str], revision: Optional[str], version: Optional[str]) -> str:
     """Update the fetcher in package.nix to reflect project updates (default: latest rev) and replaces it in package.nix."""
     def get_clean_version_arg(input_str: str):
+        """Get the version argument to use with nix-update."""
         # commit hash (hexadecimal, 7-40 chars)
         is_hash = bool(re.fullmatch(r'[0-9a-f]{7,40}', input_str, re.IGNORECASE))
 
-        return f"branch={input_str}" if is_hash else input_str
+        version_arg = f"branch={input_str}" if is_hash else input_str
+        return version_arg, is_hash
+
+    def seed_nix_rev(file_path, line_num):
+        """Clean existing tags from src attribute to ensure nix-update works properly with commit hashes specifically."""
+        with open(file_path, 'r+') as f:
+            lines = f.readlines()
+            depth, started = 0, False
+            
+            for i in range(line_num - 1, len(lines)):
+                depth += lines[i].count('{') - lines[i].count('}')
+                if '{' in lines[i]: started = True
+                
+                # \1 keeps the captured whitespace from the beginning of the line
+                lines[i] = re.sub(r'^(\s*)(?:rev|tag|branch)\s*=.*', r'\1rev = "dummy";', lines[i])
+                
+                if started and depth <= 0: break 
+                
+            f.seek(0); f.truncate(); f.writelines(lines)
 
     def run_nix_update(project_url: Optional[str], revision: Optional[str]) -> str:
         """Run nix-update."""
         try:
-            version_arg = get_clean_version_arg(revision) if revision else None
+            version_arg, is_hash = get_clean_version_arg(revision) if revision else (None, False)
+            if is_hash:
+                # remove any existing rev,tag,branch specifiers from the src attribute
+                from flake import get_attr_pos, get_package_path
+                src_pos = get_attr_pos("src")
+                seed_nix_rev(get_package_path(), src_pos)
 
             cmd = ['nix-update', 'default', '--flake'] + \
                  (['--version='+version_arg] if version_arg else []) + \
