@@ -411,7 +411,7 @@ def run_maintenance(maintenance_dir: str, output_dir: Optional[str] = None,
     if candidate.result.success:
         coordinator_message("Build succeeded!")
         if get_settings_manager().get_setting_enabled("refinement.enabled"):
-            candidate = refine_package(candidate, summary, output_dir)
+            candidate = refine_package(candidate, summary, output_dir, maintenance_mode=True)
             ccl_logger.write_kv("refined_package", candidate.code)
 
             refinement_usage = get_model_prompt_manager().get_session_usage() - packaging_usage
