@@ -10,7 +10,7 @@ from vibenix.ccl_log import init_logger, get_logger, close_logger, enum_str
 from vibenix.git_info import get_git_info
 from vibenix.ui.conversation import coordinator_message, coordinator_error, coordinator_progress
 from vibenix.ui.conversation_templated import get_model_prompt_manager
-from vibenix.flake import init_flake, get_package_contents, get_current_system
+from vibenix.flake import init_flake, get_package_contents, get_current_system, get_package_path
 from vibenix.packaging_flow.model_prompts import analyze_package_failure, classify_packaging_failure, PackagingFailure
 from vibenix.packaging_flow.refinement import refine_package
 from vibenix import config
@@ -50,7 +50,7 @@ def update_fetcher(project_url: Optional[str], revision: Optional[str],
             version_arg, is_hash = get_clean_version_arg(revision) if revision else (None, False)
             if is_hash:
                 # remove any existing rev,tag,branch specifiers from the src attribute
-                from vibenix.flake import get_attr_pos, get_package_path
+                from vibenix.flake import get_attr_pos
                 src_pos = get_attr_pos("src")
                 seed_nix_rev(get_package_path(), src_pos)
             if not update_lock:
@@ -208,36 +208,18 @@ in with pkgs; stdenv.mkDerivation {{
 
 def save_package_output(package_directory: Path, output_dir: str) -> None:
     """Save the fixed package.nix and accompanying files to the output directory.
-    
-    Only copies essential files: package.nix, flake.nix, flake.lock, and run.ccl.
-    Excludes build artifacts like result symlinks, vm-task directory, and packages.nix.
+       Only copies essential files and excludes build artifacts.
     """
-    output_path = Path(output_dir).resolve()
-    output_path.mkdir(parents=True, exist_ok=True)
-
-    # List of files/patterns to exclude from output
-    exclude_items = {'result', 'vm-task', 'packages.nix', '.git', '.gitignore'}
-
-    def ignore_patterns(dir, contents):
-        """Ignore build artifacts and git files."""
-        return [c for c in contents if c in exclude_items or c.startswith(".git")]
-
-    # Copy files from package_directory to output_path
     import shutil
-    for item in package_directory.iterdir():
-        # Skip excluded items
-        if item.name in exclude_items or item.name.startswith(".git"):
-            continue
-        # Skip symlinks (like result)
-        if item.is_symlink():
-            continue
-            
-        dest = output_path / item.name
-        if item.is_dir():
-            shutil.copytree(item, dest, dirs_exist_ok=True, ignore=ignore_patterns)
-        else:
-            shutil.copy2(item, dest)
+    output_path = Path(output_dir).resolve()
+    exclude = {'result', 'vm-task', 'packages.nix', '.git', '.gitignore'}
 
+    def ignore(path, names):
+        # Ignore if name is in set or starts with .git, or if the actual path is a symlink
+        return [n for n in names if n in exclude or n.startswith(".git") 
+                or (Path(path) / n).is_symlink()]
+
+    shutil.copytree(package_directory, output_path, dirs_exist_ok=True, ignore=ignore)
     coordinator_message(f"Saved updated package.nix to: {output_path / 'package.nix'}")
 
 def create_nixpkgs_function_calls(initial_path: str):
