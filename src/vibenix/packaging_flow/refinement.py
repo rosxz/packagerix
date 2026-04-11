@@ -76,7 +76,7 @@ def refine_package(curr: Solution, project_page: str, output_dir=None, maintenan
         chat_history = [] # List to keep track of (user_prompt -> final model response) over the course of refinement
 
     iteration = 0
-    max_loops = 3 if not maintenance_mode else 1
+    max_loops = 3 if not maintenance_mode else 2
     while iteration < max_loops: # TODO make configurable
         #get_logger().log_debug(f"Chat history at iteration {iteration} start: {len(chat_history) if chat_history is not None else 'N/A'}")
         ccl_logger.log_iteration_start(iteration)
