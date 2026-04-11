@@ -153,7 +153,7 @@ def fix_build_error(
 
 
 @run_formatter_after
-@ask_model_prompt('error_fixing/fix_build_error.md')
+@ask_model_prompt('error_fixing/mnt_fix_build_error.md')
 def fix_build_error_maintenance(
     code: str,
     error: str,
