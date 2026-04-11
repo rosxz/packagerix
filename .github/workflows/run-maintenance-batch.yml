@@ -286,6 +286,7 @@ jobs:
         run: |
           mkdir -p ~/.vibenix
           
+          provider="${{ steps.provider.outputs.provider }}"
           # Convert ollama/modelname to openai/modelname (no-op for other providers)
           model="${{ github.event.inputs.model || 'gemini/gemini-2.5-flash' }}"
           model_converted=$(echo "$model" | sed 's|^ollama/|openai/|')
