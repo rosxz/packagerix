@@ -50,7 +50,8 @@ def update_fetcher(project_url: Optional[str], revision: Optional[str],
 
         return replaced
 
-    def run_nix_update(project_url: Optional[str], revision: Optional[str], version: Optional[str]) -> str:
+    def run_nix_update(project_url: Optional[str], revision: Optional[str], version: Optional[str],
+                       force_version_only: bool = False) -> str:
         """Run nix-update."""
         def execute_nix_update(version_arg: Optional[str]) -> subprocess.CompletedProcess[str]:
             cmd = ['nix-update', 'default', '--flake', '--src-only'] + \
@@ -68,7 +69,7 @@ def update_fetcher(project_url: Optional[str], revision: Optional[str],
 
         try:
             is_hash = bool(re.fullmatch(r'[0-9a-f]{7,40}', revision, re.IGNORECASE)) if revision else False
-            if is_hash:
+            if is_hash and not force_version_only:
                 # remove any existing rev,tag,branch specifiers from the src attribute
                 # and add rev = "dummy" to be replaced by nix-update
                 from vibenix.flake import get_attr_pos
@@ -83,14 +84,10 @@ def update_fetcher(project_url: Optional[str], revision: Optional[str],
                     force_rev_key=True
                 )
 
-            if not update_lock:
-                # nix-update modifies the flake.lock (and .nix) by default
-                from vibenix.flake import stash_flake_lock
-                stash_flake_lock()
-                coordinator_message("Stashed flake.lock file to prevent nix-update from modifying it.")
-
             version_args: list[Optional[str]] = []
-            if not is_hash:
+            if force_version_only:
+                version_args.append(version)
+            elif not is_hash:
                 if version:
                     version_args.append(f"{version}")
                 if revision:
@@ -102,6 +99,11 @@ def update_fetcher(project_url: Optional[str], revision: Optional[str],
 
             if not version_args:
                 version_args.append(None)
+
+            # nix-update modifies the flake.lock (and .nix) by default
+            from vibenix.flake import stash_flake_lock
+            stash_flake_lock()
+            coordinator_message("Stashed flake.lock file to prevent nix-update from modifying it.")
 
             last_error: Optional[subprocess.CalledProcessError] = None
             for version_arg in version_args:
@@ -124,19 +126,33 @@ def update_fetcher(project_url: Optional[str], revision: Optional[str],
             coordinator_error(f"nix-update execution error: {e.stderr if hasattr(e, 'stderr') else str(e)}")
             raise RuntimeError(f"nix-update execution error: {e.stderr if hasattr(e, 'stderr') else str(e)}")
         finally:
-            if not update_lock:
-                from vibenix.flake import unstash_flake_lock
-                coordinator_message("Restoring flake.lock file after nix-update.")
-                unstash_flake_lock()
+            from vibenix.flake import unstash_flake_lock
+            coordinator_message("Restoring flake.lock file after nix-update.")
+            unstash_flake_lock()
         return res.stdout.strip()
 
     coordinator_progress("Updating fetcher in package.nix")
-    run_nix_update(project_url, revision, version) # This updates the fetcher in package.nix directly
+    try:
+        run_nix_update(project_url, revision, version) # This updates the fetcher in package.nix directly
+    except RuntimeError:
+        if revision:
+            coordinator_message("Initial nix-update failed. Rewriting src refs to revision and retrying with version.")
+            from vibenix.flake import get_attr_pos
+            src_pos = get_attr_pos("src")
+            if src_pos is None:
+                raise RuntimeError("Could not locate src attribute in package.nix")
+            rewrite_src_ref_attributes(
+                Path(get_package_path()),
+                src_pos,
+                revision,
+                ("rev", "tag", "branch", "release")
+            )
+            run_nix_update(project_url, revision, version, force_version_only=True)
+        else:
+            raise
 
     from vibenix.flake import update_flake
     package_contents = get_package_contents()
-    # TODO if nothing worked, try replacing version and rev|tag|branch|release directly, set hash to lib.fakeHash
-    # and replace hash "manually"
     # TODO unused project_url currently 
 
     update_flake(package_contents, commit_msg="init: nix-update")
