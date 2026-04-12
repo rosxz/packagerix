@@ -19,83 +19,128 @@ from vibenix import config
 def update_fetcher(project_url: Optional[str], revision: Optional[str],
                    version: Optional[str], update_lock: Optional[bool] = False) -> str:
     """Update the fetcher in package.nix to reflect project updates (default: latest rev) and replaces it in package.nix."""
-    def get_clean_version_arg(input_str: str):
-        """Get the version argument to use with nix-update."""
-        # commit hash (hexadecimal, 7-40 chars)
-        is_hash = bool(re.fullmatch(r'[0-9a-f]{7,40}', input_str, re.IGNORECASE))
-
-        version_arg = f"branch={input_str}" if is_hash else input_str
-        return version_arg, is_hash
-
-    def seed_nix_rev(file_path, line_num):
-        """Clean existing tags from src attribute to ensure nix-update works properly with commit hashes specifically."""
+    def rewrite_src_ref_attributes(file_path: Path, line_num: int, replacement: str,
+                                   keys: tuple[str, ...], force_rev_key: bool = False) -> bool:
+        """Rewrite matching src reference attributes and return whether any replacement was made."""
         with open(file_path, 'r+') as f:
             lines = f.readlines()
             depth, started = 0, False
-            
+            replaced = False
+            key_pattern = "|".join(re.escape(k) for k in keys)
+
             for i in range(line_num - 1, len(lines)):
                 depth += lines[i].count('{') - lines[i].count('}')
-                if '{' in lines[i]: started = True
-                
-                # \1 keeps the captured whitespace from the beginning of the line
-                lines[i] = re.sub(r'^(\s*)(?:rev|tag|branch)\s*=.*', r'\1rev = "dummy";', lines[i])
-                
-                if started and depth <= 0: break 
-                
-            f.seek(0); f.truncate(); f.writelines(lines)
+                if '{' in lines[i]:
+                    started = True
 
-    def run_nix_update(project_url: Optional[str], revision: Optional[str]) -> str:
+                match = re.match(rf'^(\s*)({key_pattern})\s*=.*', lines[i])
+                if match:
+                    indent, key = match.groups()
+                    target_key = "rev" if force_rev_key else key
+                    lines[i] = f'{indent}{target_key} = "{replacement}";\n'
+                    replaced = True
+
+                if started and depth <= 0:
+                    break
+
+            if replaced:
+                f.seek(0)
+                f.truncate()
+                f.writelines(lines)
+
+        return replaced
+
+    def run_nix_update(project_url: Optional[str], revision: Optional[str], version: Optional[str]) -> str:
         """Run nix-update."""
-        try:
-            version_arg, is_hash = get_clean_version_arg(revision) if revision else (None, False)
-            if is_hash:
-                # remove any existing rev,tag,branch specifiers from the src attribute
-                from vibenix.flake import get_attr_pos
-                src_pos = get_attr_pos("src")
-                seed_nix_rev(get_package_path(), src_pos)
-            if not update_lock:
-                # nix-update modifies the flake.lock (and .nix) by default
-                from vibenix.flake import stash_flake_lock
-                stash_flake_lock()
-                coordinator_message("Stashed flake.lock file to prevent nix-update from modifying it.")
-
-            cmd = ['nix-update', 'default', '--flake'] + \
-                 (['--version='+version_arg] if version_arg else []) + \
-                 (['--url='+project_url] if project_url else [])
+        def execute_nix_update(version_arg: Optional[str]) -> subprocess.CompletedProcess[str]:
+            cmd = ['nix-update', 'default', '--flake', '--src-only'] + \
+                ([f'--version={version_arg}'] if version_arg else []) + \
+                ([f'--url={project_url}'] if project_url else [])
 
             coordinator_message(f"Running nix-update with command: {' '.join(cmd)}")
-            res = subprocess.run(
+            return subprocess.run(
                 cmd,
                 cwd=config.flake_dir,
                 capture_output=True,
                 text=True,
                 check=True
             )
+
+        try:
+            is_hash = bool(re.fullmatch(r'[0-9a-f]{7,40}', revision, re.IGNORECASE)) if revision else False
+            if is_hash:
+                # remove any existing rev,tag,branch specifiers from the src attribute
+                # and add rev = "dummy" to be replaced by nix-update
+                from vibenix.flake import get_attr_pos
+                src_pos = get_attr_pos("src")
+                if src_pos is None:
+                    raise RuntimeError("Could not locate src attribute in package.nix")
+                rewrite_src_ref_attributes(
+                    Path(get_package_path()),
+                    src_pos,
+                    "dummy",
+                    ("rev", "tag", "branch", "release"),
+                    force_rev_key=True
+                )
+
+            if not update_lock:
+                # nix-update modifies the flake.lock (and .nix) by default
+                from vibenix.flake import stash_flake_lock
+                stash_flake_lock()
+                coordinator_message("Stashed flake.lock file to prevent nix-update from modifying it.")
+
+            version_args: list[Optional[str]] = []
+            if not is_hash:
+                if version:
+                    version_args.append(f"{version}")
+                if revision:
+                    fallback_version_arg = f"{revision}"
+                    if fallback_version_arg not in version_args:
+                        version_args.append(fallback_version_arg)
+            elif revision: # commit hash
+                version_args.append(f"branch={revision}")
+
+            if not version_args:
+                version_args.append(None)
+
+            last_error: Optional[subprocess.CalledProcessError] = None
+            for version_arg in version_args:
+                try:
+                    res = execute_nix_update(version_arg)
+                    break
+                except subprocess.CalledProcessError as e:
+                    last_error = e
+                    error_details = e.stderr if hasattr(e, 'stderr') else str(e)
+                    coordinator_message(f"nix-update attempt failed with version arg {version_arg}: {error_details}")
+            else:
+                if last_error:
+                    raise last_error
+                raise RuntimeError("nix-update failed without an explicit subprocess error.")
+
             if res.returncode != 0:
                 coordinator_error(f"nix-update failed: {res.stderr}")
                 raise RuntimeError(f"nix-update failed: {res.stderr}")
-
+        except subprocess.CalledProcessError as e:
+            coordinator_error(f"nix-update execution error: {e.stderr if hasattr(e, 'stderr') else str(e)}")
+            raise RuntimeError(f"nix-update execution error: {e.stderr if hasattr(e, 'stderr') else str(e)}")
+        finally:
             if not update_lock:
                 from vibenix.flake import unstash_flake_lock
                 coordinator_message("Restoring flake.lock file after nix-update.")
                 unstash_flake_lock()
-        except subprocess.CalledProcessError as e:
-            coordinator_error(f"nix-update execution error: {e.stderr if hasattr(e, 'stderr') else str(e)}")
-            raise RuntimeError(f"nix-update execution error: {e.stderr if hasattr(e, 'stderr') else str(e)}")
         return res.stdout.strip()
 
     coordinator_progress("Updating fetcher in package.nix")
-    run_nix_update(project_url, revision) # This updates the fetcher in package.nix directly
+    run_nix_update(project_url, revision, version) # This updates the fetcher in package.nix directly
+
     from vibenix.flake import update_flake
     package_contents = get_package_contents()
-    if version and revision:
-        pattern = r'(version\s*=\s*")' + re.escape(revision) + r'(";)'
-        replacement = rf'\g<1>{version}\g<2>'
-        package_contents = re.sub(pattern, replacement, package_contents, count=1)
-        if package_contents == get_package_contents():
-            coordinator_message("Packaging did not change from substitution, likely failed.")
+    # TODO if nothing worked, try replacing version and rev|tag|branch|release directly, set hash to lib.fakeHash
+    # and replace hash "manually"
+    # TODO unused project_url currently 
 
     update_flake(package_contents, commit_msg="init: nix-update")
+    return package_contents
 
 
 def update_lock_file() -> None:
