@@ -289,16 +289,16 @@ def _log_model_failure(messages, exception):
         if not messages:
             return
 
-        logger.error("Captured model messages for this run (may include multiple retries):")
+        #logger.error("Captured model messages for this run (may include multiple retries):")
 
-        for idx, msg in enumerate(messages):
-            content = _extract_message_content(msg)
-            if content is not None:
-                logger.error("  Message %d content: %s", idx, content[:2000])
-            else:
-                logger.error("  Message %d (repr): %r", idx, msg)
+        #for idx, msg in enumerate(messages):
+        #    content = _extract_message_content(msg)
+        #    if content is not None:
+        #        logger.error("  Message %d content: %s", idx, content[:2000])
+        #    else:
+        #        logger.error("  Message %d (repr): %r", idx, msg)
 
-        _log_internal_retry_responses(messages, level="error", log_when_none=True)
+        #_log_internal_retry_responses(messages, level="error", log_when_none=True)
     except Exception as log_exc:
         # Never let logging failures interfere with the main error path
         logger.warning("Failed to log model failure details: %s", log_exc)
