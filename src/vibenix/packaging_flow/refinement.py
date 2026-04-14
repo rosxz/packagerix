@@ -21,21 +21,13 @@ def get_tree_output() -> str:
     from vibenix.flake import get_package_path
     import subprocess
     out_path = config.solution_stack[-1].out_path
-    cmd = ["tree", "-n", out_path]
+    cmd = ["tree", "-L", "3", "-n", out_path] # 3 levels deep to avoid too much output
     result = subprocess.run(cmd, capture_output=True, text=True)
     if result.returncode != 0:
-        return ""
-    return result.stdout[len(out_path)+1:]  # Exclude the output path itself
-
-def get_tree_output() -> str:
-    from vibenix.flake import get_package_path
-    import subprocess
-    out_path = config.solution_stack[-1].out_path
-    cmd = ["tree", "-n", out_path]
-    result = subprocess.run(cmd, capture_output=True, text=True)
-    if result.returncode != 0:
-        return ""
-    return result.stdout[len(out_path)+1:]  # Exclude the output path itself
+        raise RuntimeError(f"Failed to get tree output: {result.stderr}")
+    output = result.stdout[len(out_path)+1:]  # Exclude the output path itself
+    output_lines = output.splitlines()[:256] # Limit to first 256 lines
+    return "\n".join(output_lines)
 
 def get_linter_feedback() -> list[str]:
     from vibenix.flake import get_package_path
