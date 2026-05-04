@@ -412,25 +412,17 @@ jobs:
           nixpkgs_commit="${{ matrix.post_nixpkgs_base }}"
           pkg_path="${{ matrix.package_path }}"
 
-          raw_base="https://raw.githubusercontent.com/NixOS/nixpkgs/$nixpkgs_commit"
-
-          candidates=("$pkg_path")
-          if [[ "$pkg_path" != *.nix ]]; then
-            candidates+=("$pkg_path/package.nix" "$pkg_path/default.nix")
-          fi
+          url="https://cdn.jsdelivr.net/gh/NixOS/nixpkgs@$nixpkgs_commit/$pkg_path"
+          echo "Attempting to fetch: $url"
 
           fetched=0
-          for p in "${candidates[@]}"; do
-            url="$raw_base/$p"
-            echo "Attempting to fetch: $url"
-            if curl -fsS "$url" -o maintenance-input/package.nix; then
-              echo "Fetched package file from $url"
-              fetched=1
-              break
-            else
-              echo "Not found: $url"
-            fi
-          done
+          if curl -fsS "$url" -o maintenance-input/package.nix; then
+            echo "Fetched package file from $url"
+            fetched=1
+            break
+          else
+            echo "Not found: $url"
+          fi
 
           if [ "$fetched" -ne 1 ]; then
             echo "ERROR: Could not fetch package file from nixpkgs at commit $nixpkgs_commit for path $pkg_path"
