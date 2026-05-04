@@ -407,16 +407,35 @@ jobs:
           }
           FLAKE_EOF
           
-          # Now override packaging file with our pre-extracted version (works with package.nix or default.nix)
-          pre_package_file="${{ matrix.dataset_dir }}/${{ matrix.pname }}.nix"
-          echo "Overriding packaging file from: $pre_package_file"
-          
-          if [ ! -f "$pre_package_file" ]; then
-            echo "ERROR: Pre-extracted package file not found: $pre_package_file"
+          # Fetch packaging file dynamically from nixpkgs at the target commit
+          # Try the recorded package path, and fall back to common file names
+          nixpkgs_commit="${{ matrix.post_nixpkgs_base }}"
+          pkg_path="${{ matrix.package_path }}"
+
+          raw_base="https://raw.githubusercontent.com/NixOS/nixpkgs/$nixpkgs_commit"
+
+          candidates=("$pkg_path")
+          if [[ "$pkg_path" != *.nix ]]; then
+            candidates+=("$pkg_path/package.nix" "$pkg_path/default.nix")
+          fi
+
+          fetched=0
+          for p in "${candidates[@]}"; do
+            url="$raw_base/$p"
+            echo "Attempting to fetch: $url"
+            if curl -fsS "$url" -o maintenance-input/package.nix; then
+              echo "Fetched package file from $url"
+              fetched=1
+              break
+            else
+              echo "Not found: $url"
+            fi
+          done
+
+          if [ "$fetched" -ne 1 ]; then
+            echo "ERROR: Could not fetch package file from nixpkgs at commit $nixpkgs_commit for path $pkg_path"
             exit 1
           fi
-          
-          cp "$pre_package_file" maintenance-input/package.nix
 
           echo "package_dir=maintenance-input" >> $GITHUB_OUTPUT
 
