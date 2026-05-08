@@ -31,7 +31,6 @@ class ModelPromptManager:
         self._session_tool_usage = {} # total across retries
         self._model = model
         self.current_prompt = None
-        #self.synced = False
     
     def get_session_cost(self):
         """Get the accumulated cost for this session."""
@@ -84,15 +83,6 @@ class ModelPromptManager:
     def get_current_prompt(self) -> Optional[str]:
         """Get the current prompt being used."""
         return self.current_prompt
-
-    #def get_synced(self) -> bool:
-    #    """Get whether the model is synced with the file."""
-    #    return self.synced
-
-    #def set_synced(self, synced: bool):
-    #    """Set whether the model is synced with the file."""
-    #    self.synced = synced
-    #####
 
     def ask_model_prompt(self, template_path: str):
         """Decorator for model interactions using prompt templates.
@@ -212,8 +202,6 @@ class ModelPromptManager:
                         from vibenix.flake import get_package_contents
                         
                         package_contents = get_package_contents()
-                        #get_logger().log_debug(f"Chat history before append length: {len(chat_history)}")
-                        #get_logger().log_debug(f"Appending to chat history: Prompt({rendered_prompt[:20]}), RetType({return_type}), PkgCont({package_contents[:20]}), Result({str(result)[:20]})")
                         user_message = ModelRequest(parts=[UserPromptPart(content=rendered_prompt)])
                         if return_type is None:
                             response_content = package_contents
@@ -223,7 +211,6 @@ class ModelPromptManager:
                         
                         chat_history.append(user_message)
                         chat_history.append(model_message)
-                        #get_logger().log_debug(f"Updated chat history length: {len(chat_history)}")
 
                     return result
                     

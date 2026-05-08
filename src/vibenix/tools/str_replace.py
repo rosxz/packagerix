@@ -28,7 +28,6 @@ def _str_replace(old_str: str, new_str: str, occurrence: int = None) -> str:
     try:
         # Get current package contents
         current_content = get_package_contents()
-        previous_content = current_content
         
         if not old_str:
             return f"Error replacing: `old_str` cannot be empty."
@@ -89,37 +88,7 @@ def _str_replace(old_str: str, new_str: str, occurrence: int = None) -> str:
         #    return error_msg
 
         update_flake(updated_content)
-        
-        #previous_lines = previous_content.splitlines()
-        #updated_lines = updated_content.splitlines()
-        #return_msg = ""
-        #if len(previous_lines) != len(updated_lines):
-        #    from vibenix.ui.conversation_templated import get_model_prompt_manager
-        #    get_model_prompt_manager().set_synced(False)
-        #start_line = updated_content.split(new_str)[0].count("\n") + 1
-        #for i, line in enumerate(new_str.splitlines(), start=start_line):
-        #    return_msg += f"\n* {i:>3}: {line}"
 
-        # Show updated lines (and ones with changed line numbers)
-        #if len(previous_lines) == len(updated_lines):
-        #    diff_lines = [f"{i:>3}: {updated_lines[i]}" for i in range(len(updated_lines)) if previous_lines[i] != updated_lines[i]]
-        #    diff = "\n".join(diff_lines)
-        #    return_msg = f"Updated lines:\n```\n{diff}\n```"
-        #else:
-        #    # Updated lines get * marker, other lines are shown for context (updated line number)
-        #    new_str_idx = updated_content.index(new_str)
-        #    first_diff_index = updated_content[:new_str_idx].count("\n")
-        #    diff_lines = []
-        #    for i, line in enumerate(updated_lines[first_diff_index:], start=first_diff_index):
-        #        if i < first_diff_index+len(new_str.splitlines()):
-        #            diff_lines += [f"*{i + 1:>3}: {line}"]
-        #        else:
-        #            diff_lines += [f" {i + 1:>3}: {line}"]
-        #    diff = "\n".join(diff_lines)
-        #    return_msg = f"Showing lines starting from {first_diff_index + 1}:\n```\n{diff}\n```"
-        #from vibenix.tools.view import _view
-        #return_msg = _view(prompt="_view")
-        #return f"Successfully replaced text.\n{return_msg}"
         return f"Successfully replaced text."
         
     except Exception as e:

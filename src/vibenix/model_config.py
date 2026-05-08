@@ -5,8 +5,7 @@ This module provides model configuration compatible with the previous litellm-ba
 
 import os
 import json
-import re
-from typing import Optional, Dict, Any, Tuple
+from typing import Optional, Dict, Any, Tuple, cast
 from pydantic_ai.models import Model
 from pydantic_ai.models.openai import OpenAIChatModel, OpenAIChatModelSettings
 from pydantic_ai.providers.openai import OpenAIProvider
@@ -21,218 +20,14 @@ from pydantic_ai.providers.bedrock import BedrockProvider
 from vibenix.ui.logging_config import logger
 
 from botocore.config import Config
-from botocore.exceptions import ClientError
 import boto3
 
 from vibenix.defaults import DEFAULT_MODEL_SETTINGS, DEFAULT_USAGE_LIMITS
+from vibenix.model_retrying import RetryingBedrockClient, create_retrying_client
 # Cache for model configuration to avoid repeated loading and logging
-_cached_config = None
-_cached_model = None
+_cached_config: dict[str, Any] | None = None
+_cached_model: Model | None = None
 _use_prompted_output = False  # Whether to use PromptedOutput mode for structured outputs
-_BEDROCK_TOOL_NAME_PATTERN = re.compile(r"^[a-zA-Z0-9_-]+$")
-_BEDROCK_TOOL_FIELD_PATH_PATTERN = re.compile(
-    r"messages\.(\d+)(?:\.member)?\.content\.(\d+)(?:\.member)?\.toolUse\.(name|input)"
-)
-_ENDOFTEXT_MARKER = "<|endoftext|>"
-
-
-def _extract_bedrock_tool_uses(messages: list[dict]) -> list[dict[str, Any]]:
-    """Extract toolUse entries from Bedrock converse messages for diagnostics."""
-    tool_uses: list[dict[str, Any]] = []
-
-    for message_index, message in enumerate(messages):
-        content_blocks = message.get("content", []) if isinstance(message, dict) else []
-        if not isinstance(content_blocks, list):
-            continue
-
-        for content_index, content_block in enumerate(content_blocks):
-            if not isinstance(content_block, dict):
-                continue
-            tool_use = content_block.get("toolUse")
-            if isinstance(tool_use, dict):
-                tool_uses.append(
-                    {
-                        "message_index": message_index,
-                        "content_index": content_index,
-                        "tool_use": tool_use,
-                    }
-                )
-
-    return tool_uses
-
-
-def _extract_bedrock_tool_field_at_path(messages: list[dict], message_index: int, content_index: int, field_name: str) -> Any:
-    """Return toolUse.<field_name> at the specific Bedrock error path indices."""
-    if message_index < 0 or content_index < 0:
-        return None
-    if message_index >= len(messages):
-        return None
-
-    message = messages[message_index]
-    if not isinstance(message, dict):
-        return None
-
-    content_blocks = message.get("content")
-    if not isinstance(content_blocks, list) or content_index >= len(content_blocks):
-        return None
-
-    content_block = content_blocks[content_index]
-    if not isinstance(content_block, dict):
-        return None
-
-    tool_use = content_block.get("toolUse")
-    if not isinstance(tool_use, dict):
-        return None
-
-    return tool_use.get(field_name)
-
-
-def _extract_failed_tool_field_from_error(error: Exception, messages: list[dict]) -> dict[str, Any] | None:
-    """Parse Bedrock validation path and return referenced toolUse field value."""
-    match = _BEDROCK_TOOL_FIELD_PATH_PATTERN.search(str(error))
-    if not match:
-        return None
-
-    message_index = int(match.group(1))
-    content_index = int(match.group(2))
-    field_name = match.group(3)
-    field_value = _extract_bedrock_tool_field_at_path(messages, message_index, content_index, field_name)
-    # Whats going on here actually????
-
-    return {
-        "message_index": message_index,
-        "content_index": content_index,
-        "field_name": field_name,
-        "field_value": field_value,
-        "field_value_repr": repr(field_value),
-        "field_value_type": type(field_value).__name__,
-    }
-
-
-def _normalize_bedrock_tool_name(tool_name: Any) -> str:
-    """Drop everything from the first non-[a-zA-Z0-9_-] character onward."""
-    normalized = str(tool_name) if tool_name is not None else ""
-    match = re.match(r"[a-zA-Z0-9_-]+", normalized)
-    return match.group(0) if match else ""
-
-
-def _normalize_bedrock_tool_names_in_messages(messages: list[dict]) -> list[dict[str, Any]]:
-    """Normalize toolUse.name entries in outgoing Bedrock messages in-place."""
-    rewrites: list[dict[str, Any]] = []
-
-    for message_index, message in enumerate(messages):
-        if not isinstance(message, dict):
-            continue
-
-        content_blocks = message.get("content", [])
-        if not isinstance(content_blocks, list):
-            continue
-
-        for content_index, content_block in enumerate(content_blocks):
-            if not isinstance(content_block, dict):
-                continue
-
-            tool_use = content_block.get("toolUse")
-            if not isinstance(tool_use, dict):
-                continue
-
-            original_name = tool_use.get("name")
-            normalized_name = _normalize_bedrock_tool_name(original_name)
-
-            if original_name != normalized_name:
-                tool_use["name"] = normalized_name
-                rewrites.append(
-                    {
-                        "message_index": message_index,
-                        "content_index": content_index,
-                        "old_name": original_name,
-                        "new_name": normalized_name,
-                    }
-                )
-
-    return rewrites
-
-
-def _log_bedrock_retry_diagnostics(error: Exception, params: dict[str, Any], retry_number: int, max_retries: int) -> None:
-    """Log concise diagnostics before retrying a failed Bedrock converse call."""
-    messages = params.get("messages", [])
-    parsed_messages = messages if isinstance(messages, list) else []
-    tool_uses = _extract_bedrock_tool_uses(parsed_messages)
-    failing_tool_from_error = _extract_failed_tool_field_from_error(error, parsed_messages)
-
-    invalid_tool_names: list[dict[str, Any]] = []
-    for entry in tool_uses:
-        tool_use = entry["tool_use"]
-        tool_name = tool_use.get("name")
-        if not isinstance(tool_name, str) or not _BEDROCK_TOOL_NAME_PATTERN.match(tool_name):
-            invalid_tool_names.append(
-                {
-                    "message_index": entry["message_index"],
-                    "content_index": entry["content_index"],
-                    "tool_name": tool_name,
-                    "tool_name_repr": repr(tool_name),
-                }
-            )
-
-    error_summary = str(error).replace("\n", " ")[:220]
-    logger.warning(
-        f"Bedrock retry {retry_number}/{max_retries} after ValidationException: {error_summary}"
-    )
-
-    if failing_tool_from_error:
-        field_name = failing_tool_from_error["field_name"]
-        field_type = failing_tool_from_error["field_value_type"]
-        logger.warning(f"Bedrock validation target: toolUse.{field_name} (type={field_type})")
-
-    if invalid_tool_names:
-        logger.warning(f"Bedrock detected {len(invalid_tool_names)} invalid toolUse.name value(s)")
-    elif tool_uses:
-        logger.warning(f"Bedrock request contains {len(tool_uses)} toolUse block(s); names look valid")
-    else:
-        logger.warning("Bedrock request contains no toolUse blocks")
-
-
-class RetryingBedrockClient:
-    """Wrapper around boto Bedrock runtime client with deterministic retry behavior."""
-
-    def __init__(self, bedrock_client, max_retries: int = 2):
-        self._client = bedrock_client
-        self._max_retries = max_retries
-
-    def __getattr__(self, name: str):
-        return getattr(self._client, name)
-
-    def converse(self, **params):
-        total_attempts = self._max_retries + 1
-
-        messages = params.get("messages")
-        if isinstance(messages, list):
-            rewrites = _normalize_bedrock_tool_names_in_messages(messages)
-            if rewrites:
-                logger.warning(
-                    f"Applied Bedrock toolUse.name normalization to {len(rewrites)} entr{'y' if len(rewrites) == 1 else 'ies'} before request"
-                )
-
-        for attempt in range(1, total_attempts + 1):
-            try:
-                return self._client.converse(**params)
-            except ClientError as error:
-                error_code = error.response.get("Error", {}).get("Code")
-                if attempt >= total_attempts:
-                    raise
-
-                if error_code == "ValidationException":
-                    _log_bedrock_retry_diagnostics(error, params, retry_number=attempt, max_retries=self._max_retries)
-                else:
-                    logger.warning(
-                        f"Bedrock client error before retry {attempt}/{self._max_retries}: "
-                        f"code={error_code}, message={str(error)}"
-                    )
-            except Exception as error:
-                if attempt >= total_attempts:
-                    raise
-
-                logger.warning(f"Bedrock unexpected error before retry {attempt}/{self._max_retries}: {str(error)}")
 
 
 def load_saved_configuration() -> Optional[Tuple[str, str, Optional[str], Optional[str]]]:
@@ -266,7 +61,7 @@ def load_saved_configuration() -> Optional[Tuple[str, str, Optional[str], Option
     return None
 
 
-def get_model_config(use_cached: bool=True, remove_model_prefix: bool=True) -> dict:
+def get_model_config(use_cached: bool=True, remove_model_prefix: bool=True) -> dict[str, Any]:
     """Get the model configuration from saved config, and model settings from env."""
     
     global _cached_config
@@ -280,12 +75,6 @@ def get_model_config(use_cached: bool=True, remove_model_prefix: bool=True) -> d
     
     if saved_config:
         provider_name, model_name, ollama_host, openai_api_base = saved_config
-        
-        # Remove provider prefix from model if present
-        #if "/" in model and remove_model_prefix:
-        #    model_name = model.split("/", 1)[1]
-        #else:
-        #    model_name = model
         
         # Determine base URL
         if openai_api_base:
@@ -318,7 +107,7 @@ def get_model_config(use_cached: bool=True, remove_model_prefix: bool=True) -> d
     
     return _cached_config
 
-def get_cached_model_config() -> dict:
+def get_cached_model_config() -> dict[str, Any]:
     """Get the cached model configuration without reloading."""
     global _cached_config
 
@@ -456,6 +245,8 @@ def initialize_model_config(model_settings = None):
     config = get_model_config()
     provider_name = config.get("provider", "openai")
     model_name = config.get("model_name")
+    if not isinstance(model_name, str):
+        raise RuntimeError("Model name missing from configuration.")
     base_url = config.get("base_url", "")
     
     logger.info(f"Loaded configuration: {provider_name}/{config['model_name']} from {provider_name}")
@@ -536,12 +327,7 @@ def initialize_model_config(model_settings = None):
                 if not api_key:
                     raise ValueError("AWS_BEARER_TOKEN_BEDROCK not found in environment or secure storage. Run interactively to configure.")
 
-            #config = get_model_config(use_cached=False, remove_model_prefix=False)
-            #model_name = config.get("model_name")
-            #model_name = provider_name + "/" + model_name if '/' not in model_name else model_name
-
             logger.info(f"Using AWS Bedrock model: {model_name} at {base_url}")
-            #provider = OpenAIProvider(base_url=base_url, api_key=api_key, http_client=create_retrying_client())
             bedrock_boto_config = Config(
                 retries={
                     'mode': 'standard',
@@ -554,19 +340,12 @@ def initialize_model_config(model_settings = None):
                 config=bedrock_boto_config
             )
             bedrock_client = RetryingBedrockClient(raw_bedrock_client, max_retries=2)
-            bedrock_provider = BedrockProvider(bedrock_client=bedrock_client, api_key=api_key)
-
-            # Update the config cache with the corrected model name
-            #_cached_config["model_name"] = model_name
+            bedrock_provider = BedrockProvider(bedrock_client=bedrock_client, api_key=api_key)  # type: ignore[call-overload]
 
             if not model_settings:
                 env_settings = load_model_settings_from_env("bedrock")
                 model_settings = create_bedrock_settings(env_settings)
             _cached_model = BedrockConverseModel(model_name, provider=bedrock_provider, settings=model_settings)
-            #if not model_settings:
-            #    env_settings = load_model_settings_from_env("bedrock")
-            #    model_settings = create_openai_settings(env_settings)
-            #_cached_model = OpenAIChatModel(config["model_name"], provider=provider, settings=model_settings)
 
         elif is_openrouter:
             # Use OpenRouterProvider for OpenRouter endpoints
@@ -579,12 +358,16 @@ def initialize_model_config(model_settings = None):
 
             config = get_model_config(use_cached=False, remove_model_prefix=False)
             model_name = config.get("model_name")
+            if not isinstance(model_name, str):
+                raise RuntimeError("Model name missing from configuration.")
             model_name = provider_name + "/" + model_name if '/' not in model_name else model_name
 
             logger.info(f"Using OpenRouter model: {model_name}")
             provider = OpenRouterProvider(api_key=api_key, http_client=create_retrying_client())
 
             # Update the config cache with the corrected model name
+            if _cached_config is None:
+                raise RuntimeError("Model configuration not initialized.")
             _cached_config["model_name"] = model_name
 
             if not model_settings:

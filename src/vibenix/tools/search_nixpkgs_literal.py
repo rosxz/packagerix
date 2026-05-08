@@ -134,7 +134,7 @@ def _search_nixpkgs_for_package_literal(query: str, package_set_unique: Optional
     matches = fuzzy_matches + substring_matches
     
     if not matches:
-        return f"No packages found matching '{query}'." # Might want to try the semantic search.
+        return f"No packages found matching '{query}'."
     
     # Categorize results while preserving fzf's ranking
     package_sets = {}  # package_set -> list of packages
