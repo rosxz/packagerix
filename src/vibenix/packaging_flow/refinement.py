@@ -15,7 +15,6 @@ from vibenix.packaging_flow.model_prompts import model_prompt_manager
 from vibenix.nix import get_build_output_path
 
 from vibenix import config
-from vibenix.packaging_flow.IterationResult import RefinementIterationResult, IterationResult
 
 def get_tree_output() -> str:
     from vibenix.flake import get_package_path

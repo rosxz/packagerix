@@ -18,7 +18,6 @@ from vibenix.defaults import get_settings_manager
 
 from vibenix.packaging_flow.model_prompts.prompt_loader import get_prompt_loader
 from vibenix.agent import VibenixAgent
-from vibenix.packaging_flow.IterationResult import IterationResult
 
 T = TypeVar('T')
 

@@ -13,7 +13,6 @@ from vibenix.errors import NixBuildErrorDiff, LogDiff, FullLogDiff, ProcessedLog
 
 # Re-export enums
 from vibenix.packaging_flow.model_prompts.enums import RefinementExit, PackagingFailure
-from vibenix.packaging_flow.IterationResult import RefinementIterationResult, IterationResult
 
 
 model_prompt_manager = get_model_prompt_manager()
